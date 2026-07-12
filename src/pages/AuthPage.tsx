@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 
-const VAPOR_TEXTS = ["Fund Now Capital", "Many funders.", "More approvals."];
+const VAPOR_TEXTS = ["Fund Now Capital", "Many funders.", "More Approvals"];
 
 export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -34,8 +34,8 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md">
-        <div className="h-24 sm:h-32 mb-6 sm:mb-8">
+      <div className="w-full flex flex-col items-center">
+        <div className="w-full max-w-2xl h-24 sm:h-32 mb-6 sm:mb-8">
           <VaporizeTextCycle
             texts={VAPOR_TEXTS}
             font={{
@@ -57,11 +57,13 @@ export default function AuthPage() {
           />
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg p-8 w-full">
+        <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
           <div className="flex flex-col items-center text-center mb-6">
-            <div className="w-12 h-12 rounded-xl bg-brand-navy flex items-center justify-center">
-              <span className="text-white font-bold text-lg tracking-wide">FN</span>
-            </div>
+            <img
+              src="/logo.png"
+              alt="Fund Now Capital — Many funders. More Approvals"
+              className="h-14 sm:h-16 w-auto"
+            />
             <h2 className="mt-4 text-2xl font-semibold text-brand-navy">
               Secure Access
             </h2>
