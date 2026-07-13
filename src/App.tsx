@@ -6,6 +6,8 @@ import AppLayout from "@/components/layout/AppLayout";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
 import ClientsPage from "@/pages/ClientsPage";
+import ClientDetailPage from "@/pages/ClientDetailPage";
+import ClientFormPage from "@/pages/ClientFormPage";
 import FundersPage from "@/pages/FundersPage";
 import FunderDetailPage from "@/pages/FunderDetailPage";
 import FunderFormPage from "@/pages/FunderFormPage";
@@ -37,6 +39,9 @@ function AppRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/clients" element={<ClientsPage />} />
+        <Route path="/clients/new" element={<ClientFormPage />} />
+        <Route path="/clients/:id" element={<ClientDetailPage />} />
+        <Route path="/clients/:id/edit" element={<ClientFormPage />} />
         <Route path="/funders" element={<FundersPage />} />
         <Route path="/funders/new" element={<FunderFormPage />} />
         <Route path="/funders/:id" element={<FunderDetailPage />} />
