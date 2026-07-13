@@ -99,7 +99,7 @@ export default function DashboardPage() {
                 <DealLine
                   key={d.id}
                   deal={d}
-                  meta={`${stageLabel(d.stage)} · ${daysSince(d.stage_changed_at)}d`}
+                  meta={`${stageLabel(d.stage)} · ${daysSince(d.stage_entered_at)}d`}
                 />
               ))}
             </ActionGroup>
