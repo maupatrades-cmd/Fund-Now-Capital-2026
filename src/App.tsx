@@ -1,8 +1,15 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import AuthPage from "@/pages/AuthPage";
+import AppLayout from "@/components/layout/AppLayout";
 import DashboardPage from "@/pages/DashboardPage";
+import PipelinePage from "@/pages/PipelinePage";
+import ClientsPage from "@/pages/ClientsPage";
+import FundersPage from "@/pages/FundersPage";
+import CalculatorPage from "@/pages/CalculatorPage";
 import { useSession } from "@/lib/useSession";
+import { queryClient } from "@/lib/queryClient";
 
 function AppRoutes() {
   const session = useSession();
@@ -22,10 +29,16 @@ function AppRoutes() {
         path="/"
         element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />}
       />
-      <Route
-        path="/dashboard"
-        element={session ? <DashboardPage /> : <Navigate to="/" replace />}
-      />
+
+      {/* Authenticated app — shared sidebar/top-bar layout. */}
+      <Route element={session ? <AppLayout /> : <Navigate to="/" replace />}>
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/pipeline" element={<PipelinePage />} />
+        <Route path="/clients" element={<ClientsPage />} />
+        <Route path="/funders" element={<FundersPage />} />
+        <Route path="/calculator" element={<CalculatorPage />} />
+      </Route>
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -33,10 +46,12 @@ function AppRoutes() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <AppRoutes />
-      <Toaster position="top-center" richColors />
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AppRoutes />
+        <Toaster position="top-center" richColors />
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }
 
