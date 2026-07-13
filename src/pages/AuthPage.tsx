@@ -4,9 +4,13 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type FormEvent,
 } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 import "./AuthPage.css";
 
 const MARK_SRC = "/brand-mark.png";
@@ -14,6 +18,19 @@ const MARK_SRC = "/brand-mark.png";
 type Phase = "brand" | "textIn" | "content";
 
 type ParticleStyle = CSSProperties;
+
+// Login form is validated with zod (locked stack: react-hook-form + zod).
+// This is login-only — there is no signup schema and no signUp call anywhere.
+const loginSchema = z.object({
+  email: z
+    .string()
+    .min(1, "Business email is required")
+    .email("Enter a valid email address"),
+  password: z.string().min(1, "Password is required"),
+  remember: z.boolean().optional(),
+});
+
+type LoginValues = z.infer<typeof loginSchema>;
 
 // Drifting background particles on the navy panel (26 dots, teal/green/soft-white).
 function useParticles(): ParticleStyle[] {
@@ -219,19 +236,36 @@ export default function AuthPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<Phase>("brand");
   const [pwVisible, setPwVisible] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const particles = useParticles();
   useVaporizeIntro(canvasRef, setPhase);
 
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "", remember: false },
+  });
+
   const brandIn = phase === "textIn" || phase === "content";
   const contentIn = phase === "content";
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    toast("Auth wiring coming in the next step");
+  const onSubmit = async (values: LoginValues) => {
+    setAuthError(null);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: values.email,
+      password: values.password,
+    });
+    if (error) {
+      // Show the real Supabase error (e.g. "Invalid login credentials").
+      setAuthError(error.message);
+      return;
+    }
+    navigate("/dashboard", { replace: true });
   };
 
   return (
@@ -297,10 +331,20 @@ export default function AuthPage() {
 
       {/* Right form panel */}
       <div className="right">
-        <form className="form-wrap" onSubmit={handleSubmit}>
+        <form
+          className="form-wrap"
+          onSubmit={handleSubmit(onSubmit)}
+          noValidate
+        >
           <img className="mobile-badge" src={MARK_SRC} alt="Fund Now Capital" />
           <h2 className="welcome">Welcome back</h2>
           <p className="subtext">Sign in to continue to your dashboard</p>
+
+          {authError && (
+            <div className="auth-error" role="alert">
+              {authError}
+            </div>
+          )}
 
           <div className="field">
             <div className="field-label">
@@ -328,10 +372,13 @@ export default function AuthPage() {
                 type="email"
                 autoComplete="email"
                 placeholder="you@fundnowcapital.africa"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                aria-invalid={errors.email ? "true" : "false"}
+                {...register("email")}
               />
             </div>
+            {errors.email && (
+              <p className="field-error">{errors.email.message}</p>
+            )}
           </div>
 
           <div className="field">
@@ -367,8 +414,8 @@ export default function AuthPage() {
                 type={pwVisible ? "text" : "password"}
                 autoComplete="current-password"
                 placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                aria-invalid={errors.password ? "true" : "false"}
+                {...register("password")}
               />
               <button
                 type="button"
@@ -404,6 +451,9 @@ export default function AuthPage() {
                 )}
               </button>
             </div>
+            {errors.password && (
+              <p className="field-error">{errors.password.message}</p>
+            )}
           </div>
 
           <div className="remember-row">
@@ -411,14 +461,13 @@ export default function AuthPage() {
               className="checkbox"
               type="checkbox"
               id="remember"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
+              {...register("remember")}
             />
             <label htmlFor="remember">Remember me for 30 days</label>
           </div>
 
-          <button className="signin-btn" type="submit">
-            Sign In
+          <button className="signin-btn" type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Signing in…" : "Sign In"}
             <svg
               width="16"
               height="16"
