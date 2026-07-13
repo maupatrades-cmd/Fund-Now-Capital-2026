@@ -7,6 +7,8 @@ import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
 import ClientsPage from "@/pages/ClientsPage";
 import FundersPage from "@/pages/FundersPage";
+import FunderDetailPage from "@/pages/FunderDetailPage";
+import FunderFormPage from "@/pages/FunderFormPage";
 import CalculatorPage from "@/pages/CalculatorPage";
 import { useSession } from "@/lib/useSession";
 import { queryClient } from "@/lib/queryClient";
@@ -36,6 +38,9 @@ function AppRoutes() {
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/clients" element={<ClientsPage />} />
         <Route path="/funders" element={<FundersPage />} />
+        <Route path="/funders/new" element={<FunderFormPage />} />
+        <Route path="/funders/:id" element={<FunderDetailPage />} />
+        <Route path="/funders/:id/edit" element={<FunderFormPage />} />
         <Route path="/calculator" element={<CalculatorPage />} />
       </Route>
 
