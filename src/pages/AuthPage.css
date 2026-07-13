@@ -1,0 +1,470 @@
+/* Fund Now Capital — Login page
+ * Ported from the design handoff (Fund Now Capital Login.dc.html).
+ * All selectors are scoped under .fnc-login to avoid leaking into the rest of the app.
+ * Design tokens live on the .fnc-login root. */
+
+.fnc-login {
+  --navy: #1a3a52;
+  --teal: #2da8b8;
+  --green: #5dba5d;
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+/* ---------- Left brand panel ---------- */
+.fnc-login .left {
+  width: 55%;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 48px 56px;
+  color: #fff;
+  background: linear-gradient(120deg, #1a3a52, #163049, #1c4a52, #1a3a52);
+  background-size: 200% 200%;
+  animation: fnc-gradientshift 15s ease infinite;
+}
+@keyframes fnc-gradientshift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.fnc-login .shimmer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 60%
+  );
+  background-size: 250% 250%;
+  animation: fnc-shimmermove 6s linear infinite;
+}
+@keyframes fnc-shimmermove {
+  0% {
+    background-position: 150% 0;
+  }
+  100% {
+    background-position: -50% 0;
+  }
+}
+
+.fnc-login .orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.35;
+  animation: fnc-pulse 5s ease-in-out infinite;
+}
+.fnc-login .orb-teal {
+  width: 280px;
+  height: 280px;
+  background: var(--teal);
+  top: -60px;
+  right: -60px;
+}
+.fnc-login .orb-green {
+  width: 260px;
+  height: 260px;
+  background: var(--green);
+  bottom: -60px;
+  left: -60px;
+  animation-delay: 1.5s;
+}
+@keyframes fnc-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.5;
+  }
+}
+
+.fnc-login .particle {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: fnc-drift linear infinite;
+}
+@keyframes fnc-drift {
+  0% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(12px, -18px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+.fnc-login .brand-stage {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  height: 180px;
+  z-index: 2;
+  flex-shrink: 0;
+}
+.fnc-login .brand-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.fnc-login .brand-replay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 1.2s ease,
+    transform 1.2s ease;
+}
+.fnc-login .brand-replay.in {
+  opacity: 1;
+  transform: translateY(0);
+}
+.fnc-login .replay-mark {
+  width: 104px;
+  height: 104px;
+  object-fit: contain;
+}
+.fnc-login .replay-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fnc-login .brand-title {
+  font-size: 36px;
+  font-weight: 700;
+  color: #fff;
+}
+.fnc-login .brand-cap {
+  color: var(--teal);
+}
+.fnc-login .brand-tag {
+  font-size: 16px;
+  color: #7fc9d4;
+  font-weight: 500;
+}
+
+.fnc-login .hero-block {
+  z-index: 2;
+  text-align: center;
+  margin-top: 16px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s ease;
+}
+.fnc-login .hero-block.in {
+  opacity: 1;
+  transform: translateY(0);
+}
+.fnc-login .hero {
+  font-size: 36px;
+  font-weight: 900;
+  line-height: 1.2;
+  margin: 0 0 10px;
+}
+.fnc-login .hero-grad {
+  background: linear-gradient(90deg, var(--teal), var(--green));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.fnc-login .hero-desc {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.5);
+  max-width: 420px;
+  margin: 0 auto 18px;
+}
+.fnc-login .badges {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 auto;
+}
+.fnc-login .badge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+.fnc-login .badge-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.fnc-login .left-footer {
+  position: absolute;
+  bottom: 20px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  z-index: 2;
+}
+
+/* ---------- Right form panel ---------- */
+.fnc-login .right {
+  width: 45%;
+  min-width: 420px;
+  background: #fcfbfa;
+  background-image: radial-gradient(rgba(26, 58, 82, 0.06) 1px, transparent 1px);
+  background-size: 18px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+.fnc-login .form-wrap {
+  width: 100%;
+  max-width: 380px;
+}
+.fnc-login .mobile-badge {
+  display: none;
+  width: 64px;
+  height: auto;
+  margin: 0 auto 20px;
+}
+.fnc-login .welcome {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 0 0 6px;
+  text-align: center;
+}
+.fnc-login .subtext {
+  font-size: 14px;
+  color: #8a8f94;
+  margin: 0 0 32px;
+  text-align: center;
+}
+.fnc-login .field {
+  margin-bottom: 18px;
+}
+.fnc-login .field-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.fnc-login .flabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--navy);
+}
+.fnc-login .forgot {
+  font-size: 13px;
+  color: var(--teal);
+  text-decoration: none;
+  font-weight: 500;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.fnc-login .forgot:hover {
+  text-decoration: underline;
+}
+.fnc-login .input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.fnc-login .input-icon {
+  position: absolute;
+  left: 14px;
+  color: #9aa3ab;
+  display: flex;
+}
+.fnc-login .input {
+  width: 100%;
+  padding: 13px 14px 13px 42px;
+  border-radius: 12px;
+  border: 1.5px solid #e6e4e0;
+  background: #fff;
+  font-size: 14px;
+  color: var(--navy);
+  outline: none;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.fnc-login .input::placeholder {
+  color: #b6bcc1;
+}
+.fnc-login .input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(45, 168, 184, 0.12);
+}
+.fnc-login .input.pw {
+  padding-right: 42px;
+  letter-spacing: 2px;
+}
+.fnc-login .input.pw.revealed {
+  letter-spacing: normal;
+}
+.fnc-login .eye-btn {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #9aa3ab;
+  cursor: pointer;
+  display: flex;
+  padding: 4px;
+}
+.fnc-login .remember-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 26px;
+}
+.fnc-login .remember-row label {
+  font-size: 13px;
+  color: #5f6b74;
+  cursor: pointer;
+}
+.fnc-login .checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--teal);
+  cursor: pointer;
+}
+.fnc-login .signin-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(90deg, var(--green), var(--teal));
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(45, 168, 184, 0.25);
+  transition:
+    box-shadow 0.2s,
+    transform 0.2s;
+}
+.fnc-login .signin-btn:hover {
+  box-shadow: 0 6px 24px rgba(45, 168, 184, 0.4);
+  transform: translateY(-1px);
+}
+.fnc-login .signin-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 4px 14px rgba(45, 168, 184, 0.25);
+}
+.fnc-login .signin-btn svg {
+  transition: transform 0.2s;
+}
+.fnc-login .signin-btn:hover:not(:disabled) svg {
+  transform: translateX(3px);
+}
+.fnc-login .divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 28px 0 16px;
+  color: #b6bcc1;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.fnc-login .divider::before,
+.fnc-login .divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e6e4e0;
+}
+.fnc-login .secure-row {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.fnc-login .secure-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #5f6b74;
+}
+.fnc-login .secure-item svg {
+  color: var(--teal);
+}
+.fnc-login .foot-links {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  font-size: 12px;
+}
+.fnc-login .foot-links a {
+  color: #8a8f94;
+  text-decoration: none;
+  cursor: pointer;
+}
+.fnc-login .foot-links a:hover {
+  color: var(--teal);
+}
+
+@media (max-width: 900px) {
+  .fnc-login .left {
+    display: none;
+  }
+  .fnc-login .right {
+    width: 100%;
+    min-width: 0;
+  }
+  .fnc-login .mobile-badge {
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fnc-login .left,
+  .fnc-login .shimmer,
+  .fnc-login .orb,
+  .fnc-login .particle {
+    animation: none;
+  }
+  .fnc-login .brand-replay,
+  .fnc-login .hero-block {
+    transition: none;
+  }
+}
