@@ -271,6 +271,21 @@
 .fnc-login .field {
   margin-bottom: 18px;
 }
+.fnc-login .field-error {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #d64545;
+}
+.fnc-login .auth-error {
+  margin-bottom: 18px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #f3c9c9;
+  background: #fdecec;
+  color: #b13030;
+  font-size: 13px;
+  text-align: center;
+}
 .fnc-login .field-label {
   display: flex;
   justify-content: space-between;
