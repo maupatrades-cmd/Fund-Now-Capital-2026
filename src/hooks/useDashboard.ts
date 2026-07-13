@@ -13,7 +13,7 @@ export type DealRow = {
   id: string;
   reference: string | null;
   stage: DealStage;
-  stage_changed_at: string;
+  stage_entered_at: string;
   gross_commission: string | null;
   created_at: string;
   client: Named;
@@ -66,7 +66,7 @@ async function fetchDashboard() {
     supabase
       .from("deals")
       .select(
-        "id, reference, stage, stage_changed_at, gross_commission, created_at, client:clients(business_name)",
+        "id, reference, stage, stage_entered_at, gross_commission, created_at, client:clients(business_name)",
       ),
     supabase.from("commission_records").select("gross_commission, status, created_at"),
     supabase
@@ -129,8 +129,8 @@ function compute(
 
   // Actions needed.
   const stuckDeals = data.deals
-    .filter((d) => isInFlight(d.stage) && daysSince(d.stage_changed_at, now) >= STUCK_DAYS)
-    .sort((a, b) => daysSince(b.stage_changed_at, now) - daysSince(a.stage_changed_at, now));
+    .filter((d) => isInFlight(d.stage) && daysSince(d.stage_entered_at, now) >= STUCK_DAYS)
+    .sort((a, b) => daysSince(b.stage_entered_at, now) - daysSince(a.stage_entered_at, now));
 
   const awaitingDecision = data.submissions
     .filter(

@@ -5,6 +5,8 @@ import { useSession } from "@/lib/useSession";
 import { NAV_ITEMS } from "./navItems";
 
 function currentTitle(pathname: string): string {
+  // Deal detail lives outside the nav; keep the header meaningful.
+  if (pathname.startsWith("/deals")) return "Deal";
   const match = NAV_ITEMS.find((n) => pathname.startsWith(n.to));
   return match?.label ?? "Dashboard";
 }

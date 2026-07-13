@@ -1,0 +1,247 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+import { one } from "@/hooks/useDeals";
+import type { DealStage } from "@/lib/dealStages";
+
+export type Deal = {
+  id: string;
+  reference: string | null;
+  client_id: string;
+  referral_partner_id: string | null;
+  stage: DealStage;
+  is_purchase_order: boolean;
+  is_priority: boolean;
+  amount_requested: string | null;
+  gross_commission: string | null;
+  awarded_funder_id: string | null;
+  declined_reason: string | null;
+  notes: string | null;
+  stage_entered_at: string;
+  created_at: string;
+  updated_at: string;
+  client: { id: string; business_name: string; referral_partner_id: string | null } | { id: string; business_name: string; referral_partner_id: string | null }[] | null;
+};
+
+export function useDeal(id: string | undefined) {
+  return useQuery({
+    queryKey: ["deal", id],
+    enabled: !!id,
+    queryFn: async (): Promise<Deal> => {
+      const { data, error } = await supabase
+        .from("deals")
+        .select("*, client:clients(id, business_name, referral_partner_id)")
+        .eq("id", id!)
+        .single();
+      if (error) throw error;
+      return data as Deal;
+    },
+  });
+}
+
+export function useUpdateDeal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: Record<string, unknown> }) => {
+      const { error } = await supabase.from("deals").update(input).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["deal", v.id] });
+      qc.invalidateQueries({ queryKey: ["pipeline"] });
+    },
+  });
+}
+
+// ---- Funder submissions --------------------------------------------------
+export type DealSubmission = {
+  id: string;
+  deal_id: string;
+  funder_id: string;
+  status: string;
+  submitted_at: string | null;
+  responded_at: string | null;
+  quote_amount: string | null;
+  offered_commission: string | null;
+  notes: string | null;
+  created_at: string;
+  funder: { id: string; name: string } | { id: string; name: string }[] | null;
+};
+
+export type SubmissionInput = {
+  funder_id: string;
+  status: string;
+  submitted_at: string | null;
+  quote_amount: number | null;
+  offered_commission: number | null;
+  notes: string | null;
+};
+
+export function funderName(s: DealSubmission): string {
+  return one(s.funder)?.name ?? "Unknown funder";
+}
+
+export function useDealSubmissions(dealId: string | undefined) {
+  return useQuery({
+    queryKey: ["deal-submissions", dealId],
+    enabled: !!dealId,
+    queryFn: async (): Promise<DealSubmission[]> => {
+      const { data, error } = await supabase
+        .from("deal_funder_submissions")
+        .select("*, funder:funders(id, name)")
+        .eq("deal_id", dealId!)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as DealSubmission[];
+    },
+  });
+}
+
+export function useSaveSubmission() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      dealId,
+      submissionId,
+      input,
+    }: {
+      dealId: string;
+      submissionId?: string;
+      input: SubmissionInput;
+    }) => {
+      if (submissionId) {
+        const { error } = await supabase
+          .from("deal_funder_submissions")
+          .update(input)
+          .eq("id", submissionId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("deal_funder_submissions")
+          .insert({ ...input, deal_id: dealId });
+        if (error) throw error;
+      }
+    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["deal-submissions", v.dealId] }),
+  });
+}
+
+export function useDeleteSubmission() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; dealId: string }) => {
+      const { error } = await supabase.from("deal_funder_submissions").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["deal-submissions", v.dealId] }),
+  });
+}
+
+// ---- Communications ------------------------------------------------------
+export type Communication = {
+  id: string;
+  channel: string;
+  direction: string | null;
+  subject: string | null;
+  body: string | null;
+  occurred_at: string;
+};
+
+export function useDealCommunications(dealId: string | undefined) {
+  return useQuery({
+    queryKey: ["deal-communications", dealId],
+    enabled: !!dealId,
+    queryFn: async (): Promise<Communication[]> => {
+      const { data, error } = await supabase
+        .from("communications")
+        .select("id, channel, direction, subject, body, occurred_at")
+        .eq("deal_id", dealId!)
+        .order("occurred_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Communication[];
+    },
+  });
+}
+
+export function useAddCommunication() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      dealId,
+      clientId,
+      referralPartnerId,
+      channel,
+      subject,
+      body,
+    }: {
+      dealId: string;
+      clientId: string | null;
+      referralPartnerId: string | null;
+      channel: string;
+      subject: string;
+      body: string;
+    }) => {
+      const uid = (await supabase.auth.getUser()).data.user?.id ?? null;
+      const { error } = await supabase.from("communications").insert({
+        deal_id: dealId,
+        client_id: clientId,
+        referral_partner_id: referralPartnerId,
+        channel,
+        subject: subject || null,
+        body: body || null,
+        created_by: uid,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["deal-communications", v.dealId] }),
+  });
+}
+
+// ---- Stage history -------------------------------------------------------
+export type StageHistoryRow = {
+  id: string;
+  from_stage: string | null;
+  to_stage: string;
+  changed_at: string;
+};
+
+export function useDealStageHistory(dealId: string | undefined) {
+  return useQuery({
+    queryKey: ["deal-stage-history", dealId],
+    enabled: !!dealId,
+    queryFn: async (): Promise<StageHistoryRow[]> => {
+      const { data, error } = await supabase
+        .from("deal_stage_history")
+        .select("id, from_stage, to_stage, changed_at")
+        .eq("deal_id", dealId!)
+        .order("changed_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as StageHistoryRow[];
+    },
+  });
+}
+
+// ---- Commission calculator (server-side database function) ---------------
+export type CommissionBreakdown = {
+  tier_pct: number;
+  company_retention: number;
+  partner_pool: number;
+  partner_share: number;
+  owner_share: number;
+};
+
+export function useCalculateCommission(gross: number | null, isPurchaseOrder: boolean) {
+  return useQuery({
+    queryKey: ["commission", gross, isPurchaseOrder],
+    enabled: gross != null && gross > 0,
+    queryFn: async (): Promise<CommissionBreakdown> => {
+      const { data, error } = await supabase.rpc("calculate_commission", {
+        gross_commission: gross,
+        is_purchase_order: isPurchaseOrder,
+      });
+      if (error) throw error;
+      // PostgREST returns the composite as an object (or a 1-row array).
+      const row = Array.isArray(data) ? data[0] : data;
+      return row as CommissionBreakdown;
+    },
+  });
+}
