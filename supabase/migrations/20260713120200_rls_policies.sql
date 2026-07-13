@@ -141,9 +141,14 @@ create policy "documents_owner_all" on public.documents
   for all to authenticated
   using (public.is_owner()) with check (public.is_owner());
 
+-- Partners may read their own clients' documents EXCEPT bank statements, which
+-- are owner-only (highly sensitive financial data).
 create policy "documents_partner_read_own" on public.documents
   for select to authenticated
-  using (referral_partner_id = public.current_partner_id());
+  using (
+    referral_partner_id = public.current_partner_id()
+    and doc_type <> 'bank_statement'
+  );
 
 -- ---------------------------------------------------------------------------
 -- communications

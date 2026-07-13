@@ -121,11 +121,14 @@ create table public.funders (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,                       -- real name (owner only)
   display_name_for_partner text not null unique,   -- fictional first name (partner-facing)
-  funder_type text,
+  funder_type text,                                -- e.g. working_capital, MCA, po_finance, invoice_discount, asset_finance, property_secured
+  agreement_status text,                           -- state of the funder agreement
   is_active boolean not null default true,
   notes text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint funders_agreement_status_ck
+    check (agreement_status is null or agreement_status in ('signed', 'verbal', 'pending', 'estimated'))
 );
 
 comment on column public.funders.name is 'Real funder name. Owner-only — never exposed to referral partners.';
