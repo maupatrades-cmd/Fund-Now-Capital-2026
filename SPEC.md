@@ -263,6 +263,126 @@ Celebrations must stay rare enough to stay meaningful; overuse is the failure mo
 
 ---
 
+## S15. LEAD NURTURE & PARTNER FOCUS (Part 7 — Roadmap Phase E, items E9–E11)
+
+Solves the real business pattern: leads stalling between introduction and document collection; the partner (Doctor) opening new leads before closing existing ones. Sits **on top of** lead entry (B2), notifications (A11/A12/D6), the Doctor portal (D1–D2), and invoicing (C1). **Do not surface before those exist.**
+
+**Locked configuration (owner decisions):**
+- Nurture timeline: **14 days (fixed)**.
+- Friction threshold: partner sees a warning modal at **3+ leads in `awaiting_documents`** status. Soft warning, **not a hard block**.
+- Template language: **English only**.
+- Template editability: **owner only** (partner sees read-only).
+
+Every S15 automation writes to `activity_logs` (S5). Every partner-facing message uses **fictional funder names** (S11 anonymisation is absolute). Seeded templates use **Part 7's exact copy — do not paraphrase**.
+
+### S15.M1 — 14-Day Client Nurture Automation
+
+`lead_nurture_sequences`: id, lead_id FK, deal_id FK (nullable — created on qualify), sequence_start_date, current_day int, status enum(active/paused/completed/abandoned/stalled_pending_decision), client_engagement_score int (0–100, computed), next_action_scheduled_at, created_at, updated_at.
+
+`nurture_events`: id, sequence_id FK, event_type enum(email_sent/whatsapp_sent/sms_sent/partner_notified/owner_escalated/client_opened_email/client_clicked_link/client_responded/documents_partial/documents_complete/call_scheduled/paused/resumed/abandoned), event_data jsonb, channel enum(email/whatsapp/sms/in_app), external_message_id (Resend/Twilio), triggered_at, outcome text.
+
+**Day-by-day schedule** (all times owner-configurable in Settings later; defaults below):
+- **Day 0:** welcome email + Trust Pack PDF attached + WhatsApp warm follow-up from owner (Twilio template) + simple doc checklist (CIPC + director ID only — keep the first ask small).
+- **Day 1:** partner notification "reach out to [client] today" + dashboard highlight "48-hour rule: contact [client] today".
+- **Day 2:** if no client response → partner gets a pre-written WhatsApp template with a one-click "copy + open WhatsApp" button.
+- **Day 3:** partner dashboard shows "3 days — time for a nudge call"; auto-draft second follow-up email; escalation notification to owner.
+- **Day 5:** check documents received; if not, notify owner with options (extend nurture / personal call / mark stalled / abandon).
+- **Day 7 (CRITICAL):** `status → at_risk` if no docs; partner dashboard row turns amber; auto-suggested action "try a video call"; pre-drafted message ready.
+- **Day 10:** partner notification "personal call time — email/WhatsApp not working"; escalation to owner with clear options.
+- **Day 14:** `status → stalled_pending_decision`; owner **MUST** decide revive/archive/abandon (blocks in the pending-actions list until resolved).
+
+**Behaviour-driven triggers (adapt the sequence):**
+- Client opens welcome email (Resend tracking) → shorter nurture path.
+- Client clicks the upload link → pause automated nudges 24h; notify owner "client engaged with upload page — likely coming soon".
+- Client sends partial docs → tone shifts to "just X more"; progress bar surfaces in owner + partner views ("60% ready to submit").
+- Client responds via WhatsApp/email → auto-pause automated nudges; notify owner+partner "client engaged — take over manually".
+- Client asks a question → route to owner with auto-draft response templates (see M3 objection library).
+
+**Implementation notes:**
+- Schedule via a Supabase Edge Function (pg_cron trigger) evaluating due sequences daily, **owner-timezone-aware**.
+- Every automated action writes to `activity_logs` (S5) and fires an appropriate notification (S4).
+- The nurture sequence **auto-creates when a lead is qualified** (S2 workflow) — it starts at the introduction/pitch moment, not at lead entry.
+
+### S15.M2 — Partner Focus Dashboard (redesigns the D1 partner dashboard)
+
+Sections, top to bottom:
+1. **THIS WEEK'S FOCUS** card (unmissable, top of page): header "N leads waiting for documents — chase these before adding new leads"; per-lead row (client name, day-in-nurture, colour-coded urgency green &lt;3d / amber 3–6d / red 7d+, quick-action button: copy WhatsApp template / book 15-min call / escalate to owner); bottom line "M deals ready to invoice — R X available".
+2. **LEAD HEALTH OVERVIEW** (bar chart, current period vs goal): rows leads submitted → documents received → submitted to funder → approved → funded; conversion % vs goal (25%) — green ≥25%, amber 15–24%, red &lt;15%; insight card "Your leads take avg N days to send documents. Top performers hit 3 days. Consider a 48-hour follow-up rule."
+3. **STALLED LEADS REQUIRING ACTION:** every lead in at_risk/stalled state, always visible until resolved; columns client, days since intro, last action taken, suggested next action, one-click actions.
+4. **ADD NEW LEAD** button — with the friction check below.
+5. **WEEKLY STREAK** card (positive reinforcement): consecutive weeks with follow-up completed; days since last stalled lead; rolling average lead-to-documents time.
+
+**Friction check (S15.M2.friction) — locked at 3 leads:** when the partner clicks "Add New Lead" AND has ≥3 leads in `awaiting_documents`, show a **soft warning modal**: lists the 3 stalled clients with days stalled; copy "Adding new leads before closing existing ones drops our conversion rate — and your earnings. Please chase these 3 first. Adding new leads should be the exception, not the norm." Buttons **[Chase these first — I'll close them]** / **[Add new lead anyway]**. **Not a block — override allowed.** Every override logs to `activity_logs` with `event_type=NEW_LEAD_ADDED_WITH_STALLED` (owner visibility).
+
+`lead_health_metrics`: id, user_id FK, calculation_date, leads_submitted_30d, leads_submitted_90d, leads_submitted_all_time, documents_received_rate, funder_submission_rate, approval_rate, funding_rate, average_time_to_documents_days, current_stalled_lead_count, last_calculated_at. Recalc nightly.
+
+`partner_streaks`: id, user_id FK, streak_type enum(follow_up_consistency/weekly_lead_submissions/documents_received_within_48h), current_streak_days, longest_streak_days, last_broken_at.
+
+### S15.M3 — Nudge Toolkit (partner WhatsApp/email templates)
+
+`nudge_templates`: id, template_name, template_category enum(day_0_thank_you/day_0_expectations/day_2_check_in/day_2_value_reminder/day_2_direct_ask/day_4_objection/day_4_reassurance/day_4_urgency/day_7_call_offer/day_7_stakes/day_7_video/day_10_call/day_10_scheduling/day_10_honest/day_14_final/day_14_close_out/day_14_goodbye/objection_bank_statements/objection_rates/objection_thinking/objection_previously_declined), template_channel enum(whatsapp/email/sms), subject text (email only), body_text (with `{variables}` — `{ClientName}`, `{FunderCount}`, `{DealAmount}`, etc.), usage_count int, effectiveness_score numeric (computed from response rates), active bool, created_at, updated_at, edited_by, version_number.
+
+`template_versions`: id, template_id FK, version_number, body_text snapshot, subject snapshot, edited_by FK, edited_at, change_notes, is_current_version bool. Enables rollback.
+
+`nudge_usage`: id, template_id FK, lead_id FK, sent_by_user_id FK, sent_at, client_responded_within_24h bool, response_content text (nullable).
+
+**Owner template management UI** (Settings → Templates & Communications): list all templates grouped by category; edit any body/subject with a variable-insertion helper; preview panel renders with sample data (Mama Mabase JV etc.); enable/disable individual templates; add custom templates; **Save = new `template_versions` row, `is_current_version` flipped**; per-template effectiveness metrics (once data accumulates); one-click rollback to a previous version.
+
+**Partner UI** (per-lead in dashboard): "Nudge Client" button on every lead card; modal shows 3–5 templates appropriate to the current nurture day; partner selects → optional inline edit → "Send via WhatsApp" pre-fills a WhatsApp deep link with the rendered message; every send logged to `nudge_usage`. **Partner CANNOT edit templates**; owner changes propagate immediately. An admin note field is visible to the partner (e.g. "Use after 4pm for best response").
+
+Seed the **objection library** (initial four templates: bank-statements privacy, rates concerns, "need to think", "previously declined"; owner can add more) using **Part 7's exact wording — do not paraphrase**.
+
+### S15.M4 — Client Motivation & Trust Building
+
+`client_trust_packs`: id, client_id FK, pdf_url (Supabase Storage, generated via Edge Function), sent_at, opened_at (Resend tracking), version_number.
+
+**Trust Pack PDF** (Fund Now Capital branded): FNC overview (who/what/tagline); credentials block (CIPC 2026/066284/07, Bryanston + Polokwane addresses, Absa banking, 010 102 0534, thapelol@fundnowcapital.africa); case study (one funded client, anonymised or by permission — starts with **Chickanos**, the R400k Pollen deal, R14k commission funded); testimonials (from `client_testimonials` as they accumulate); **funder panel with REAL funder names — this is client-facing** (clients engage funders directly, so real names are fine here; the anonymisation rule is partner-facing only); process explanation with timeline; POPIA + data-security assurances; owner contact card. **Auto-sent with the Day 0 welcome email; regenerated if testimonials update.**
+
+**Client progress indicator** (on any client-facing link/portal page) — "Journey to Funding" checklist: ✓ Introduction call (Day 0) · ✓ Welcome email received · ◯ Documents submitted **[You're here]** · ◯ Reviewed by our team · ◯ Submitted to funder · ◯ Approval received · ◯ Contract signed · ◯ Funds in your account. Shows % complete: "You're X% of the way there. Send [next item] to move forward."
+
+`client_testimonials`: id, client_id FK, deal_id FK, testimonial_text, rating int (1–5), permission_to_use bool, requested_at, submitted_at, approved_by_owner_at. **Auto-requested when a deal reaches Funded** (WhatsApp + email prompt with guiding questions: "How did FNC help you? What was different?").
+
+### S15.M5 — Partner Motivation & Accountability
+
+**Weekly Reflection email** (Sunday evening / Monday morning, partner-timezone aware): subject "Doctor's Weekly Reflection — Week of [Date]"; sections — this week's wins (X leads submitted, Y approved, Z funded), stuck points (Y leads with no docs 5+ days), earnings (R X), tier progress (X% to next tier), challenges (personal coaching line from patterns), suggested focus for next week. Delivered via Resend from hello@fundnowcapital.africa; one email per active partner.
+
+**Positive reinforcement:**
+- Partner closes a stalled lead (at_risk/stalled → any active stage) → celebration notification + **"Closer" badge (S14)** + optional owner-suggested DM ("Great work on [client name], Doctor. Thank you.").
+- Weekly conversion improvement detected → dashboard comparison card "+5% vs last week" + optional owner-suggested DM.
+
+`owner_partner_messages`: id, from_user_id FK, to_user_id FK (partner), body text, sent_at, read_at, thread_id (nullable — threaded replies), attachment_url. Renders as a "Message from [Owner Name]" card in the partner dashboard; preserved in `activity_logs` (S5) per audit requirements.
+
+**Partner AI Coach (Phase F — deferred within Part 7):** chat via Anthropic Claude API, context = the partner's own conversion patterns + historical CRM data + best practices + FNC business context; sample queries "Client isn't responding — what should I try?" / "How do I handle 'rates are too high'?" / "Should I follow up with X again?". Data is the partner's alone; owner opt-in to **summaries only, never raw chats**.
+
+### S15.M6 — Owner View of Partner Performance
+
+**Partner Performance Dashboard** (Owner sidebar → Team → [Partner Name]):
+- **Engagement metrics** (from `user_engagement_metrics`, S12): CRM logins/week, avg session length, templates used, nudges sent, follow-ups completed.
+- **Effectiveness metrics** (from `lead_health_metrics`): documents-received rate, per-stage conversion, avg time-to-close a lead, current stalled lead count.
+- **Behaviour patterns:** most active days, sectors bringing most leads, sectors with highest conversion.
+
+**Coaching opportunities** (auto-generated weekly), e.g. "Doctor's follow-up rate at day 4 is 30% below average — coaching moment on Day 4 templates might help." / "Doctor added 8 new leads this week but only closed 1 — consider a weekly sync focused on closing." Stored in `coaching_prompts`: id, user_id FK (about whom), for_user_id FK (the owner), prompt_text, generated_at, acknowledged_at, action_taken text.
+
+**Partnership Health Score** (single 0–100): 40% conversion-rate weight + 20% communication-frequency weight (both directions) + 20% follow-through weight (commitments kept, from M7) + 20% recent-trend weight (30-day delta). **Score &lt;60 triggers a proactive coaching prompt for the owner.** `partnership_health_scores`: id, partner_id FK, score int, computed_at, components jsonb (each weight's contribution).
+
+### S15.M7 — Sunday Setup (weekly commitment ritual)
+
+Weekly guided flow (Sunday evening / Monday morning, partner-timezone aware):
+- **Step 1 — Review last week:** auto-shows leads worked, wins, misses. Partner clicks "Reviewed".
+- **Step 2 — Identify this week's focus:** partner picks the top 3 leads to close (from active leads ranked by nurture day) + free-text personal goals.
+- **Step 3 — Commit to specific actions:** partner types commitments ("I will send follow-up messages to X, Y, Z by Wednesday" / "I will do 1 video call this week with a stalled lead" / "I will only add 2 new leads maximum this week").
+- **Step 4 — Confirmation:** confetti (**small — S14**) + notification to owner "Doctor completed Sunday Setup — his focus this week: [top 3 leads]. Commitments: [list]."
+
+`weekly_commitments`: id, user_id FK, week_start_date, top_priorities jsonb (3 items with lead_ids), committed_actions jsonb, committed_at, completed_action_count int (updated Friday), reflection_completed bool, completion_percentage numeric. **Friday afternoon:** automated check "Did you complete your commitments?" → partner marks each done/partial/missed; feeds the `partnership_health_score` follow-through component.
+
+### S15 build order within Phase E
+- **E9** = M1 (Nurture Automation) + M3 (Nudge Toolkit + owner management UI). Together they unlock the partner's ability to close leads warmly. Highest impact.
+- **E10** = M2 (Partner Focus Dashboard redesign) + M4 (Trust Pack + Progress Indicator). The behavioural-change layer.
+- **E11** = M5 (Motivation & Accountability) + M6 (Owner view of partner) + M7 (Sunday Setup). Long-term partnership infrastructure.
+- **Partner AI Coach** (last part of M5) moves to **Phase F** alongside the other AI features.
+
+---
+
 ## SA VALIDATION RULES (used everywhere)
 
 - **SA ID:** 13 digits, Luhn checksum, valid DOB + citizenship digit.

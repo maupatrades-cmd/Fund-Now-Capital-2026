@@ -55,7 +55,9 @@ Goal: Doctor logs in and finds a living product. GATE: real deals + earnings dat
 - ⬜ D6. WhatsApp notifications go live (Twilio approved by now; SMS fallback)
 - ⬜ D7. Swap test partner account → Doctor's real account (masobota18@gmail.com), partner smoke test of anonymisation (zero real funder names anywhere)
 
-## PHASE E — Automation & Intelligence (Parts 1, 5, 6)
+## PHASE E — Automation & Intelligence (Parts 1, 5, 6, 7)
+
+**Note:** Part 7 (Lead Nurture & Partner Focus, SPEC S15) slots in here, after Doctor's portal ships in Phase D. It's deliberately not earlier — nurture automation needs real **leads** (B2), **notifications** (A11/A12/D6), the **partner portal** (D1–D2), and **invoicing** (C1) live underneath it first.
 
 - ⬜ E1. Gmail integration (two-way, auto-attach to deals)
 - ⬜ E2. Email template library + funder submission templates (Part 6 M3)
@@ -65,6 +67,9 @@ Goal: Doctor logs in and finds a living product. GATE: real deals + earnings dat
 - ⬜ E6. AI features (Part 1 P3): email drafter, bank statement analyser, funder routing recommender; Best Fit AI Advisor for Doctor (Part 3 F4)
 - ⬜ E7. Reports v2 (Part 5 R3–R5): sector analysis, velocity/conversion, cash flow projection; scheduled email reports
 - ⬜ E8. Vision Board + KPI Projection Engine (Part 2, Owner Home v2)
+- ⬜ E9. Lead Nurture + Nudge Toolkit (Part 7 — SPEC S15.M1 + S15.M3): 14-day client nurture automation (`lead_nurture_sequences` + `nurture_events`, pg_cron Edge Function, auto-created on lead qualify) + owner-managed WhatsApp/email nudge templates (`nudge_templates`/`template_versions`/`nudge_usage`, owner-edit / partner read-only). Highest impact.
+- ⬜ E10. Partner Focus Dashboard + Trust Pack (Part 7 — SPEC S15.M2 + S15.M4): redesigned partner dashboard (this-week's-focus, lead-health, stalled leads, 3-lead friction check → `lead_health_metrics`/`partner_streaks`) + client Trust Pack PDF, progress indicator, and `client_testimonials`. Behavioural-change layer.
+- ⬜ E11. Partner Motivation + Owner View + Sunday Setup (Part 7 — SPEC S15.M5–M7): weekly reflection, owner↔partner messages (`owner_partner_messages`), partner performance view + `coaching_prompts` + `partnership_health_scores`, and the Sunday Setup ritual (`weekly_commitments`). Partner AI Coach deferred to Phase F.
 
 ## PHASE F — Hardening & Scale (Parts 4, 5, 6)
 
