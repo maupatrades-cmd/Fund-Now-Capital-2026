@@ -44,3 +44,22 @@ export const SUBMISSION_STATUS_BADGE: Record<string, string> = {
   quote_received: "bg-amber-100 text-amber-800 ring-amber-600/20",
   declined: "bg-red-100 text-red-700 ring-red-600/20",
 };
+
+// Partner-safe generic decline reasons (deal_funder_submissions.decline_reason_category).
+// A referring partner may see ONLY this generic category — never the funder's
+// real name or the owner-only internal decline notes. Mirrors the
+// submission_decline_reason enum; the DB CHECK requires one when status=declined.
+export const DECLINE_REASONS = [
+  { value: "affordability", label: "Affordability" },
+  { value: "documentation_gaps", label: "Documentation gaps" },
+  { value: "sector_appetite", label: "Sector appetite" },
+  { value: "credit_profile", label: "Credit profile" },
+  { value: "security_insufficient", label: "Security insufficient" },
+  { value: "funder_criteria_not_met", label: "Funder criteria not met" },
+  { value: "other", label: "Other" },
+] as const;
+
+export function declineReasonLabel(value: string | null | undefined): string {
+  if (!value) return "—";
+  return DECLINE_REASONS.find((r) => r.value === value)?.label ?? value;
+}
