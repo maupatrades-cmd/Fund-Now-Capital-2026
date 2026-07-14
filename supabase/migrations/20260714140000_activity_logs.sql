@@ -113,6 +113,13 @@ begin
     from jsonb_object_keys(nv) as k
     where (nv->k) is distinct from (ov->k)
       and k not in ('updated_at');
+
+    -- Nothing meaningful changed (only bookkeeping columns like updated_at):
+    -- skip the audit row entirely. Only reachable for UPDATE — INSERT/DELETE
+    -- legitimately have no diff and must still be logged.
+    if v_changed is null then
+      return null;
+    end if;
   end if;
 
   v_event := case tg_op when 'INSERT' then 'CREATE' when 'UPDATE' then 'UPDATE' else 'DELETE' end::public.activity_event_type;

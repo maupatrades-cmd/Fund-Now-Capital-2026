@@ -13,10 +13,12 @@ export function ActivityFeed({ entityId }: { entityId: string }) {
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : isError ? (
         <p className="text-sm text-red-600">
-          Couldn't load activity: {(error as Error)?.message}
+          Couldn't load activity: {error instanceof Error ? error.message : "Unknown error"}
         </p>
       ) : (
-        <ActivityList rows={data ?? []} />
+        // Entity feeds mix in related events (a deal's submissions, a client's
+        // deals/contacts), so show each row's entity badge to disambiguate.
+        <ActivityList rows={data ?? []} showEntity />
       )}
     </div>
   );

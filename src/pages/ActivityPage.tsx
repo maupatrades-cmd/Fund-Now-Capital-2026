@@ -133,7 +133,7 @@ export default function ActivityPage() {
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : isError ? (
           <p className="text-sm text-red-600">
-            Couldn't load activity: {(error as Error)?.message}
+            Couldn't load activity: {error instanceof Error ? error.message : "Unknown error"}
           </p>
         ) : (
           <>
