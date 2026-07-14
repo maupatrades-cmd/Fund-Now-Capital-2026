@@ -1,6 +1,6 @@
 # FUND NOW CAPITAL CRM — MASTER ROADMAP (v2, integrates Parts 1–6)
 
-This is the single source of truth for build order. It supersedes the per-part phase suggestions in Parts 1–6. Feature DETAILS live in `docs/spec-part-1.md … spec-part-6.md`. Core rules live in `CLAUDE.md`.
+This is the single source of truth for build order. It supersedes the per-part phase suggestions in Parts 1–6. Feature DETAILS live in `SPEC.md`. Core rules live in `CLAUDE.md`.
 
 **Ordering principle:** dependencies first, money-adjacent systems get their audit/notification plumbing BEFORE they exist, Doctor's portal ships only when it has real data to show.
 
