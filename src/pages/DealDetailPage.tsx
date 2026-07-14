@@ -1,14 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { DEAL_STAGES, stageLabel } from "@/lib/dealStages";
+import { DEAL_STAGES, stageLabel, type DealStage } from "@/lib/dealStages";
 import { formatZAR, daysSince } from "@/lib/format";
 import { stageUrgency, URGENCY_BADGE } from "@/lib/deals";
 import { one } from "@/hooks/useDeals";
 import { useToggleDealPriority } from "@/hooks/useDeals";
-import { useDeal, useUpdateDeal } from "@/hooks/useDealDetail";
+import { useDeal, useUpdateDeal, useReopenDeal } from "@/hooks/useDealDetail";
 import { FunderSubmissions } from "@/components/deals/FunderSubmissions";
 import { CommunicationsLog } from "@/components/deals/CommunicationsLog";
 import { DealDocuments } from "@/components/deals/DealDocuments";
@@ -19,7 +19,16 @@ export default function DealDetailPage() {
   const { data: deal, isLoading, isError, error } = useDeal(id);
   const updateDeal = useUpdateDeal();
   const togglePriority = useToggleDealPriority();
+  const reopen = useReopenDeal();
   const [notes, setNotes] = useState<string | null>(null);
+  const [reopenTo, setReopenTo] = useState<string | null>(null);
+
+  // Drop any local notes draft when navigating to a different deal so it can't
+  // be saved back to the wrong record.
+  useEffect(() => {
+    setNotes(null);
+    setReopenTo(null);
+  }, [id]);
 
   if (isLoading) return <div className="text-sm text-muted-foreground">Loading deal…</div>;
   if (isError || !deal) {
@@ -38,8 +47,26 @@ export default function DealDetailPage() {
   const urgency = stageUrgency(days);
   const notesValue = notes ?? deal.notes ?? "";
 
-  const changeStage = (stage: string) =>
+  const changeStage = (stage: string) => {
+    if (stage === deal.stage) return;
+    // Declined is terminal — leaving it is the deliberate reopen path (confirm first).
+    if (deal.stage === "declined") {
+      setReopenTo(stage);
+      return;
+    }
     updateDeal.mutate({ id: deal.id, input: { stage } });
+  };
+
+  const confirmReopen = async () => {
+    if (!reopenTo) return;
+    try {
+      await reopen.mutateAsync({ id: deal.id, stage: reopenTo as DealStage });
+      toast.success("Deal reopened");
+      setReopenTo(null);
+    } catch (e) {
+      toast.error((e as Error).message || "Could not reopen deal");
+    }
+  };
 
   const saveNotes = async () => {
     try {
@@ -78,7 +105,15 @@ export default function DealDetailPage() {
         </div>
         <button
           type="button"
-          onClick={() => togglePriority.mutate({ id: deal.id, isPriority: !deal.is_priority })}
+          onClick={() =>
+            togglePriority.mutate(
+              { id: deal.id, isPriority: !deal.is_priority },
+              {
+                onError: (e) =>
+                  toast.error((e as Error).message || "Could not update priority"),
+              },
+            )
+          }
           className={
             "flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium " +
             (deal.is_priority
@@ -161,6 +196,35 @@ export default function DealDetailPage() {
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
         <StageHistory dealId={deal.id} />
       </section>
+
+      {reopenTo && (
+        <div className="fixed inset-0 z-40 grid place-items-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setReopenTo(null)} aria-hidden="true" />
+          <div className="relative z-10 w-full max-w-sm space-y-4 rounded-xl border border-border bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-brand-navy">Reopen deal?</h3>
+            <p className="text-sm text-muted-foreground">
+              This deal was declined. Reopen it as “{stageLabel(reopenTo)}”?
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={confirmReopen}
+                disabled={reopen.isPending}
+                className="rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60"
+              >
+                {reopen.isPending ? "Reopening…" : "Yes, reopen"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setReopenTo(null)}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

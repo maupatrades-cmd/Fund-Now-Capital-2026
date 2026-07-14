@@ -59,7 +59,11 @@ export function useUploadDealDocument() {
         uploaded_by: uid,
       });
       if (insErr) {
-        await supabase.storage.from(BUCKET).remove([path]);
+        // Best-effort rollback; surface the original insert error regardless.
+        const { error: rmErr } = await supabase.storage.from(BUCKET).remove([path]);
+        if (rmErr) {
+          console.warn("Orphaned upload left in storage:", path, rmErr.message);
+        }
         throw insErr;
       }
     },
@@ -78,7 +82,10 @@ export function useDeleteDealDocument() {
       storagePath: string;
       dealId: string;
     }) => {
-      await supabase.storage.from(BUCKET).remove([storagePath]);
+      // Remove the file first; if that fails, keep the metadata row so the
+      // document isn't orphaned in storage — the user can retry.
+      const { error: rmErr } = await supabase.storage.from(BUCKET).remove([storagePath]);
+      if (rmErr) throw rmErr;
       const { error } = await supabase.from("documents").delete().eq("id", id);
       if (error) throw error;
     },

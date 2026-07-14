@@ -4,12 +4,14 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { Plus } from "lucide-react";
+import { toast } from "sonner";
 import { DEAL_STAGES } from "@/lib/dealStages";
 import {
   usePipeline,
@@ -49,6 +51,7 @@ export default function PipelinePage() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor),
   );
 
   const filtered = useMemo(
@@ -77,7 +80,13 @@ export default function PipelinePage() {
       const newStage = String(over.id);
       const deal = (deals ?? []).find((d) => d.id === dealId);
       if (deal && deal.stage !== newStage) {
-        updateStage.mutate({ id: dealId, stage: newStage as PipelineDeal["stage"] });
+        if (deal.stage === "declined") {
+          toast(
+            "Declined deals can't be moved — reopen from the deal detail page if needed.",
+          );
+        } else {
+          updateStage.mutate({ id: dealId, stage: newStage as PipelineDeal["stage"] });
+        }
       }
     }
     setTimeout(() => {
