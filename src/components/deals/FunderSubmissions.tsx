@@ -15,7 +15,7 @@ import {
   type DealSubmission,
   type SubmissionInput,
 } from "@/hooks/useDealDetail";
-import { SUBMISSION_STATUSES, submissionStatusLabel, SUBMISSION_STATUS_BADGE } from "@/lib/deals";
+import { SUBMISSION_STATUSES, submissionStatusLabel, SUBMISSION_STATUS_BADGE, DECLINE_REASONS } from "@/lib/deals";
 import { formatZAR } from "@/lib/format";
 
 const cls =
@@ -27,14 +27,28 @@ const nullableAmount = z.preprocess(
   z.number().finite("Enter a valid amount").nonnegative("Must be zero or more").nullable(),
 );
 
-const submissionSchema = z.object({
-  funder_id: z.string().min(1, "Choose a funder"),
-  status: z.string().min(1),
-  submitted_at: z.string().optional().default(""),
-  quote_amount: nullableAmount,
-  offered_commission: nullableAmount,
-  notes: z.string().optional().default(""),
-});
+const submissionSchema = z
+  .object({
+    funder_id: z.string().min(1, "Choose a funder"),
+    status: z.string().min(1),
+    submitted_at: z.string().optional().default(""),
+    quote_amount: nullableAmount,
+    offered_commission: nullableAmount,
+    notes: z.string().optional().default(""),
+    decline_reason_category: z.string().optional().default(""),
+    decline_notes_internal: z.string().optional().default(""),
+  })
+  // A declined submission must carry a partner-safe reason category. The
+  // database CHECK is the source of truth; this mirrors it for a friendly error.
+  .superRefine((val, ctx) => {
+    if (val.status === "declined" && !val.decline_reason_category) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["decline_reason_category"],
+        message: "Pick a decline reason",
+      });
+    }
+  });
 type SubmissionValues = z.input<typeof submissionSchema>;
 
 export function FunderSubmissions({
@@ -167,9 +181,12 @@ function SubmissionForm({
       quote_amount: submission?.quote_amount != null ? String(submission.quote_amount) : "",
       offered_commission: submission?.offered_commission != null ? String(submission.offered_commission) : "",
       notes: submission?.notes ?? "",
+      decline_reason_category: submission?.decline_reason_category ?? "",
+      decline_notes_internal: submission?.decline_notes_internal ?? "",
     },
   });
 
+  const statusValue = watch("status");
   const offeredRaw = watch("offered_commission");
   const gross =
     offeredRaw === "" || offeredRaw == null || !Number.isFinite(Number(offeredRaw))
@@ -177,6 +194,7 @@ function SubmissionForm({
       : Number(offeredRaw);
 
   const onSubmit = async (v: SubmissionValues) => {
+    const declined = v.status === "declined";
     const input: SubmissionInput = {
       funder_id: v.funder_id as string,
       status: v.status as string,
@@ -184,6 +202,9 @@ function SubmissionForm({
       quote_amount: (v.quote_amount as number | null) ?? null,
       offered_commission: (v.offered_commission as number | null) ?? null,
       notes: (v.notes as string) ? (v.notes as string) : null,
+      // Only persist decline detail when the submission is actually declined.
+      decline_reason_category: declined ? (v.decline_reason_category as string) || null : null,
+      decline_notes_internal: declined ? (v.decline_notes_internal as string) || null : null,
     };
     try {
       await save.mutateAsync({ dealId, submissionId: submission?.id, input });
@@ -232,6 +253,38 @@ function SubmissionForm({
           {errors.offered_commission && <p className={errCls}>{errors.offered_commission.message}</p>}
         </div>
       </div>
+
+      {/* Decline detail — only when the funder declined this submission.
+          Category is partner-safe; internal notes are owner-only. */}
+      {statusValue === "declined" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-lg border border-red-200 bg-red-50/60 p-3">
+          <div>
+            <label className="block text-xs font-medium text-brand-navy mb-1">
+              Decline reason <span className="font-normal text-muted-foreground">(partner-safe)</span>
+            </label>
+            <select className={cls} {...register("decline_reason_category")}>
+              <option value="">Select reason…</option>
+              {DECLINE_REASONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+            {errors.decline_reason_category && (
+              <p className={errCls}>{errors.decline_reason_category.message}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-brand-navy mb-1">
+              Internal notes <span className="font-normal text-muted-foreground">(owner-only)</span>
+            </label>
+            <textarea
+              className={cls}
+              rows={2}
+              placeholder="What the funder actually said — never shown to the partner"
+              {...register("decline_notes_internal")}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Embedded commission calculator (server-side function) */}
       <div className="rounded-lg border border-border bg-white p-3">

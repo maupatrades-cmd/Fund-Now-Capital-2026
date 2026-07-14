@@ -83,6 +83,10 @@ export type DealSubmission = {
   quote_amount: string | null;
   offered_commission: string | null;
   notes: string | null;
+  // Owner-only decline detail. decline_reason_category is partner-safe (shown in
+  // the Phase-D portal); decline_notes_internal is never exposed to partners.
+  decline_reason_category: string | null;
+  decline_notes_internal: string | null;
   created_at: string;
   funder: { id: string; name: string } | { id: string; name: string }[] | null;
 };
@@ -94,6 +98,8 @@ export type SubmissionInput = {
   quote_amount: number | null;
   offered_commission: number | null;
   notes: string | null;
+  decline_reason_category: string | null;
+  decline_notes_internal: string | null;
 };
 
 export function funderName(s: DealSubmission): string {
