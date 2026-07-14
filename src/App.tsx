@@ -13,6 +13,7 @@ import FundersPage from "@/pages/FundersPage";
 import FunderDetailPage from "@/pages/FunderDetailPage";
 import FunderFormPage from "@/pages/FunderFormPage";
 import CalculatorPage from "@/pages/CalculatorPage";
+import ActivityPage from "@/pages/ActivityPage";
 import { useSession } from "@/lib/useSession";
 import { queryClient } from "@/lib/queryClient";
 
@@ -49,6 +50,7 @@ function AppRoutes() {
         <Route path="/funders/:id" element={<FunderDetailPage />} />
         <Route path="/funders/:id/edit" element={<FunderFormPage />} />
         <Route path="/calculator" element={<CalculatorPage />} />
+        <Route path="/activity" element={<ActivityPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
