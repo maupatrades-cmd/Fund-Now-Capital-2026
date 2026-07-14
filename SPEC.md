@@ -107,6 +107,15 @@ Indexes: (timestamp DESC), (user_id, timestamp DESC), (entity_type, entity_id, t
 
 Views: owner chronological timeline (filter user/event/entity/date, export CSV); per-entity Activity tab on deal/client/lead; security log owner-only. Retention: never auto-delete (7yr+ policy handled operationally). Existing `deal_stage_history` remains; `activity_logs` is the general layer.
 
+**A10 implementation notes (as built — deviations from the outline above):**
+- The timestamp column is named **`occurred_at`** (not `timestamp`): `timestamp` is a reserved type keyword and a bare column of that name would need quoting everywhere. Same semantics (timestamptz, UTC). Indexes use `occurred_at`.
+- **"Async"** is realised as lightweight **AFTER-row triggers** (one small insert, sub-millisecond, effectively non-blocking) rather than a message queue. A true fire-and-forget queue (pg_net / pgmq) is deferred.
+- Triggers are attached to **deals, deal_funder_submissions, clients, client_contacts, commission_records**. The **`leads`** trigger is deferred to **B2** (the table doesn't exist yet).
+- Event-type mapping: INSERT→`CREATE`, UPDATE→`UPDATE`, DELETE→`DELETE`; a deal update that changes `stage`→`STAGE_CHANGE`; **all** `deal_funder_submissions` writes→`SUBMISSION` (the description carries the added/updated/status-change detail). `changed_fields`/`before_values`/`after_values` are captured on UPDATE (excluding `updated_at`).
+- `entity_type` values are singular strings: `deal`, `deal_funder_submission`, `client`, `client_contact`, `commission_record`. `related_entity_ids` links children to parents (submissions/commission → deal; contacts/deals → client) so a deal's Activity tab picks up its submissions and a client's picks up its deals + contacts.
+- RLS: **owner-only SELECT**; no insert/update/delete policy exists, so the trail is written only by the SECURITY DEFINER trigger and is immutable through the API. `ip_address`/`user_agent`/`session_id` are left for the app layer (auth/READ events, Phase E/F). READ logging is **not** enabled at this stage.
+- Frontend: Activity **section** on the deal detail page (which uses stacked sections, not a tab bar) and an Activity **tab** on the client detail page; owner `/activity` timeline with date/user/event/entity filters, description search, and CSV export (client-side; latest 500 per page).
+
 ---
 
 ## S6. DOCUMENT MANAGEMENT UPGRADE (Part 6 M1 — Roadmap B3 core, E/F extras)

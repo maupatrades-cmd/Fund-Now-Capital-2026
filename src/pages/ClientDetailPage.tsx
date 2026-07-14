@@ -7,8 +7,9 @@ import { ContactsManager } from "@/components/clients/ContactsManager";
 import { DocumentsPanel } from "@/components/clients/DocumentsPanel";
 import { referredByMeta } from "@/lib/clients";
 import { formatZAR } from "@/lib/format";
+import { ActivityFeed } from "@/components/activity/ActivityFeed";
 
-type Tab = "overview" | "documents" | "notes";
+type Tab = "overview" | "documents" | "notes" | "activity";
 
 export default function ClientDetailPage() {
   const { id } = useParams();
@@ -66,6 +67,9 @@ export default function ClientDetailPage() {
         <TabButton active={tab === "notes"} onClick={() => setTab("notes")}>
           Notes
         </TabButton>
+        <TabButton active={tab === "activity"} onClick={() => setTab("activity")}>
+          Activity
+        </TabButton>
       </div>
 
       {tab === "overview" && (
@@ -103,6 +107,12 @@ export default function ClientDetailPage() {
           ) : (
             <p className="text-sm text-muted-foreground">No notes yet.</p>
           )}
+        </section>
+      )}
+
+      {tab === "activity" && (
+        <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+          <ActivityFeed entityId={client.id} />
         </section>
       )}
     </div>

@@ -13,6 +13,7 @@ import { FunderSubmissions } from "@/components/deals/FunderSubmissions";
 import { CommunicationsLog } from "@/components/deals/CommunicationsLog";
 import { DealDocuments } from "@/components/deals/DealDocuments";
 import { StageHistory } from "@/components/deals/StageHistory";
+import { ActivityFeed } from "@/components/activity/ActivityFeed";
 
 export default function DealDetailPage() {
   const { id } = useParams();
@@ -195,6 +196,10 @@ export default function DealDetailPage() {
 
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
         <StageHistory dealId={deal.id} />
+      </section>
+
+      <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+        <ActivityFeed entityId={deal.id} />
       </section>
 
       {reopenTo && (
