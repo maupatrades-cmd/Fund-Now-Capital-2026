@@ -2,7 +2,7 @@
 
 ## What this is
 Internal CRM for **Fund Now Capital**, a South African SME funding brokerage owned by Thapelo Maupa (she/her). Owner-first tool now; referral-partner portal for **Doctor (Bright Destiny)** launches in **Phase D**. Client-facing portal deliberately deferred (Part 7).
-Build order lives in **ROADMAP.md** — always consult it before starting work. Feature details live in `docs/spec-part-1.md … docs/spec-part-6.md`.
+Build order lives in **ROADMAP.md** — always consult it before starting work. Feature details live in `SPEC.md`.
 
 ## Who I'm working with
 Thapelo — founder, 12+ years high-performance sales, learning to code (beginner), mother, Christian faith central to her life. Explain technical decisions in plain language. Name real tradeoffs once, recommend one, respect her call. Never invent funder rates, client data, or facts — ask. When she's working very late, be honest and encourage rest.
@@ -24,7 +24,7 @@ React + TypeScript + Vite · Tailwind + shadcn/ui · Supabase (Postgres/Auth/Sto
 Gross X → 40% company retention → 60% partner pool. Partner tier % of pool: PO deals flat 40%. Non-PO by gross band: R0–80,000 → 29% · R80,001–150,000 → 30% · R150,001–500,000 → 33% · R500,001+ → 25%. Owner share = pool − partner share. Three outputs always sum to X. Contract range 20–45%; all tiers comply. Single source of truth: the DB function, called via RPC everywhere (calculator screen, deal submissions, doctor earnings).
 
 ## Funder anonymisation (live in schema)
-`funders.real_name` (owner-only) + `display_name_for_partner` (Rachel, Marcus, Ethan, Nadia, Palesa, Themba, Chloe, Amara, Ryan, Sophie, Sipho, Elizabeth, Thomas, Grace, Nicholas, Isabelle, Benjamin, Lerato, William, Zanele, Alexander). Partner-facing surfaces show the fictional name only — screens, notifications, PDFs, AI outputs, everywhere.
+`funders.name` (owner-only) + `display_name_for_partner` (Rachel, Marcus, Ethan, Nadia, Palesa, Themba, Chloe, Amara, Ryan, Sophie, Sipho, Elizabeth, Thomas, Grace, Nicholas, Isabelle, Benjamin, Lerato, William, Zanele, Alexander). Partner-facing surfaces show the fictional name only — screens, notifications, PDFs, AI outputs, everywhere.
 
 ## Brand
 Navy `#1a3a52` · Teal `#2da8b8` · Green `#5dba5d` · Tagline "Many funders. More approvals." · Inter · clean modern SaaS · shared AppLayout (navy sidebar + top bar) on every owner screen · PriorityGlow is the single sanctioned glow effect (priority deals + celebrations only).
