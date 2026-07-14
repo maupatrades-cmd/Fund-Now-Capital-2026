@@ -135,9 +135,13 @@ export function useUpdateDealStage() {
     onError: (_e, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(["pipeline"], ctx.prev);
     },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ["pipeline"] });
+    onSuccess: () => {
+      // Only a successful stage change writes an activity row.
       invalidateActivity(qc);
+    },
+    onSettled: () => {
+      // Reconcile the optimistic update on both success and rollback.
+      qc.invalidateQueries({ queryKey: ["pipeline"] });
     },
   });
 }
