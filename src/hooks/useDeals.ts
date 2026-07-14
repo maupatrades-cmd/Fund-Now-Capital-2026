@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { DealStage } from "@/lib/dealStages";
+import { invalidateActivity } from "@/hooks/useActivity";
 
 export function one<T>(rel: T | T[] | null): T | null {
   return Array.isArray(rel) ? (rel[0] ?? null) : (rel ?? null);
@@ -103,7 +104,10 @@ export function useCreateDeal() {
       if (error) throw error;
       return data as { id: string };
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["pipeline"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pipeline"] });
+      invalidateActivity(qc);
+    },
   });
 }
 
@@ -131,7 +135,14 @@ export function useUpdateDealStage() {
     onError: (_e, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(["pipeline"], ctx.prev);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["pipeline"] }),
+    onSuccess: () => {
+      // Only a successful stage change writes an activity row.
+      invalidateActivity(qc);
+    },
+    onSettled: () => {
+      // Reconcile the optimistic update on both success and rollback.
+      qc.invalidateQueries({ queryKey: ["pipeline"] });
+    },
   });
 }
 
@@ -145,6 +156,7 @@ export function useToggleDealPriority() {
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ["pipeline"] });
       qc.invalidateQueries({ queryKey: ["deal", v.id] });
+      invalidateActivity(qc);
     },
   });
 }
