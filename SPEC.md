@@ -238,7 +238,7 @@ Figma-derived asset library (exported SVG/PNG, stored in Supabase Storage). Five
 - criteria jsonb (machine-readable unlock rule, e.g. `{"metric":"deals_funded","gte":1}`)
 - asset_url (Figma export in Storage), sort_order, active bool, created_at
 
-Earned badges live in **`doctor_badges`** (S11 / F6): id, doctor_id, badge_design_id FK, earned_at, deal_id (nullable, the triggering deal), seen_at (for the "new badge" indicator). A badge is awarded once its `criteria` is met; awarding fires a **BADGE_EARNED** notification (S4) and a **big** confetti celebration. Seed families (per S11): first deal funded, 4-week streak, 10 quality leads, R100k earnings, repeat client — each with tier thresholds.
+Earned badges live in **`doctor_badges`** (S11 / F6): id, doctor_id, badge_design_id FK, earned_at, deal_id (nullable, the triggering deal), seen_at (for the "new badge" indicator). A badge is awarded once its `criteria` is met; awarding fires **exactly one BADGE_EARNED notification** (S4) and **exactly one** confetti celebration — `big` for a standard unlock, or **`massive` when that same unlock also crosses a tier** (Bronze→Silver→Gold→Platinum→Elite). A tier-crossing badge is a **single `massive` event — never `big` + `massive` combined**. Seed families (per S11): first deal funded, 4-week streak, 10 quality leads, R100k earnings, repeat client — each with tier thresholds.
 
 ### Confetti
 Library: **canvas-confetti** (single dependency, no external assets). Particles use brand colours only — Navy `#1a3a52`, Teal `#2da8b8`, Green `#5dba5d`. Four intensities:
@@ -247,8 +247,10 @@ Library: **canvas-confetti** (single dependency, no external assets). Particles 
 |---|---|---|
 | **small** | quick pop | lead **qualified** · new client added |
 | **medium** | short burst | deal approved · contract signed |
-| **big** | full burst + PriorityGlow pulse | deal funded · badge unlocked |
-| **massive** | sustained multi-burst, screen-filling | R100k+ commission month · tier crossed (Bronze→Silver→…→Elite) |
+| **big** | full burst + PriorityGlow pulse | deal funded · **standard** badge unlock (no tier change) |
+| **massive** | sustained multi-burst, screen-filling | R100k+ commission month · **tier-crossing** badge unlock (Bronze→Silver→…→Elite) |
+
+**Implementation note:** Celebration size is chosen at emit time by the most significant matching rule, and each event fires exactly one notification and one animation — no stacking. (So a single funded deal that also unlocks a tier-crossing badge resolves to one `massive` celebration, not a `big` and a `massive`.)
 
 `big` and `massive` compose with **PriorityGlow** (the single sanctioned glow effect, per CLAUDE.md) — no other glow. Honour `prefers-reduced-motion`: fall back to a static celebratory toast for users who opt out.
 
