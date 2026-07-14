@@ -1,70 +1,45 @@
-# Fund Now Capital CRM
+# Fund Now Capital CRM — CLAUDE.md (v2)
 
 ## What this is
-An internal CRM for **Fund Now Capital**, a South African SME funding brokerage. Owned by Thapelo Maupa (she/her). Phase 1 is a **single-owner internal tool**. A referral-partner portal comes in a later phase — so the schema and security model are designed for it now, but the partner-facing screens are NOT built yet.
+Internal CRM for **Fund Now Capital**, a South African SME funding brokerage owned by Thapelo Maupa (she/her). Owner-first tool now; referral-partner portal for **Doctor (Bright Destiny)** launches in **Phase D**. Client-facing portal deliberately deferred (Part 7).
+Build order lives in **ROADMAP.md** — always consult it before starting work. Feature details live in `docs/spec-part-1.md … docs/spec-part-6.md`.
 
 ## Who I'm working with
-Thapelo is the founder — 12+ years in sales, business-minded, learning to code at a beginner level with the goal of understanding her own product. Explain technical decisions in plain language. When a choice has real tradeoffs, name them briefly and recommend one. Never invent funder rates, client data, or facts — if something isn't specified, ask.
+Thapelo — founder, 12+ years high-performance sales, learning to code (beginner), mother, Christian faith central to her life. Explain technical decisions in plain language. Name real tradeoffs once, recommend one, respect her call. Never invent funder rates, client data, or facts — ask. When she's working very late, be honest and encourage rest.
 
 ## Tech stack (locked)
-- **Frontend:** React + TypeScript + Vite
-- **Styling:** Tailwind + shadcn/ui
-- **Backend:** Supabase (Postgres, Auth, Storage, RLS, Edge Functions)
-- **Forms:** react-hook-form + zod
-- **Data fetching:** TanStack Query
-- **Deploy:** Vercel
-- **Version control:** GitHub, private repo. CodeRabbit reviews PRs.
+React + TypeScript + Vite · Tailwind + shadcn/ui · Supabase (Postgres/Auth/Storage/RLS/Edge Functions) · react-hook-form + zod · TanStack Query · dnd-kit · gsap (PriorityGlow only) · Vercel (auto-deploy from main) · GitHub `maupatrades-cmd/Fund-Now-Capital-2026` · CodeRabbit on PRs · Resend for email · Twilio for WhatsApp/SMS (Phase D) · Anthropic API for AI features (Phase E).
 
 ## Security rules — NON-NEGOTIABLE
-This app holds client bank statements and a live commission ledger. Treat security as the priority.
-1. **Supabase native Auth only** (email + password), with `auth.uid()`-based RLS on every table. NEVER use custom session tokens. (A previous build on another platform failed exactly this way — custom tokens broke RLS and forced every read through service-role backend functions. Do not repeat that pattern.)
-2. **Never expose the service role key to the client.** It lives only in server-side/Edge Function environments.
-3. **RLS enabled on every table**, day one. Owners: full read/write. Partners: read-only on rows linked to their own `referral_partner_id` (write these policies now, even though partner screens don't exist yet).
-4. **Public signup is OFF.** The first owner account is created once, then signup is disabled. New users are owner-invited only.
-5. **Money is always recomputed server-side on save.** The commission split is never trusted from the browser — the client may show a live preview, but persisted values are recalculated server-side.
-6. All monetary values are `numeric(14,2)` in Postgres. Never floats.
+1. Supabase native Auth only; `auth.uid()`-based RLS on every table. NEVER custom session tokens (the LB-281 lesson from a previous build).
+2. Service role key never reaches the client.
+3. RLS on every new table from day one. Owner: full. Partner: read-only own rows. Funder identity is owner-only; partners see `display_name_for_partner` ONLY.
+4. Public signup OFF. Users created by owner. Current users: `business.lekgoro@gmail.com` (owner), `queenasdice@gmail.com` (test partner — placeholder for Doctor).
+5. Money is recomputed server-side on save; client values never trusted.
+6. All monetary values `numeric(14,2)`. Never floats. Currency format `R1,250,000` (en-ZA).
+7. Bank statements are owner-only in RLS — partners never see them.
+8. Every new feature writes to `activity_logs` (once A10 lands) and, where user-relevant, fires notifications (once A11 lands).
 
-## The Commission Engine — the core of the app
-Every funded deal produces a gross commission `X` that Fund Now Capital receives from the funder. It splits like this:
-1. `company_retention = X × 0.40` (stays in the business, flat, all deals)
-2. `partner_pool = X × 0.60` (shared between Thapelo and the referral partner)
-3. Partner's share of the pool is set by tier %, chosen by deal type and gross-commission band:
-   - **Purchase Order deals (any funder): flat 40% of pool**
-   - **Non-PO deals, by gross band:**
-     - R0 – R80,000 → 29%
-     - R80,001 – R150,000 → 30%
-     - R150,001 – R500,000 → 33%
-     - R500,001+ → 25%
-4. `partner_share = partner_pool × tier%`
-5. `owner_share = partner_pool − partner_share`
-6. The three outputs (company_retention, partner_share, owner_share) must always sum to X.
+## The Commission Engine (locked — implemented as `calculate_commission()` in Postgres)
+Gross X → 40% company retention → 60% partner pool. Partner tier % of pool: PO deals flat 40%. Non-PO by gross band: R0–80,000 → 29% · R80,001–150,000 → 30% · R150,001–500,000 → 33% · R500,001+ → 25%. Owner share = pool − partner share. Three outputs always sum to X. Contract range 20–45%; all tiers comply. Single source of truth: the DB function, called via RPC everywhere (calculator screen, deal submissions, doctor earnings).
 
-Implement this ONCE as a shared, unit-tested function. Both the calculator screen and the deal-submission save path use it. The save path runs it server-side.
-
-Contract note: the referral partner agreement permits a 20%–45% range; all tier percentages above fall inside it.
-
-## Funder anonymisation (schema now, UI later)
-Each funder has a real name AND a `display_name_for_partner` (a fictional first name). In the future partner portal, the partner only ever sees the fictional name — this stops them bypassing Fund Now Capital to approach funders directly. The owner always sees real names. Store both now.
+## Funder anonymisation (live in schema)
+`funders.real_name` (owner-only) + `display_name_for_partner` (Rachel, Marcus, Ethan, Nadia, Palesa, Themba, Chloe, Amara, Ryan, Sophie, Sipho, Elizabeth, Thomas, Grace, Nicholas, Isabelle, Benjamin, Lerato, William, Zanele, Alexander). Partner-facing surfaces show the fictional name only — screens, notifications, PDFs, AI outputs, everywhere.
 
 ## Brand
-- Navy `#1a3a52` (primary), Teal `#2da8b8` (secondary), Green `#5dba5d` (success/positive)
-- Tagline: "Many funders. More approvals."
-- Currency: South African Rand, formatted `R1,250,000` via `Intl.NumberFormat('en-ZA')`.
-- Clean modern SaaS, sidebar nav, responsive (owner uses desktop + mobile).
+Navy `#1a3a52` · Teal `#2da8b8` · Green `#5dba5d` · Tagline "Many funders. More approvals." · Inter · clean modern SaaS · shared AppLayout (navy sidebar + top bar) on every owner screen · PriorityGlow is the single sanctioned glow effect (priority deals + celebrations only).
 
-## Deal stages (15, in order)
+## Deal stages (15, Declined is terminal — revival only via deal-detail dropdown w/ confirm)
 New Lead → Qualifying → Document Collection → Deal Review → Submitted → In Credit → Approved/Quote Received → Client Deciding → Verification/KYC → Contract Signed → Advance Pending → Funded → Invoiced → Commission Paid → Declined
-(Declined is terminal, reachable from any stage.)
+
+## Current build state (update this section as phases complete)
+DONE: schema+RLS+engine+21 funders · auth/login · dashboard · funder panel · client DB · pipeline kanban + deal detail + calculators (PR #9, merged) · deal_pipeline migration applied to live.
+IN FLIGHT: declined-terminal fix + PR #9 review fixes (PR #10, awaiting CodeRabbit — its migration not yet applied to live) · Mama Mabase smoke test.
+NEXT: Phase A10–A13 (activity logging, in-app notifications, Resend emails, Twilio paperwork).
+
+## Open decisions (do not build past these without owner's answer)
+1. Doctor's Commission Estimator "Business View" transparency (blocks D5).
+2. Password expiry policy at F2 (recommend against forced 90-day rotation; prefer 2FA).
 
 ## Working style
-- Small, reviewable commits with clear messages. One logical change per PR where practical.
-- Write the schema and RLS first, verify it, THEN build screens.
-- When you finish a step, tell me what you did and what to test — don't chain ten changes silently.
-- Ask before destructive migrations.
-- Deployed app (main branch): https://fund-now-capital-2026-git-main-thapelo-l.vercel.app/
-
----
-
-## Repo status (living notes — update as work lands)
-- **Login page** (`src/pages/AuthPage.tsx` + `AuthPage.css`): split-screen UI built to the design handoff. Currently **UI-only** — Sign In shows a placeholder toast and is NOT yet wired to Supabase Auth. Wiring native email/password auth (rule #1) and disabling public signup (rule #4) is the next step for this screen.
-- **Not yet started:** Supabase project/client, database schema, RLS policies, commission engine function, all post-login screens.
+Small verified stages. One PR per logical change; open PR, WAIT for CodeRabbit, owner merges. After any schema merge: apply migration to live DB, verify, then owner runs smoke test. Tell her what you did and what to test — never chain ten silent changes. Ask before destructive migrations. Never discuss real funder rates in partner-facing code or copy.

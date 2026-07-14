@@ -4,13 +4,17 @@ import { stageLabel } from "@/lib/dealStages";
 import { formatRelative } from "@/lib/format";
 
 export function StageHistory({ dealId }: { dealId: string }) {
-  const { data: history, isLoading } = useDealStageHistory(dealId);
+  const { data: history, isLoading, isError, error } = useDealStageHistory(dealId);
 
   return (
     <div>
       <h3 className="mb-3 text-sm font-semibold text-brand-navy">Stage history</h3>
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : isError ? (
+        <p className="text-sm text-red-600">
+          Couldn't load stage history: {(error as Error)?.message}
+        </p>
       ) : history && history.length > 0 ? (
         <ul className="space-y-2">
           {history.map((h) => (

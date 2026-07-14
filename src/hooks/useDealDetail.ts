@@ -52,6 +52,26 @@ export function useUpdateDeal() {
   });
 }
 
+// Deliberate revival of a declined deal — goes through the reopen_deal()
+// database function (the only way past the terminal-stage trigger).
+export function useReopenDeal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, stage }: { id: string; stage: DealStage }) => {
+      const { error } = await supabase.rpc("reopen_deal", {
+        p_deal_id: id,
+        p_stage: stage,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["deal", v.id] });
+      qc.invalidateQueries({ queryKey: ["deal-stage-history", v.id] });
+      qc.invalidateQueries({ queryKey: ["pipeline"] });
+    },
+  });
+}
+
 // ---- Funder submissions --------------------------------------------------
 export type DealSubmission = {
   id: string;
@@ -121,7 +141,11 @@ export function useSaveSubmission() {
         if (error) throw error;
       }
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["deal-submissions", v.dealId] }),
+    onSuccess: (_d, v) => {
+      // The pipeline cards embed submissions, so keep that cache fresh too.
+      qc.invalidateQueries({ queryKey: ["deal-submissions", v.dealId] });
+      qc.invalidateQueries({ queryKey: ["pipeline"] });
+    },
   });
 }
 
@@ -132,7 +156,10 @@ export function useDeleteSubmission() {
       const { error } = await supabase.from("deal_funder_submissions").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["deal-submissions", v.dealId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["deal-submissions", v.dealId] });
+      qc.invalidateQueries({ queryKey: ["pipeline"] });
+    },
   });
 }
 

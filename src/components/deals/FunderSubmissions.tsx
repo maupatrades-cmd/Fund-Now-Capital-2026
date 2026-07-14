@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +20,22 @@ import { formatZAR } from "@/lib/format";
 
 const cls =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
+const errCls = "mt-1 text-xs text-red-600";
+
+const nullableAmount = z.preprocess(
+  (v) => (v === "" || v == null ? null : Number(v)),
+  z.number().finite("Enter a valid amount").nonnegative("Must be zero or more").nullable(),
+);
+
+const submissionSchema = z.object({
+  funder_id: z.string().min(1, "Choose a funder"),
+  status: z.string().min(1),
+  submitted_at: z.string().optional().default(""),
+  quote_amount: nullableAmount,
+  offered_commission: nullableAmount,
+  notes: z.string().optional().default(""),
+});
+type SubmissionValues = z.input<typeof submissionSchema>;
 
 export function FunderSubmissions({
   dealId,
@@ -106,6 +125,7 @@ export function FunderSubmissions({
       {(adding || editing) && (
         <div className="mt-3">
           <SubmissionForm
+            key={editing?.id ?? "new"}
             dealId={dealId}
             isPurchaseOrder={isPurchaseOrder}
             submission={editing ?? undefined}
@@ -133,33 +153,37 @@ function SubmissionForm({
 }) {
   const { data: funders } = useFunderOptions();
   const save = useSaveSubmission();
-  const [funderId, setFunderId] = useState(submission?.funder_id ?? "");
-  const [status, setStatus] = useState(submission?.status ?? "submitted");
-  const [submittedAt, setSubmittedAt] = useState(
-    submission?.submitted_at ? submission.submitted_at.slice(0, 10) : "",
-  );
-  const [quote, setQuote] = useState(
-    submission?.quote_amount != null ? String(submission.quote_amount) : "",
-  );
-  const [offered, setOffered] = useState(
-    submission?.offered_commission != null ? String(submission.offered_commission) : "",
-  );
-  const [notes, setNotes] = useState(submission?.notes ?? "");
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<SubmissionValues>({
+    resolver: zodResolver(submissionSchema),
+    defaultValues: {
+      funder_id: submission?.funder_id ?? "",
+      status: submission?.status ?? "submitted",
+      submitted_at: submission?.submitted_at ? submission.submitted_at.slice(0, 10) : "",
+      quote_amount: submission?.quote_amount != null ? String(submission.quote_amount) : "",
+      offered_commission: submission?.offered_commission != null ? String(submission.offered_commission) : "",
+      notes: submission?.notes ?? "",
+    },
+  });
 
-  const gross = offered === "" ? null : Number(offered);
+  const offeredRaw = watch("offered_commission");
+  const gross =
+    offeredRaw === "" || offeredRaw == null || !Number.isFinite(Number(offeredRaw))
+      ? null
+      : Number(offeredRaw);
 
-  const submit = async () => {
-    if (!funderId) {
-      toast.error("Choose a funder");
-      return;
-    }
+  const onSubmit = async (v: SubmissionValues) => {
     const input: SubmissionInput = {
-      funder_id: funderId,
-      status,
-      submitted_at: submittedAt ? new Date(submittedAt).toISOString() : null,
-      quote_amount: quote === "" ? null : Number(quote),
-      offered_commission: offered === "" ? null : Number(offered),
-      notes: notes || null,
+      funder_id: v.funder_id as string,
+      status: v.status as string,
+      submitted_at: v.submitted_at ? new Date(v.submitted_at as string).toISOString() : null,
+      quote_amount: (v.quote_amount as number | null) ?? null,
+      offered_commission: (v.offered_commission as number | null) ?? null,
+      notes: (v.notes as string) ? (v.notes as string) : null,
     };
     try {
       await save.mutateAsync({ dealId, submissionId: submission?.id, input });
@@ -171,20 +195,21 @@ function SubmissionForm({
   };
 
   return (
-    <div className="space-y-3 rounded-lg border border-brand-teal/40 bg-slate-50 p-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 rounded-lg border border-brand-teal/40 bg-slate-50 p-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-brand-navy mb-1">Funder</label>
-          <select className={cls} value={funderId} onChange={(e) => setFunderId(e.target.value)}>
+          <select className={cls} {...register("funder_id")}>
             <option value="">Select funder…</option>
             {(funders ?? []).map((f) => (
               <option key={f.id} value={f.id}>{f.name}</option>
             ))}
           </select>
+          {errors.funder_id && <p className={errCls}>{errors.funder_id.message}</p>}
         </div>
         <div>
           <label className="block text-xs font-medium text-brand-navy mb-1">Status</label>
-          <select className={cls} value={status} onChange={(e) => setStatus(e.target.value)}>
+          <select className={cls} {...register("status")}>
             {SUBMISSION_STATUSES.map((s) => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
@@ -192,17 +217,19 @@ function SubmissionForm({
         </div>
         <div>
           <label className="block text-xs font-medium text-brand-navy mb-1">Submitted date</label>
-          <input type="date" className={cls} value={submittedAt} onChange={(e) => setSubmittedAt(e.target.value)} />
+          <input type="date" className={cls} {...register("submitted_at")} />
         </div>
         <div>
           <label className="block text-xs font-medium text-brand-navy mb-1">Quote amount (R)</label>
-          <input type="number" min="0" step="1000" className={cls} value={quote} onChange={(e) => setQuote(e.target.value)} />
+          <input type="number" min="0" step="1000" className={cls} {...register("quote_amount")} />
+          {errors.quote_amount && <p className={errCls}>{errors.quote_amount.message}</p>}
         </div>
         <div className="sm:col-span-2">
           <label className="block text-xs font-medium text-brand-navy mb-1">
             Offered commission (R) — gross for the split
           </label>
-          <input type="number" min="0" step="100" className={cls} value={offered} onChange={(e) => setOffered(e.target.value)} />
+          <input type="number" min="0" step="100" className={cls} {...register("offered_commission")} />
+          {errors.offered_commission && <p className={errCls}>{errors.offered_commission.message}</p>}
         </div>
       </div>
 
@@ -214,21 +241,20 @@ function SubmissionForm({
         <CommissionBreakdownView gross={gross} isPurchaseOrder={isPurchaseOrder} />
       </div>
 
-      <textarea className={cls} rows={2} placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+      <textarea className={cls} rows={2} placeholder="Notes" {...register("notes")} />
 
       <div className="flex items-center gap-2">
         <button
-          type="button"
-          onClick={submit}
-          disabled={save.isPending}
+          type="submit"
+          disabled={isSubmitting}
           className="rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60"
         >
-          {save.isPending ? "Saving…" : submission ? "Save" : "Add"}
+          {isSubmitting ? "Saving…" : submission ? "Save" : "Add"}
         </button>
         <button type="button" onClick={onCancel} className="rounded-lg border border-border px-4 py-2 text-sm text-brand-navy hover:bg-white">
           Cancel
         </button>
       </div>
-    </div>
+    </form>
   );
 }

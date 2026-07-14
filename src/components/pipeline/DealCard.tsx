@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Building2, Landmark } from "lucide-react";
@@ -49,6 +50,16 @@ export function DraggableDeal({
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: deal.id,
   });
+  // Keep dnd-kit's keyboard drag (Space picks up) but let Enter open the deal.
+  const { onKeyDown: dndKeyDown, ...restListeners } = listeners ?? {};
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onOpen(deal.id);
+      return;
+    }
+    dndKeyDown?.(e);
+  };
   const days = daysSince(deal.stage_entered_at);
   const urgency = stageUrgency(days);
 
@@ -71,11 +82,11 @@ export function DraggableDeal({
     <div
       ref={setNodeRef}
       style={style}
-      {...listeners}
+      {...restListeners}
       {...attributes}
       onClick={() => onOpen(deal.id)}
+      onKeyDown={handleKeyDown}
       className="cursor-pointer touch-none select-none"
-      role="button"
     >
       {shell}
     </div>

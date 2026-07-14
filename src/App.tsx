@@ -2,7 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import AuthPage from "@/pages/AuthPage";
-import AppLayout from "@/components/layout/AppLayout";
+import OwnerGate from "@/components/layout/OwnerGate";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
 import DealDetailPage from "@/pages/DealDetailPage";
@@ -35,8 +35,8 @@ function AppRoutes() {
         element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />}
       />
 
-      {/* Authenticated app — shared sidebar/top-bar layout. */}
-      <Route element={session ? <AppLayout /> : <Navigate to="/" replace />}>
+      {/* Authenticated app — owner-only, shared sidebar/top-bar layout. */}
+      <Route element={session ? <OwnerGate /> : <Navigate to="/" replace />}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/deals/:id" element={<DealDetailPage />} />
