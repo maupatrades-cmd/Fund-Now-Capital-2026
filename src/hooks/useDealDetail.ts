@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { one } from "@/hooks/useDeals";
+import { invalidateActivity } from "@/hooks/useActivity";
 import type { DealStage } from "@/lib/dealStages";
 
 export type Deal = {
@@ -48,6 +49,7 @@ export function useUpdateDeal() {
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ["deal", v.id] });
       qc.invalidateQueries({ queryKey: ["pipeline"] });
+      invalidateActivity(qc);
     },
   });
 }
@@ -68,6 +70,7 @@ export function useReopenDeal() {
       qc.invalidateQueries({ queryKey: ["deal", v.id] });
       qc.invalidateQueries({ queryKey: ["deal-stage-history", v.id] });
       qc.invalidateQueries({ queryKey: ["pipeline"] });
+      invalidateActivity(qc);
     },
   });
 }
@@ -151,6 +154,7 @@ export function useSaveSubmission() {
       // The pipeline cards embed submissions, so keep that cache fresh too.
       qc.invalidateQueries({ queryKey: ["deal-submissions", v.dealId] });
       qc.invalidateQueries({ queryKey: ["pipeline"] });
+      invalidateActivity(qc);
     },
   });
 }
@@ -165,6 +169,7 @@ export function useDeleteSubmission() {
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ["deal-submissions", v.dealId] });
       qc.invalidateQueries({ queryKey: ["pipeline"] });
+      invalidateActivity(qc);
     },
   });
 }

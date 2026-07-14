@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { invalidateActivity } from "@/hooks/useActivity";
 
 type Named = { name: string } | { name: string }[] | null;
 
@@ -131,7 +132,10 @@ export function useCreateClient() {
       if (error) throw error;
       return data as Client;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      invalidateActivity(qc);
+    },
   });
 }
 
@@ -157,6 +161,7 @@ export function useUpdateClient() {
     onSuccess: (c) => {
       qc.invalidateQueries({ queryKey: ["clients"] });
       qc.invalidateQueries({ queryKey: ["client", c.id] });
+      invalidateActivity(qc);
     },
   });
 }
@@ -191,8 +196,10 @@ export function useSaveClientContact() {
       if (error) throw error;
       return data as ClientContact;
     },
-    onSuccess: (c) =>
-      qc.invalidateQueries({ queryKey: ["client-contacts", c.client_id] }),
+    onSuccess: (c) => {
+      qc.invalidateQueries({ queryKey: ["client-contacts", c.client_id] });
+      invalidateActivity(qc);
+    },
   });
 }
 
@@ -203,7 +210,9 @@ export function useDeleteClientContact() {
       const { error } = await supabase.from("client_contacts").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: (_d, vars) =>
-      qc.invalidateQueries({ queryKey: ["client-contacts", vars.clientId] }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["client-contacts", vars.clientId] });
+      invalidateActivity(qc);
+    },
   });
 }

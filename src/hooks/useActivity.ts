@@ -1,10 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { ActivityLog } from "@/lib/activity";
 
 // Cap on rows fetched in one page — surfaced to the user when hit.
 export const ACTIVITY_FEED_LIMIT = 500;
 const ENTITY_LIMIT = 200;
+
+// Activity rows are written by DB triggers as a side effect of other mutations,
+// so those mutations can't know an audit row appeared. Any mutation that writes
+// to a trigger-backed table (deals, deal_funder_submissions, clients,
+// client_contacts, commission_records) must call this in onSuccess/onSettled so
+// the entity feeds and the /activity timeline refetch instead of showing a
+// stale snapshot taken before the change.
+export function invalidateActivity(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["activity-entity"] });
+  qc.invalidateQueries({ queryKey: ["activity-feed"] });
+}
 
 // Activity for a single entity: the entity's own log rows PLUS rows that
 // reference it via related_entity_ids (a deal picks up its submissions; a
