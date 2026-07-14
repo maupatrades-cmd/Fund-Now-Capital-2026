@@ -224,6 +224,43 @@ Owner view: Team → partner profile: engagement overview (last login, frequency
 
 ---
 
+## S14. CELEBRATIONS & REWARDS SYSTEM (Part 3 F5–F6 — Roadmap F6)
+
+Two coordinated systems that make wins feel earned: **rank badges** (a persistent achievement library) and **confetti** (the moment-of-win animation). **Build order unchanged — this ships in F6**, after the portal, engagement suite, and real earnings data exist. Not surfaced earlier.
+
+### Rank badges
+Figma-derived asset library (exported SVG/PNG, stored in Supabase Storage). Five-tier progression per badge family: **Bronze → Silver → Gold → Platinum → Elite**.
+
+`badge_designs` (the catalogue — owner-curated, seeded from Figma):
+- id, code (unique slug, e.g. `first_deal_funded`), name, description
+- tier enum(bronze/silver/gold/platinum/elite)
+- category enum(milestone/streak/volume/earnings/quality)
+- criteria jsonb (machine-readable unlock rule, e.g. `{"metric":"deals_funded","gte":1}`)
+- asset_url (Figma export in Storage), sort_order, active bool, created_at
+
+Earned badges live in **`doctor_badges`** (S11 / F6): id, doctor_id, badge_design_id FK, earned_at, deal_id (nullable, the triggering deal), seen_at (for the "new badge" indicator). A badge is awarded once its `criteria` is met; awarding fires a **BADGE_EARNED** notification (S4) and a **big** confetti celebration. Seed families (per S11): first deal funded, 4-week streak, 10 quality leads, R100k earnings, repeat client — each with tier thresholds.
+
+### Confetti
+Library: **canvas-confetti** (single dependency, no external assets). Particles use brand colours only — Navy `#1a3a52`, Teal `#2da8b8`, Green `#5dba5d`. Four intensities:
+
+| Size | Feel | Trigger events |
+|---|---|---|
+| **small** | quick pop | lead **qualified** · new client added |
+| **medium** | short burst | deal approved · contract signed |
+| **big** | full burst + PriorityGlow pulse | deal funded · badge unlocked |
+| **massive** | sustained multi-burst, screen-filling | R100k+ commission month · tier crossed (Bronze→Silver→…→Elite) |
+
+`big` and `massive` compose with **PriorityGlow** (the single sanctioned glow effect, per CLAUDE.md) — no other glow. Honour `prefers-reduced-motion`: fall back to a static celebratory toast for users who opt out.
+
+### What NOT to celebrate (deliberate restraint)
+- **No confetti on login** — a celebration marks an achievement, not a routine action.
+- **No per-lead confetti** — a raw new lead is not a win; only a **qualified** lead earns the `small` tier. Per-lead animation trains users to ignore it.
+- No celebration for owner-internal edits, or for stage moves that aren't approval / signing / funding.
+
+Celebrations must stay rare enough to stay meaningful; overuse is the failure mode.
+
+---
+
 ## SA VALIDATION RULES (used everywhere)
 
 - **SA ID:** 13 digits, Luhn checksum, valid DOB + citizenship digit.

@@ -73,7 +73,7 @@ Goal: Doctor logs in and finds a living product. GATE: real deals + earnings dat
 - ⬜ F3. Backup & continuity (Part 6 M7): secondary offsite backup, weekly restore test, data export tools, DR playbook
 - ⬜ F4. Activity monitoring dashboards (Part 5 M4): engagement scores, alerts, Doctor's transparent self-view
 - ⬜ F5. PWA + mobile experience (Part 6 M9): installable, camera capture, push
-- ⬜ F6. Learning feed + gamification (Part 3 F5–F6)
+- ⬜ F6. Learning feed + gamification (Part 3 F5–F6): rank badges (Bronze→Silver→Gold→Platinum→Elite; `badge_designs` catalogue + `doctor_badges`) + confetti celebrations (canvas-confetti, four sizes). Full design in **SPEC S14**. Build order unchanged — ships here in F6, not earlier.
 - ⬜ F7. Integrations (Part 6 M10): CIPC validation, Absa matching, Chrome extension, webhooks
 - ⬜ F8. Advanced BI (Part 6 M11) + institutional wiki (Part 6 M12)
 - ⬜ F9. Data quality full suite (Part 6 M6): completeness scoring, hygiene prompts, merge
