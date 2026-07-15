@@ -45,6 +45,8 @@ NEXT: A13 paperwork (external, in progress) · Phase B kickoff (B1 Industry Clas
 ## Working style
 Small verified stages. One PR per logical change; open PR, WAIT for CodeRabbit, owner merges. After any schema merge: apply migration to live DB, verify, then owner runs smoke test. Tell her what you did and what to test — never chain ten silent changes. Ask before destructive migrations. Never discuss real funder rates in partner-facing code or copy.
 
+For any migration that adds FK columns to a table with existing data, use `NOT VALID` for the FK constraints and build their indexes with `CREATE INDEX CONCURRENTLY` in a follow-up migration (outside any transaction — `CONCURRENTLY` cannot run inside one), then `VALIDATE CONSTRAINT`. Never use inline `REFERENCES` or plain `CREATE INDEX` on populated tables — these acquire write-blocking locks. Applies to every FK migration in Phases B through F.
+
 For Edge Functions invoked from the database via `pg_net` (currently `send-notification-email`, and any future notification/webhook-invoked function), a `WEBHOOK_SECRET` must be set as a Supabase Edge Function secret AND stored as a Vault value in the database so both sides agree. Every Edge Function may also require its own function-specific environment variables (API keys, base URLs). When a Claude Code session's proxy blocks outbound HTTP, use `pg_net` from inside the database for readiness probes — it's the same path production uses and stays non-destructive with fake IDs.
 
 Supabase RLS silently returns empty result sets for UPDATE/DELETE without permission. Every mutation must use `.select()` or `RETURNING id` and check the returned row count to catch silent RLS failures loudly. Never assume a mutation succeeded just because no error was thrown.

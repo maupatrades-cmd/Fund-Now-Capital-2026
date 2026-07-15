@@ -1,5 +1,11 @@
 -- B1 Industry Classification (SPEC S1 / Roadmap B1).
 --
+-- ZERO-DOWNTIME FK PATTERN: the FK columns on `clients` are added NOT VALID and
+-- their indexes are built CONCURRENTLY (in the follow-up migration
+-- 20260715201000) to avoid write-blocking locks on the clients table. This
+-- pattern applies to every future FK-add migration on tables with existing data
+-- — see Supabase docs on zero-downtime migrations.
+--
 -- Adds the taxonomy every later feature assumes: industries + sub_industries
 -- reference tables, an owner-editable funder appetite matrix, and nullable
 -- industry FKs on clients. RLS from day one (CLAUDE.md rule #3).
@@ -142,14 +148,30 @@ grant select on public.partner_funder_industry_appetite to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- clients: add taxonomy FKs + sector_notes. Legacy `sector` kept as-is.
+--
+-- Zero-downtime: columns are added nullable (metadata-only, no table rewrite)
+-- and the FK constraints are added NOT VALID so the ADD does not scan or lock
+-- existing rows. The supporting indexes are built CONCURRENTLY and the
+-- constraints VALIDATEd in the follow-up migration 20260715201000 (CREATE INDEX
+-- CONCURRENTLY cannot run inside this transaction).
 -- ---------------------------------------------------------------------------
-alter table public.clients
-  add column if not exists industry_id     uuid references public.industries(id)     on delete set null,
-  add column if not exists sub_industry_id uuid references public.sub_industries(id) on delete set null,
-  add column if not exists sector_notes    text;
+alter table public.clients add column if not exists industry_id     uuid;
+alter table public.clients add column if not exists sub_industry_id uuid;
+alter table public.clients add column if not exists sector_notes    text;
 
-create index if not exists clients_industry_id_idx     on public.clients(industry_id);
-create index if not exists clients_sub_industry_id_idx on public.clients(sub_industry_id);
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'clients_industry_id_fkey') then
+    alter table public.clients
+      add constraint clients_industry_id_fkey
+      foreign key (industry_id) references public.industries(id) on delete set null not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'clients_sub_industry_id_fkey') then
+    alter table public.clients
+      add constraint clients_sub_industry_id_fkey
+      foreign key (sub_industry_id) references public.sub_industries(id) on delete set null not valid;
+  end if;
+end $$;
 
 
 -- ---------------------------------------------------------------------------
