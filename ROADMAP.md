@@ -6,7 +6,7 @@ This is the single source of truth for build order. It supersedes the per-part p
 
 **Legend:** ✅ done · 🔨 in progress · ⬜ not started · 🔒 blocked by earlier item
 
-## PHASE A — Core Spine (CURRENT — finish before anything new)
+## PHASE A — Core Spine (COMPLETE)
 Goal: the original 5-screen CRM works end-to-end with a real deal, plus the two foundations every later module writes into.
 
 - ✅ A1. Schema: 11 tables, RLS, commission engine, 21 funders seeded
@@ -22,7 +22,7 @@ Goal: the original 5-screen CRM works end-to-end with a real deal, plus the two 
 - ✅ A10. Activity Logging foundation (Part 4): `activity_logs` table, async triggers on CREATE/UPDATE/DELETE for deals/clients/client_contacts/deal_funder_submissions/commission_records, per-entity Activity tab (deal + client detail), owner `/activity` timeline with filters + CSV export. (Generalises the stage-history table from PR #9.) `leads` trigger deferred to B2 (table doesn't exist yet). — merged, applied + verified live.
 - ✅ A11. In-app Notification system (Part 4): `notifications` + `notification_deliveries` + `notification_preferences` tables, bell icon + dropdown + mark-as-read, Realtime badge updates, `/notifications` list + `/settings/notifications` prefs. DEAL_APPROVED / DEAL_FUNDED / COMMISSION_PAID triggers live (owner-targeted, role-aware funder names); LEAD_CREATED_FOR_YOU trigger stubbed for B2. Hardened: mark-read RPCs return affected rows. — merged (PRs #18, #19), applied + verified live.
 - ✅ A12. Email notifications via Resend (Part 4, high-priority events: LEAD_CREATED_FOR_YOU, DEAL_APPROVED, DEAL_FUNDED, COMMISSION_PAID): `send-notification-email` Edge Function invoked async via pg_net, branded HTML + text template, per-event email prefs (owner default on), skip on disabled/quiet-hours/digest, `notification_deliveries` email rows. Domain `fundnowcapital.africa` verified in Resend. — merged (PR #20), migration applied + function deployed to live; live DEAL_APPROVED smoke test passed end-to-end (email sent from hello@fundnowcapital.africa, `notification_deliveries` email row recorded `sent`).
-- 🔨 A13. STARTED (paperwork only, external — owner-driven, runs in parallel): Twilio account + WhatsApp Business API verification + template pre-approval. Long lead time; underway now. Not a code build.
+- ✅ A13. Twilio account + WhatsApp Business API verification + template pre-approval (paperwork only, external — owner-driven). Not a code build; closed for Phase A. WhatsApp/SMS delivery goes live in D6.
 
 ## PHASE B — Data Foundations (Parts 2 + 6.M1)
 Goal: the data structures every later feature assumes.
