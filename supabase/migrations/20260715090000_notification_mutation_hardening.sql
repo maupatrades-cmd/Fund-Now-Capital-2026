@@ -111,7 +111,9 @@ begin
       from public.deals d
       left join public.clients c on c.id = d.client_id
      where d.id = new.deal_id;
-    select display_name_for_partner into v_funder from public.funders where id = new.funder_id;
+    -- Owner-facing notification: real funder name is fine (funder identity is
+    -- owner-only). The Phase D partner leg must use display_name_for_partner.
+    select name into v_funder from public.funders where id = new.funder_id;
     v_recipient := public.notify_owner();  -- Phase D: also notify referring partner
     perform public.emit_in_app_notification(
       v_recipient, 'DEAL_APPROVED', 'Deal approved',
@@ -158,7 +160,7 @@ begin
     v_recipient := public.notify_owner();  -- Phase D: also notify referring partner
     perform public.emit_in_app_notification(
       v_recipient, 'COMMISSION_PAID', 'Commission paid',
-      'Your commission of R' || to_char(new.partner_share, 'FM999,999,990')
+      'Partner commission of R' || to_char(new.partner_share, 'FM999,999,990')
         || ' for ' || coalesce(v_ref, 'a deal') || ' has been paid.',
       '/deals/' || new.deal_id::text,
       jsonb_build_object('commission_record_id', new.id, 'deal_id', new.deal_id)

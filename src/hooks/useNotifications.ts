@@ -94,11 +94,12 @@ export function useMarkNotificationsRead() {
   const invalidate = useInvalidateNotifications();
   return useMutation({
     mutationFn: async (ids: string[]) => {
-      // RPC returns the number of rows updated; zero back from a non-empty
-      // request means nothing was written — surface it rather than assume success.
+      // RPC returns the number of rows updated. Any mismatch from the requested
+      // count — total no-op or a partial ownership/RLS mismatch on a subset —
+      // means not everything was written, so surface it rather than assume success.
       const { data, error } = await supabase.rpc("mark_notifications_read", { p_ids: ids });
       if (error) throw error;
-      if (ids.length > 0 && !data) throw new Error("Notifications were not updated");
+      if (ids.length > 0 && data !== ids.length) throw new Error("Notifications were not updated");
     },
     onSuccess: invalidate,
   });
