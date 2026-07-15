@@ -88,18 +88,21 @@ async function hydrateDealContext(
 
   const funderName = async (funderId?: string | null): Promise<string | null> => {
     if (!funderId) return null;
-    const { data: f } = await supabase
-      .from("funders").select("name, display_name_for_partner").eq("id", funderId).single();
+    const { data: f, error } = await supabase
+      .from("funders").select("name, display_name_for_partner").eq("id", funderId).maybeSingle();
+    if (error) throw error; // real query failure -> caught below; zero rows -> null (fallback)
     if (!f) return null;
     return role === "owner" ? (f.name as string) : (f.display_name_for_partner as string);
   };
   const dealBits = async (id?: string) => {
     if (!id) return { reference: null, clientName: null, amountRequested: null, awardedFunderId: null };
-    const { data: d } = await supabase
-      .from("deals").select("reference, client_id, amount_requested, awarded_funder_id").eq("id", id).single();
+    const { data: d, error: dErr } = await supabase
+      .from("deals").select("reference, client_id, amount_requested, awarded_funder_id").eq("id", id).maybeSingle();
+    if (dErr) throw dErr;
     let clientName: string | null = null;
     if (d?.client_id) {
-      const { data: cl } = await supabase.from("clients").select("business_name").eq("id", d.client_id).single();
+      const { data: cl, error: cErr } = await supabase.from("clients").select("business_name").eq("id", d.client_id).maybeSingle();
+      if (cErr) throw cErr;
       clientName = (cl?.business_name as string) ?? null;
     }
     return {
@@ -116,8 +119,9 @@ async function hydrateDealContext(
       let funderId: string | null = null;
       let quote: number | null = null;
       if (submissionId) {
-        const { data: s } = await supabase
-          .from("deal_funder_submissions").select("funder_id, quote_amount").eq("id", submissionId).single();
+        const { data: s, error: sErr } = await supabase
+          .from("deal_funder_submissions").select("funder_id, quote_amount").eq("id", submissionId).maybeSingle();
+        if (sErr) throw sErr;
         funderId = (s?.funder_id as string) ?? null;
         quote = (s?.quote_amount as number) ?? null;
       }
@@ -142,8 +146,9 @@ async function hydrateDealContext(
       const crId = data.commission_record_id as string | undefined;
       let share: number | null = null;
       if (crId) {
-        const { data: cr } = await supabase
-          .from("commission_records").select("partner_share").eq("id", crId).single();
+        const { data: cr, error: crErr } = await supabase
+          .from("commission_records").select("partner_share").eq("id", crId).maybeSingle();
+        if (crErr) throw crErr;
         share = (cr?.partner_share as number) ?? null;
       }
       const d = await dealBits(dealId);

@@ -455,11 +455,11 @@ Header gradient navy `#1a3a52`→teal `#2da8b8` (135°) · cyan accent bar `#3ec
 Fund Now Capital (Pty) Ltd · CIPC 2026/066284/07 · 010 102 0534 · hello@fundnowcapital.africa · www.fundnowcapital.africa · Cedarwood House, 128 Ballyclare Drive, Bryanston 2191 (Sandton) · 75 Marshall Street, Polokwane 0699 · LinkedIn (Fund Now Capital) + TikTok @fundnowcapital · tagline "Many funders. More approvals." **Never** put a personal email (e.g. `thapelol@…`) on an automated footer — `hello@` is the shared reply inbox.
 
 ### S16.4 Which variant each future email extends
-- **Deal-state notifications** (`DEAL_APPROVED`, `LEAD_CREATED_FOR_YOU`) → **`deal_approved`** layout.
+- **Deal-state notifications** (`DEAL_APPROVED`) → **`deal_approved`** layout.
 - **`DEAL_FUNDED`** → **`deal_funded`** (a fifth variant reusing the `deal_approved` layout + check-in-circle icon), with locked copy: subject/H1 "Deal funded"; body "`{funder_display}` has funded `{deal_reference}` for `{amount}`. The advance to `{client_name}` is complete." then "Open the deal to record the funded date and start the commission process."; CTA "View deal in CRM"; category `deal`.
 - **Money notifications** (`COMMISSION_PAID`, invoice paid, payment received) → **`commission_paid`** layout.
 - **Digests / summaries** (weekly summary, Doctor's monthly statements) → **`weekly_summary`** layout.
-- **Onboarding / first-touch** (welcome, `LEAD_QUALIFIED`, client Trust Pack cover) → **`welcome`** layout.
+- **Onboarding / first-touch** (welcome, `LEAD_QUALIFIED`, `LEAD_CREATED_FOR_YOU`, client Trust Pack cover) → **`welcome`** layout.
 
 (`deal_approved` + `commission_paid` share the green-success-band renderer; `welcome` + `weekly_summary` are live-dormant until B2 / C6.)
 
@@ -473,12 +473,12 @@ Fund Now Capital (Pty) Ltd · CIPC 2026/066284/07 · 010 102 0534 · hello@fundn
 **Template interface (v2).** The Edge Function hydrates typed display variables and passes them to `renderEmail(model)` → `{subject, html, text}`: `firstName`, `funderDisplay` (role-aware — real `funders.name` for owner, `display_name_for_partner` for partner), `dealReference`, `amount` (pre-formatted en-ZA, e.g. `R8,000,000`), `clientName`, `linkUrl`, `eventType`, `appBaseUrl`. Hydration reads the notification's `data` payload (`deal_id` / `submission_id` / `commission_record_id`) with the service-role client — triggers stay simple (they still fire `body_text` for the in-app bell); only the email is enriched. Any hydration miss falls back to `body_text`.
 
 ### S16.6 Logo & icon assets
-`/public/logo-white.png` (white mark — dark header) and `/public/logo-full.png` (colour lockup — light backgrounds: future PDFs / signatures). The **header logo is a hosted PNG** referenced by absolute HTTPS URL built from `APP_BASE_URL` — never inline-embed or use `data:` URIs for the logo. The per-variant accent icon and the LinkedIn/TikTok social glyphs are **inline SVG** (`role="img"` + `aria-label`); Outlook 2016+ shows the alt text.
+`/public/logo-white.png` (white mark — dark header) and `/public/logo-full.png` (colour lockup — light backgrounds: future PDFs / signatures). The **header logo is a hosted PNG** referenced by absolute HTTPS URL built from `APP_BASE_URL` — never inline-embed or use `data:` URIs for the logo. The per-variant accent icon and the LinkedIn/TikTok social glyphs are **inline SVG** (`role="img"` + `aria-label` for SVG-capable clients). **Outlook 2016+ does not render inline SVG**, so these icons are simply absent there — an accepted compromise (no PNG fallback, per brief).
 
 ### S16.7 Deliverability & compatibility rules (non-negotiable)
 - **Plain-text fallback for every variant** (spam score + text-only clients).
 - **Tables + inline styles only** — no CSS classes, no `<style>` block, no flexbox, no grid. No `@media` queries; the footer columns instead stack via `<div>`+`inline-block` inside an MSO ghost table.
-- **Hosted logo PNG** (absolute HTTPS, `alt` text); **accent + social icons are inline SVG** with `role="img"`/`aria-label` — Outlook falls back to the alt text.
+- **Hosted logo PNG** (absolute HTTPS, `alt` text); **accent + social icons are inline SVG** with `role="img"`/`aria-label` for SVG-capable clients. Outlook 2016+ does not render inline SVG (icons absent there) — accepted compromise, no PNG fallback.
 - Outlook fallbacks for gradients (`bgcolor`) and a VML CTA button; don't rely on `border-radius`/`box-shadow` for legibility.
 - Tested against Outlook 2016+, Gmail web, Gmail iOS/Android, Apple Mail.
 

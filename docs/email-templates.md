@@ -18,7 +18,9 @@ design system: **SPEC S16**.
 - **Hosted logo (PNG), inline-SVG icons.** The header logo is a hosted PNG
   referenced by absolute HTTPS URL under `APP_BASE_URL`. The per-variant accent
   icon and the LinkedIn/TikTok social glyphs are **inline `<svg>`** (`role="img"`
-  + `aria-label`); Outlook 2016+ shows the alt text — an accepted compromise.
+  + `aria-label` for SVG-capable clients). **Outlook 2016+ does not render inline
+  SVG**, so these icons are absent there — an accepted compromise (no PNG
+  fallback, per brief).
 - **Plain-text fallback** for every variant — required for deliverability.
 - **The template never fetches funder data.** The Edge Function hydrates a
   role-aware funder name (real for owner, fictional `display_name_for_partner`

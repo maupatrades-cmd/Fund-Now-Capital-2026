@@ -15,7 +15,9 @@
 // COMPROMISE LOG (pre-approved, Section 12):
 //   - CTA border-radius squares in Outlook 2016 → acceptable.
 //   - Header/CTA gradients render as solid navy/teal in Outlook → bgcolor fallback.
-//   - Inline SVG icons don't render in Outlook → aria-label/alt text fallback.
+//   - Inline SVG icons don't render in Outlook 2016+ (Microsoft dropped inline
+//     SVG in 2025) → the accent + social icons are simply absent there; no PNG
+//     fallback (accepted per brief). aria-label serves SVG-capable clients only.
 //   - Footer columns stack via <div>+inline-block wrapped in an MSO ghost table
 //     (no @media, since no <style> block) → documented at the use site.
 
@@ -313,7 +315,7 @@ export function renderEmail(m: EmailModel): { subject: string; html: string; tex
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${PAGE_BG};">
 <tr><td align="center" style="padding:24px 12px;">
 <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background-color:${CARD};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background-color:${CARD};">
 
   <!-- Block A: gradient header -->
   <tr><td align="center" bgcolor="${NAVY}" style="background-color:${NAVY};background-image:linear-gradient(135deg,${NAVY} 0%,${TEAL} 100%);padding:32px 24px 28px;">
@@ -362,7 +364,7 @@ export function renderEmail(m: EmailModel): { subject: string; html: string; tex
     `You're receiving this because you're subscribed to ${c.category}`,
     `notifications. Update preferences: ${prefsUrl}`,
     "",
-    `${LEGAL_NAME} · CIPC ${CIPC}`,
+    `© 2026 ${LEGAL_NAME} · CIPC ${CIPC}`,
     "Cedarwood House, 128 Ballyclare Drive, Bryanston 2191, Sandton",
     "75 Marshall Street, Polokwane 0699",
     `${PHONE} · ${CONTACT_EMAIL} · ${WEBSITE_LABEL}`,
