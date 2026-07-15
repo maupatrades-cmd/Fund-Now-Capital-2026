@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 
 // ---- Types (hand-authored, matching the B1 schema; no generated DB types) ----
@@ -199,10 +200,15 @@ export function useUpsertAppetite() {
   });
 }
 
+// Delete one appetite cell with an optimistic-delete pattern: hide the cell
+// immediately, roll back the cache on failure, and reconcile with the server on
+// settle. The row-count check still fires so a silent RLS no-op throws (which
+// triggers the rollback path) rather than looking like success.
 export function useClearAppetite() {
   const qc = useQueryClient();
+  const key = ["funder-appetite"] as const;
   return useMutation({
-    mutationFn: async ({ id }: { id: string }) => {
+    mutationFn: async ({ id }: { id: string; funderId: string; industryId: string }) => {
       const { data, error } = await supabase
         .from("funder_industry_preferences")
         .delete()
@@ -211,7 +217,22 @@ export function useClearAppetite() {
       if (error) throw error;
       if (!data || data.length === 0) throw new Error("Appetite was not cleared");
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["funder-appetite"] }),
+    onMutate: async ({ funderId, industryId }) => {
+      // Cancel in-flight refetches so they can't clobber the optimistic write.
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<Record<string, FunderAppetite>>(key);
+      if (previous) {
+        const next = { ...previous };
+        delete next[appetiteCellKey(funderId, industryId)];
+        qc.setQueryData(key, next);
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      toast.error("Couldn't delete — try again");
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: key }),
   });
 }
 

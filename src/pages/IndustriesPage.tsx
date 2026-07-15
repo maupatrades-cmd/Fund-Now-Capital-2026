@@ -350,14 +350,15 @@ function AppetiteEditor({
 
   const onClear = () => {
     if (!current) return onClose();
+    // Optimistic delete: the hook hides the cell immediately and rolls back +
+    // toasts on failure, so we only handle the success path here.
     clear.mutate(
-      { id: current.id },
+      { id: current.id, funderId: cell.funderId, industryId: cell.industryId },
       {
         onSuccess: () => {
           toast.success("Appetite cleared");
           onClose();
         },
-        onError: (e) => toast.error(e instanceof Error ? e.message : "Could not clear appetite"),
       },
     );
   };

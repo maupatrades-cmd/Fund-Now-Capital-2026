@@ -39,7 +39,15 @@ function AppRoutes() {
         element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />}
       />
 
-      {/* Authenticated app — owner-only, shared sidebar/top-bar layout. */}
+      {/*
+        Authenticated app — owner-only, shared sidebar/top-bar layout.
+        Owner-gating is centralised here: <OwnerGate> wraps the whole block, so
+        every route inside is owner-only without a per-route check (no
+        duplication to abstract). A dedicated <RequireOwner> wrapper — with
+        per-route redirect targets, error messages, or layout variants — would
+        only earn its place once we have ~8+ owner routes with varying needs.
+        Not yet warranted; the single shared gate stays.
+      */}
       <Route element={session ? <OwnerGate /> : <Navigate to="/" replace />}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pipeline" element={<PipelinePage />} />
