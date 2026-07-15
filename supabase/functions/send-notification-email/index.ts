@@ -126,11 +126,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // Recipient email.
   const { data: profile, error: profileErr } = await supabase
     .from("profiles")
-    .select("email")
+    .select("email, full_name")
     .eq("id", n.user_id)
     .single();
   if (profileErr) console.error("profile lookup failed", profileErr);
   const email = profile?.email as string | undefined;
+  // Greeting first name, derived from full_name; null falls back to "Hi there,".
+  const firstName = (profile?.full_name as string | undefined)?.trim().split(/\s+/)[0] || null;
   if (!email) {
     await finalize("skipped", { error_message: "no recipient email on profile" });
     return json({ ok: false, skipped: "no recipient email" });
@@ -169,6 +171,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     title: n.title,
     bodyText: n.body_text,
     linkUrl: n.link_url,
+    firstName,
     eventType: n.event_type,
     appBaseUrl: APP_BASE_URL,
   });
