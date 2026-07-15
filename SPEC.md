@@ -385,6 +385,28 @@ Weekly guided flow (Sunday evening / Monday morning, partner-timezone aware):
 - **E11** = M5 (Motivation & Accountability) + M6 (Owner view of partner) + M7 (Sunday Setup). Long-term partnership infrastructure.
 - **Partner AI Coach** (last part of M5) moves to **Phase F** alongside the other AI features.
 
+### Event orchestration and firing order
+
+When a single business event fires multiple side effects (notification, celebration, template, workflow), the order is **deterministic and non-blocking**:
+
+1. **Notification write (S4)** — synchronous, inside the DB trigger. Guaranteed atomic with the source change: if the deal update rolls back, so does the notification.
+2. **Activity log write (S5)** — synchronous, **same transaction**. Same atomicity guarantee.
+3. **Celebration render (S14)** — **client-side only**. Fires after the frontend receives the Realtime notification event. Never blocks anything server-side; a missed or late celebration never affects the primary event.
+4. **Downstream automations (S15)** — e.g. `client_testimonial` request, nurture-sequence adjustments, doctor-payroll/earnings updates. **Asynchronous**, queued by pg_cron or an Edge Function invocation. **NEVER fired from the same DB trigger as the notification** — this keeps the primary transaction fast, and a downstream failure can never roll back the primary event.
+
+Steps 1–2 are one atomic DB transaction; step 3 is a client reaction to Realtime; step 4 is out-of-band. A failure in a later step never undoes an earlier one.
+
+**Current multi-effect events** (side effects listed in firing order):
+
+| Event | 1. Notification (S4) | 2. Activity log (S5) | 3. Celebration (S14, client-side) | 4. Downstream automations (async) |
+|---|---|---|---|---|
+| **DEAL_APPROVED** | ✓ DEAL_APPROVED | ✓ | medium | — |
+| **DEAL_FUNDED** | ✓ DEAL_FUNDED | ✓ | big | testimonial request (S15.M4); commission-record wiring (C2) |
+| **COMMISSION_PAID** | ✓ COMMISSION_PAID | ✓ | — (not a celebration trigger) | doctor earnings/payroll update (C3); streak/health metrics |
+| **LEAD_QUALIFIED** | ✓ LEAD_CREATED_FOR_YOU | ✓ | small | nurture sequence auto-create + pg_cron scheduling (S15.M1) |
+
+(Steps 1–2 are the DB-trigger layer built in A10/A11; step 3 is S14; step 4 lands with the referenced Phase C/E items. LEAD_QUALIFIED's notification + downstream activate in B2 when the `leads` table exists.)
+
 ---
 
 ## SA VALIDATION RULES (used everywhere)
