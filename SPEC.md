@@ -430,6 +430,56 @@ Steps 1–2 are one atomic DB transaction; step 3 is a client reaction to Realti
 
 ---
 
+## S16. EMAIL TEMPLATES & DESIGN SYSTEM (Roadmap A12 — canonical for all future emails)
+
+Every automated email FNC sends is built from **one shared, bulletproof template** with swappable content variants. Established in A12 (PR #24). **Future email work — Phase C invoicing/statements, Phase D portal notifications, Phase E welcome/nurture flows — extends one of these four variants; nothing is designed from scratch.** Implementation: `supabase/functions/send-notification-email/email-template.ts`; contributor guide: `docs/email-templates.md`.
+
+### S16.1 The four canonical layouts (PR #24)
+A shared shell (header + content card + footer) wraps four body variants, each emitting **HTML + a matching plain-text body**:
+- **`welcome`** — greeting + intro paragraph + CTA. Onboarding / first-touch.
+- **`deal_approved`** — greeting + lead-in + green success band (holds the message) + CTA. Deal-state good news.
+- **`weekly_summary`** — greeting + intro + stat tiles (a table row of cells) + status rows + CTA. Digests.
+- **`commission_paid`** — greeting + lead-in + green success band + CTA. Money events.
+
+**Structural blocks (all table-based, inline styles only):**
+- **Gradient header block** — navy→teal linear-gradient (solid navy `bgcolor` fallback for Outlook), centered hosted **white FN mark**, "Many funders. More approvals." tagline (green-tint + cyan-tint spans), a 40×2px cyan accent bar, 3px cyan bottom border.
+- **Content card** — white card, H1 title, "Hi {first_name}," greeting, body, bulletproof CTA button (role=presentation table + padded `<a>`).
+- **Three-column footer block** — deep-navy; brand row (white mark + wordmark); three `<td>` columns **Offices / Contact / Connect** (Connect holds hosted white LinkedIn + TikTok PNGs); divider; legal row (© + CIPC + per-category subscription line + prefs link).
+- **Plain-text fallback pattern** — wordmark + tagline, title, variant body (success line, or stat/status lines for digests), CTA URL, subscription + prefs URL, full contact block, © + CIPC.
+
+### S16.2 Design tokens (shared with the CRM UI)
+Navy `#1a3a52` (header / headings) · Teal `#2da8b8` + Cyan `#00C9D4` (accents) · Green `#5dba5d`→Teal gradient CTA · Deep-navy `#0d2438` (footer) · white `#ffffff` content card on `#e5e7eb`/`#f8f9fb` page · body ink `#334155` · muted `#8B95A5`. Typography: **Inter** (matching the app), declared `'Inter', Arial, Helvetica, sans-serif` — most email clients lack the web font and fall back to Arial/Helvetica, so never rely on Inter-only styling. 600px shell.
+
+### S16.3 Locked contact block (Phase A closure — use exactly)
+Fund Now Capital (Pty) Ltd · CIPC 2026/066284/07 · 010 102 0534 · hello@fundnowcapital.africa · www.fundnowcapital.africa · Cedarwood House, 128 Ballyclare Drive, Bryanston 2191 (Sandton) · 75 Marshall Street, Polokwane 0699 · LinkedIn (Fund Now Capital) + TikTok @fundnowcapital · tagline "Many funders. More approvals." **Never** put a personal email (e.g. `thapelol@…`) on an automated footer — `hello@` is the shared reply inbox.
+
+### S16.4 Which variant each future email extends
+- **Deal-state notifications** (`DEAL_APPROVED`, `DEAL_FUNDED`, `LEAD_CREATED_FOR_YOU`) → **`deal_approved`** layout.
+- **Money notifications** (`COMMISSION_PAID`, invoice paid, payment received) → **`commission_paid`** layout.
+- **Digests / summaries** (weekly summary, Doctor's monthly statements) → **`weekly_summary`** layout.
+- **Onboarding / first-touch** (welcome, new-lead-qualified, client Trust Pack cover) → **`welcome`** layout.
+
+(`deal_approved` + `commission_paid` share the green-success-band renderer; `welcome` + `weekly_summary` are live-dormant until B2 / C6.)
+
+### S16.5 Adding a new event type
+1. Add the value to the `notification_event_type` enum.
+2. Pick the layout variant (S16.4) — or fall through to `generic` (title + body + CTA), no code change.
+3. Emit it via `emit_in_app_notification(...)` with a good `title`, `body_text`, optional `link_url` (keep funder names role-aware — fictional `display_name_for_partner` for partners).
+4. Map it in `resolveVariant()` if it needs a specific layout; add its category to `eventCategory()` for the footer line.
+5. If it should send email, confirm it's in the S4 email allow-list and that `notification_preferences` are backfilled.
+
+### S16.6 Logo assets
+`/public/logo-white.png` (white mark — dark backgrounds: header + footer) and `/public/logo-full.png` (colour lockup — light backgrounds: future PDFs / signatures). Social icons are hosted white PNGs (Outlook has no SVG). **Always reference logos/icons by absolute HTTPS URL** built from `APP_BASE_URL` — never inline-embed or use `data:` URIs.
+
+### S16.7 Deliverability & compatibility rules (non-negotiable)
+- **Plain-text fallback for every variant** (spam score + text-only clients).
+- **Tables + inline styles only** — no CSS classes, no `<style>` block, no flexbox, no grid. (Consequence: no `@media` queries, so the layout does not stack on narrow screens; sizes are chosen to stay legible when the 600px shell is scaled down.)
+- **Hosted PNG images**, absolute HTTPS, with `alt` text (SVG unsupported in Outlook/Gmail).
+- Outlook fallbacks for gradient (`bgcolor`); don't rely on `border-radius`/`box-shadow` for legibility.
+- Tested against Outlook, Gmail web, Gmail iOS/Android, Apple Mail.
+
+---
+
 ## SA VALIDATION RULES (used everywhere)
 
 - **SA ID:** 13 digits, Luhn checksum, valid DOB + citizenship digit.
