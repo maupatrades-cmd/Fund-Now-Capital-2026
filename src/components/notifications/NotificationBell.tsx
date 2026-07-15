@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Bell, CheckCheck } from "lucide-react";
+import { toast } from "sonner";
 import { useSession } from "@/lib/useSession";
 import { formatRelative } from "@/lib/format";
 import {
@@ -29,10 +30,19 @@ export function NotificationBell() {
   const navigate = useNavigate();
 
   const onItemClick = (n: Notification) => {
-    if (!n.read_status) markRead.mutate(n.id);
+    if (!n.read_status) {
+      markRead.mutate(n.id, {
+        onError: () => toast.error("Couldn't mark as read — try again"),
+      });
+    }
     setOpen(false);
     if (n.link_url) navigate(n.link_url);
   };
+
+  const onMarkAll = () =>
+    markAll.mutate(undefined, {
+      onError: () => toast.error("Couldn't mark all as read — try again"),
+    });
 
   return (
     <div className="relative">
@@ -59,7 +69,7 @@ export function NotificationBell() {
               {unread > 0 && (
                 <button
                   type="button"
-                  onClick={() => markAll.mutate()}
+                  onClick={onMarkAll}
                   className="inline-flex items-center gap-1 text-xs font-medium text-brand-teal hover:underline"
                 >
                   <CheckCheck className="h-3.5 w-3.5" /> Mark all read
@@ -67,7 +77,8 @@ export function NotificationBell() {
               )}
             </div>
 
-            <div className="max-h-96 overflow-y-auto">
+            {/* Grow naturally; only scroll once the list is long. */}
+            <div className={recent && recent.length > 3 ? "max-h-96 overflow-y-auto" : ""}>
               {isLoading ? (
                 <p className="px-4 py-6 text-center text-sm text-muted-foreground">Loading…</p>
               ) : recent && recent.length > 0 ? (

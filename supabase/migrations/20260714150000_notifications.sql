@@ -1,8 +1,15 @@
 -- A11 — In-app Notification system (SPEC S4).
 --
--- Three tables (notifications / notification_deliveries / notification_preferences)
--- plus profile contact columns. In-app notifications are written by SECURITY
--- DEFINER triggers on domain events; email/WhatsApp/SMS delivery is A12/D6.
+-- Creates three notification tables (notifications, notification_deliveries,
+-- notification_preferences), adds four columns to profiles (phone_number,
+-- phone_number_verified, whatsapp_opted_in, sms_opted_in), creates trigger
+-- functions and attaches triggers on deal_funder_submissions (DEAL_APPROVED),
+-- deals (DEAL_FUNDED), and commission_records (COMMISSION_PAID). Includes an
+-- inactive stub for LEAD_CREATED_FOR_YOU that activates when the leads table
+-- exists (B2).
+--
+-- In-app notifications are written by SECURITY DEFINER triggers; email/WhatsApp/
+-- SMS delivery is A12/D6.
 
 -- ---------------------------------------------------------------------------
 -- Enums (full S4 event list; only DEAL_APPROVED/DEAL_FUNDED/COMMISSION_PAID and

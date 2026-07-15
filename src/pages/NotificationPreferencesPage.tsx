@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { useSession } from "@/lib/useSession";
 import { NOTIFICATION_EVENT_TYPES, NOTIFICATION_CHANNELS } from "@/lib/notifications";
 import {
@@ -31,25 +32,25 @@ export default function NotificationPreferencesPage() {
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="px-4 py-3 font-semibold">Event</th>
-              {NOTIFICATION_CHANNELS.map((c) => (
-                <th key={c.key} className="px-4 py-3 text-center font-semibold">{c.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={1 + NOTIFICATION_CHANNELS.length} className="px-4 py-6 text-center text-muted-foreground">
-                  Loading…
-                </td>
+      {isLoading ? (
+        // Wait for the real preference values before rendering toggles, so they
+        // never flicker from a default state to the loaded state.
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-white py-16 text-sm text-muted-foreground shadow-sm">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading preferences…
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="px-4 py-3 font-semibold">Event</th>
+                {NOTIFICATION_CHANNELS.map((c) => (
+                  <th key={c.key} className="px-4 py-3 text-center font-semibold">{c.label}</th>
+                ))}
               </tr>
-            ) : (
-              NOTIFICATION_EVENT_TYPES.map((e) => (
+            </thead>
+            <tbody>
+              {NOTIFICATION_EVENT_TYPES.map((e) => (
                 <tr key={e.value} className="border-b border-border last:border-0">
                   <td className="px-4 py-3 font-medium text-brand-navy">{e.label}</td>
                   {NOTIFICATION_CHANNELS.map((c) =>
@@ -71,11 +72,11 @@ export default function NotificationPreferencesPage() {
                     ),
                   )}
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
