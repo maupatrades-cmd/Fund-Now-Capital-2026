@@ -16,13 +16,13 @@ Goal: the original 5-screen CRM works end-to-end with a real deal, plus the two 
 - ✅ A5. Client Database (list, detail tabs, contacts, documents bucket)
 - ✅ A6. Pipeline Kanban + Deal Detail + Calculator (PR #9)
 - ✅ A7. GATE: deal_pipeline migration applied to live DB; dashboard/pipeline errors gone
-- 🔨 A8. Declined-stage terminal fix (CodeRabbit finding — client guard + DB trigger + deliberate revival) — PR #10, awaiting CodeRabbit
-- ⬜ A9. SMOKE TEST GATE: Mama Mabase entered as client, R8M deal created (DEAL-001), dragged across stages, priority glow on, dashboard KPIs show real numbers
-- ⬜ A9.5. Partner-safe decline model (PR Y): `deal_funder_submissions` gains `decline_reason_category` (partner-safe enum) + owner-only `decline_notes_internal`; DB CHECK requires a category when a submission is declined; deal-level auto-decline moves the deal to terminal Declined once its last active submission is declined (respects the terminal trigger + `reopen_deal`, logs to `deal_stage_history`); `partner_submission_view` exposes fictional funder name + status + reason category for the partner's own deals only. Owner decline-form UI included; partner portal surface deferred to Phase D (S11).
-- 🔨 A10. Activity Logging foundation (Part 4): `activity_logs` table, async triggers on CREATE/UPDATE/DELETE for deals/clients/client_contacts/deal_funder_submissions/commission_records, per-entity Activity tab (deal + client detail), owner `/activity` timeline with filters + CSV export. (Generalises the stage-history table from PR #9.) `leads` trigger deferred to B2 (table doesn't exist yet). — in this PR, awaiting CodeRabbit.
+- ✅ A8. Declined-stage terminal fix (CodeRabbit finding — client guard + DB trigger + deliberate revival) — merged, applied + verified live
+- ✅ A9. SMOKE TEST GATE: Mama Mabase entered as client, R8M deal created (DEAL-001), dragged across stages, priority glow on, dashboard KPIs show real numbers — passed
+- ✅ A9.5. Partner-safe decline model (merged, migration applied live): `deal_funder_submissions` gains `decline_reason_category` (partner-safe enum) + owner-only `decline_notes_internal`; DB CHECK requires a category when a submission is declined; deal-level auto-decline moves the deal to terminal Declined once its last active submission is declined (respects the terminal trigger + `reopen_deal`, logs to `deal_stage_history`); `partner_submission_view` exposes fictional funder name + status + reason category for the partner's own deals only. Owner decline-form UI included; partner portal surface deferred to Phase D (S11).
+- ✅ A10. Activity Logging foundation (Part 4): `activity_logs` table, async triggers on CREATE/UPDATE/DELETE for deals/clients/client_contacts/deal_funder_submissions/commission_records, per-entity Activity tab (deal + client detail), owner `/activity` timeline with filters + CSV export. (Generalises the stage-history table from PR #9.) `leads` trigger deferred to B2 (table doesn't exist yet). — merged, applied + verified live.
 - ✅ A11. In-app Notification system (Part 4): `notifications` + `notification_deliveries` + `notification_preferences` tables, bell icon + dropdown + mark-as-read, Realtime badge updates, `/notifications` list + `/settings/notifications` prefs. DEAL_APPROVED / DEAL_FUNDED / COMMISSION_PAID triggers live (owner-targeted, role-aware funder names); LEAD_CREATED_FOR_YOU trigger stubbed for B2. Hardened: mark-read RPCs return affected rows. — merged (PRs #18, #19), applied + verified live.
 - ✅ A12. Email notifications via Resend (Part 4, high-priority events: LEAD_CREATED_FOR_YOU, DEAL_APPROVED, DEAL_FUNDED, COMMISSION_PAID): `send-notification-email` Edge Function invoked async via pg_net, branded HTML + text template, per-event email prefs (owner default on), skip on disabled/quiet-hours/digest, `notification_deliveries` email rows. Domain `fundnowcapital.africa` verified in Resend. — merged (PR #20), migration applied + function deployed to live; live DEAL_APPROVED smoke test passed end-to-end (email sent from hello@fundnowcapital.africa, `notification_deliveries` email row recorded `sent`).
-- ⬜ A13. START (paperwork only, runs in parallel): Twilio account + WhatsApp Business API verification + template pre-approval. Long lead time; begin now.
+- 🔨 A13. STARTED (paperwork only, external — owner-driven, runs in parallel): Twilio account + WhatsApp Business API verification + template pre-approval. Long lead time; underway now. Not a code build.
 
 ## PHASE B — Data Foundations (Parts 2 + 6.M1)
 Goal: the data structures every later feature assumes.
@@ -35,6 +35,7 @@ Goal: the data structures every later feature assumes.
 
 ## PHASE C — Money Operations (Part 5)
 Goal: every rand invoiced, tracked, and paid — with the audit trail already live under it.
+_Email design: every email here (invoices, statements, payment/overdue notices) extends one of the four canonical templates in **SPEC S16** — never designed from scratch._
 
 - ⬜ C1. Invoicing FNC → funders: `invoices`/`line_items`/`payments` tables, auto-draft on Funded, approval flow, branded PDF (sequence continues from INV-0031), Resend delivery, overdue flags at 30/45/60 days
 - ⬜ C2. Commission records wiring: deal funded → `commission_records` ledger row (the follow-up Claude Code flagged in PR #9)
@@ -45,6 +46,7 @@ Goal: every rand invoiced, tracked, and paid — with the audit trail already li
 - ⬜ C7. Owner Home v1 (Part 2): greeting, scripture/affirmation line, monthly targets, vision horizons (basic). Old dashboard becomes "Business Overview" in nav.
 
 ## PHASE D — Doctor's Portal Launch (Parts 1 + 3)
+_Email design: portal + stage notifications extend a **SPEC S16** canonical template (fictional funder names on every partner-facing email)._
 Goal: Doctor logs in and finds a living product. GATE: real deals + earnings data exist. DECISION REQUIRED before D5: Commission Estimator "Business View" transparency level (full ranged breakdown vs Doctor's-number-only). Logged in CLAUDE.md as OPEN DECISION.
 
 - ⬜ D1. Partner-role routing + portal shell (his own layout, fictional funder names everywhere)
@@ -56,6 +58,7 @@ Goal: Doctor logs in and finds a living product. GATE: real deals + earnings dat
 - ⬜ D7. Swap test partner account → Doctor's real account (masobota18@gmail.com), partner smoke test of anonymisation (zero real funder names anywhere)
 
 ## PHASE E — Automation & Intelligence (Parts 1, 5, 6, 7)
+_Email design: welcome flow (E5) + nurture sequences (E9) extend a **SPEC S16** canonical template — no new templates from scratch._
 
 **Note:** Part 7 (Lead Nurture & Partner Focus, SPEC S15) slots in here, after Doctor's portal ships in Phase D. It's deliberately not earlier — nurture automation needs real **leads** (B2), **notifications** (A11/A12/D6), the **partner portal** (D1–D2), and **invoicing** (C1) live underneath it first.
 
