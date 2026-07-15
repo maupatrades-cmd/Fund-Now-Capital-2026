@@ -24,13 +24,18 @@ export type Client = {
   id: string;
   business_name: string;
   cipc_number: string | null;
-  sector: string | null;
+  sector: string | null; // legacy free-text; deprecated in favour of industry_id (B1). Kept for manual reconciliation.
+  sector_notes: string | null;
+  industry_id: string | null;
+  sub_industry_id: string | null;
   monthly_turnover: string | null;
   address: string | null;
   referral_partner_id: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
+  industry: Named;
+  sub_industry: Named;
 };
 
 export type ClientContact = {
@@ -49,6 +54,9 @@ export type ClientInput = {
   business_name: string;
   cipc_number: string | null;
   sector: string | null;
+  sector_notes: string | null;
+  industry_id: string | null;
+  sub_industry_id: string | null;
   monthly_turnover: number | null;
   address: string | null;
   referral_partner_id: string | null;
@@ -98,11 +106,11 @@ export function useClient(id: string | undefined) {
     queryFn: async (): Promise<Client> => {
       const { data, error } = await supabase
         .from("clients")
-        .select("*")
+        .select("*, industry:industries(name), sub_industry:sub_industries(name)")
         .eq("id", id!)
         .single();
       if (error) throw error;
-      return data as Client;
+      return data as unknown as Client;
     },
   });
 }
@@ -130,7 +138,7 @@ export function useCreateClient() {
     mutationFn: async (input: ClientInput): Promise<Client> => {
       const { data, error } = await supabase.from("clients").insert(input).select().single();
       if (error) throw error;
-      return data as Client;
+      return data as unknown as Client;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["clients"] });
@@ -156,7 +164,7 @@ export function useUpdateClient() {
         .select()
         .single();
       if (error) throw error;
-      return data as Client;
+      return data as unknown as Client;
     },
     onSuccess: (c) => {
       qc.invalidateQueries({ queryKey: ["clients"] });

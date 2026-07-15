@@ -54,6 +54,10 @@ Baseline funder appetite matrix (owner-editable; seed as `funder_industry_prefer
 - Auto & Motoring: HIGH Centrafin, Sourcefin, PrefCap
 - Education/Training: HIGH Business Partners, Bridgement
 
+**Build status (B1 — shipped):** `industries`, `sub_industries`, and `funder_industry_preferences` tables live with RLS from day one. `industries`/`sub_industries` are reference data (owner read/write; all app users read). `funder_industry_preferences` is **owner-only** at the table level (it carries `funder_id` + owner-only `notes`); partners reach appetite through the anonymised view `public.partner_funder_industry_appetite`, which exposes `display_name_for_partner` + industry + `appetite_level` **only** — never `funder_id`, the real name, or `notes` (funder-anonymisation rule). All 25 industries + sub-industries seeded exactly as above; the baseline appetite matrix seeds only for funders present on the panel (missing funders skipped, count reported via `RAISE NOTICE`). `appetite_level` enum = `high | medium | low | avoid`. Owner management screen at `/settings/industries` (Industries tree + Funder appetite matrix tabs).
+
+**`clients` taxonomy:** `clients` gained nullable `industry_id` + `sub_industry_id` FKs and a free-text `sector_notes`. The legacy `clients.sector` free-text column is **intentionally retained, not auto-migrated** — the owner reconciles it manually. `sector` is **deprecated and slated for removal once B2 lands** (lead entry captures industry structurally from the start). The client form now uses the two-level industry → sub-industry dropdown + `sector_notes`; `sector` is no longer edited in the UI (existing values preserved on save).
+
 ---
 
 ## S2. LEAD ENTRY & QUALIFICATION (Part 2 — Roadmap B2)

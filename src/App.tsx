@@ -16,6 +16,7 @@ import CalculatorPage from "@/pages/CalculatorPage";
 import ActivityPage from "@/pages/ActivityPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import NotificationPreferencesPage from "@/pages/NotificationPreferencesPage";
+import IndustriesPage from "@/pages/IndustriesPage";
 import { useSession } from "@/lib/useSession";
 import { queryClient } from "@/lib/queryClient";
 
@@ -38,7 +39,15 @@ function AppRoutes() {
         element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />}
       />
 
-      {/* Authenticated app — owner-only, shared sidebar/top-bar layout. */}
+      {/*
+        Authenticated app — owner-only, shared sidebar/top-bar layout.
+        Owner-gating is centralised here: <OwnerGate> wraps the whole block, so
+        every route inside is owner-only without a per-route check (no
+        duplication to abstract). A dedicated <RequireOwner> wrapper — with
+        per-route redirect targets, error messages, or layout variants — would
+        only earn its place once we have ~8+ owner routes with varying needs.
+        Not yet warranted; the single shared gate stays.
+      */}
       <Route element={session ? <OwnerGate /> : <Navigate to="/" replace />}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pipeline" element={<PipelinePage />} />
@@ -55,6 +64,7 @@ function AppRoutes() {
         <Route path="/activity" element={<ActivityPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings/notifications" element={<NotificationPreferencesPage />} />
+        <Route path="/settings/industries" element={<IndustriesPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

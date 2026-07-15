@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useClient } from "@/hooks/useClients";
+import { useClient, one } from "@/hooks/useClients";
 import { ContactsManager } from "@/components/clients/ContactsManager";
 import { DocumentsPanel } from "@/components/clients/DocumentsPanel";
 import { referredByMeta } from "@/lib/clients";
@@ -44,7 +44,7 @@ export default function ClientDetailPage() {
             <Badge className={referred.className}>{referred.label}</Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {client.sector || "Sector not set"}
+            {one(client.industry)?.name || client.sector || "Industry not set"}
           </p>
         </div>
         <button
@@ -78,7 +78,10 @@ export default function ClientDetailPage() {
             <h3 className="mb-3 text-sm font-semibold text-brand-navy">Business info</h3>
             <dl className="space-y-2 text-sm">
               <Info label="CIPC number" value={client.cipc_number} />
-              <Info label="Sector" value={client.sector} />
+              <Info label="Industry" value={one(client.industry)?.name ?? null} />
+              <Info label="Sub-industry" value={one(client.sub_industry)?.name ?? null} />
+              <Info label="Sector notes" value={client.sector_notes} />
+              {client.sector && <Info label="Legacy sector" value={client.sector} />}
               <Info
                 label="Monthly turnover"
                 value={client.monthly_turnover != null ? formatZAR(client.monthly_turnover) : null}
