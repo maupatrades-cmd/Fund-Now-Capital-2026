@@ -58,6 +58,10 @@ Baseline funder appetite matrix (owner-editable; seed as `funder_industry_prefer
 
 **`clients` taxonomy:** `clients` gained nullable `industry_id` + `sub_industry_id` FKs and a free-text `sector_notes`. The legacy `clients.sector` free-text column is **intentionally retained, not auto-migrated** — the owner reconciles it manually. `sector` is **deprecated and slated for removal once B2 lands** (lead entry captures industry structurally from the start). The client form now uses the two-level industry → sub-industry dropdown + `sector_notes`; `sector` is no longer edited in the UI (existing values preserved on save).
 
+**Funder count — two figures by design (LOCKED):** Two funder figures exist by design. The email marketing copy references '43+ funders' — this is the wider panel narrative used in outbound communications (welcome emails, deal notifications, brand messaging). It is a marketing figure only. The CRM database contains 21 funders — the operational ones with signed or verbal contracts. These are the funders that appear in the pipeline, receive submissions, are recommended by the industry appetite matrix, and pay commission. Adding a funder to the CRM database is a deliberate act triggered by a new contract, not a background sync. The two figures should NOT be reconciled. Un-contracted funders exist for outreach but are intentionally invisible to the CRM.
+
+**Appetite matrix — operational reconciliation:** Against the 21 operational CRM funders, the S1 baseline seeds appetite for **12** of them (51 preference rows: 36 high · 12 medium · 3 avoid); the remaining **9** funders are **unscored pending owner input** via the Funder appetite matrix at `/settings/industries`. This 12-scored / 9-unscored split reflects the 21-funder operational reality — it is not measured against the 43+ marketing figure.
+
 ---
 
 ## S2. LEAD ENTRY & QUALIFICATION (Part 2 — Roadmap B2)

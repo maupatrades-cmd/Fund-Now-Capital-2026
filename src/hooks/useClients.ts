@@ -104,9 +104,14 @@ export function useClient(id: string | undefined) {
     queryKey: ["client", id],
     enabled: !!id,
     queryFn: async (): Promise<Client> => {
+      // Use LEFT joins (!left) so legacy clients without industry_id (created
+      // pre-B1) still load — manual industry assignment surfaces the dropdown for
+      // the owner to set. (PostgREST embeds default to LEFT; !left makes it
+      // explicit and guards against a later switch to !inner, which would hide
+      // those rows.)
       const { data, error } = await supabase
         .from("clients")
-        .select("*, industry:industries(name), sub_industry:sub_industries(name)")
+        .select("*, industry:industries!left(name), sub_industry:sub_industries!left(name)")
         .eq("id", id!)
         .single();
       if (error) throw error;

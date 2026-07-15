@@ -60,9 +60,25 @@ export function useFundersMinimal() {
   return useQuery({
     queryKey: ["funders-minimal"],
     queryFn: async (): Promise<{ id: string; name: string }[]> => {
-      const { data, error } = await supabase.from("funders").select("id, name").order("name");
+      // The CRM only holds funders with signed/verbal contracts (currently 21 —
+      // see SPEC.md S1). The 200 limit is intentional safety headroom, not a
+      // pagination boundary. If the operational panel ever approaches 100,
+      // revisit with pagination — but this is deliberately expected to grow
+      // slowly and predictably.
+      const { data, error } = await supabase
+        .from("funders")
+        .select("id, name")
+        .order("name")
+        .limit(200);
       if (error) throw error;
-      return (data ?? []) as { id: string; name: string }[];
+      const rows = (data ?? []) as { id: string; name: string }[];
+      // Tripwire: if we ever hit the cap, the matrix may be silently truncating.
+      if (rows.length === 200) {
+        console.warn(
+          "useFundersMinimal returned exactly 200 funders — the limit has been reached. Consider adding pagination before the next funder is contracted. See SPEC.md S1.",
+        );
+      }
+      return rows;
     },
   });
 }
