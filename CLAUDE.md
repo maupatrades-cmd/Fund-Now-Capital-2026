@@ -44,4 +44,6 @@ NEXT: A13 paperwork (external, runs in parallel) · Phase B kickoff (B1 Industry
 ## Working style
 Small verified stages. One PR per logical change; open PR, WAIT for CodeRabbit, owner merges. After any schema merge: apply migration to live DB, verify, then owner runs smoke test. Tell her what you did and what to test — never chain ten silent changes. Ask before destructive migrations. Never discuss real funder rates in partner-facing code or copy.
 
+Every Edge Function needs `WEBHOOK_SECRET` and any other required environment variables set as Supabase Edge Function secrets before deployment (a secret shared with the DB must match its Vault counterpart). When a Claude Code session's proxy blocks outbound HTTP, use `pg_net` from within the database for readiness probes — it's the same path production uses.
+
 Supabase RLS silently returns empty result sets for UPDATE/DELETE without permission. Every mutation must use `.select()` or `RETURNING id` and check the returned row count to catch silent RLS failures loudly. Never assume a mutation succeeded just because no error was thrown.
