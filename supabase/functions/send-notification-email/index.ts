@@ -12,7 +12,7 @@
 // EMAIL_REPLY_TO. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are auto-injected.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { Resend } from "npm:resend@4.0.1";
 import { renderEmail } from "./email-template.ts";
 
@@ -55,6 +55,106 @@ function withinQuietHours(nowMin: number, startMin: number | null, endMin: numbe
     : nowMin >= startMin || nowMin < endMin;
 }
 
+// en-ZA currency, whole rands with thousands separators: 8000000 -> "R8,000,000".
+function formatRand(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const num = Number(v);
+  if (!Number.isFinite(num)) return null;
+  const grouped = Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `R${grouped}`;
+}
+
+type DealContext = {
+  funderDisplay: string | null;
+  dealReference: string | null;
+  amount: string | null;
+  clientName: string | null;
+};
+
+// Hydrate deal display data for the email templates from the notification's
+// `data` payload, using the service-role client (no RLS user context). Funder
+// name is role-aware: owner sees the real `funders.name`, partner the fictional
+// `display_name_for_partner`. Any miss returns nulls and the template falls back
+// to the notification's composed body_text — an email never breaks on this.
+async function hydrateDealContext(
+  supabase: SupabaseClient,
+  eventType: string,
+  data: Record<string, unknown> | null,
+  role: string | null,
+): Promise<DealContext> {
+  const empty: DealContext = { funderDisplay: null, dealReference: null, amount: null, clientName: null };
+  if (!data) return empty;
+  const dealId = (data.deal_id as string | undefined) ?? undefined;
+
+  const funderName = async (funderId?: string | null): Promise<string | null> => {
+    if (!funderId) return null;
+    const { data: f } = await supabase
+      .from("funders").select("name, display_name_for_partner").eq("id", funderId).single();
+    if (!f) return null;
+    return role === "owner" ? (f.name as string) : (f.display_name_for_partner as string);
+  };
+  const dealBits = async (id?: string) => {
+    if (!id) return { reference: null, clientName: null, amountRequested: null, awardedFunderId: null };
+    const { data: d } = await supabase
+      .from("deals").select("reference, client_id, amount_requested, awarded_funder_id").eq("id", id).single();
+    let clientName: string | null = null;
+    if (d?.client_id) {
+      const { data: cl } = await supabase.from("clients").select("business_name").eq("id", d.client_id).single();
+      clientName = (cl?.business_name as string) ?? null;
+    }
+    return {
+      reference: (d?.reference as string) ?? null,
+      clientName,
+      amountRequested: (d?.amount_requested as number) ?? null,
+      awardedFunderId: (d?.awarded_funder_id as string) ?? null,
+    };
+  };
+
+  try {
+    if (eventType === "DEAL_APPROVED") {
+      const submissionId = data.submission_id as string | undefined;
+      let funderId: string | null = null;
+      let quote: number | null = null;
+      if (submissionId) {
+        const { data: s } = await supabase
+          .from("deal_funder_submissions").select("funder_id, quote_amount").eq("id", submissionId).single();
+        funderId = (s?.funder_id as string) ?? null;
+        quote = (s?.quote_amount as number) ?? null;
+      }
+      const d = await dealBits(dealId);
+      return {
+        funderDisplay: await funderName(funderId),
+        dealReference: d.reference,
+        amount: formatRand(quote ?? d.amountRequested),
+        clientName: d.clientName,
+      };
+    }
+    if (eventType === "DEAL_FUNDED") {
+      const d = await dealBits(dealId);
+      return {
+        funderDisplay: await funderName(d.awardedFunderId),
+        dealReference: d.reference,
+        amount: formatRand(d.amountRequested),
+        clientName: d.clientName,
+      };
+    }
+    if (eventType === "COMMISSION_PAID") {
+      const crId = data.commission_record_id as string | undefined;
+      let share: number | null = null;
+      if (crId) {
+        const { data: cr } = await supabase
+          .from("commission_records").select("partner_share").eq("id", crId).single();
+        share = (cr?.partner_share as number) ?? null;
+      }
+      const d = await dealBits(dealId);
+      return { funderDisplay: null, dealReference: d.reference, amount: formatRand(share), clientName: d.clientName };
+    }
+  } catch (e) {
+    console.error("hydrateDealContext failed", e);
+  }
+  return empty;
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
 
@@ -79,7 +179,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // Load the notification.
   const { data: n, error: nErr } = await supabase
     .from("notifications")
-    .select("id, user_id, event_type, title, body_text, link_url")
+    .select("id, user_id, event_type, title, body_text, link_url, data")
     .eq("id", notificationId)
     .single();
   if (nErr || !n) return json({ error: "notification not found" }, 404);
@@ -126,7 +226,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // Recipient email.
   const { data: profile, error: profileErr } = await supabase
     .from("profiles")
-    .select("email, full_name")
+    .select("email, full_name, role")
     .eq("id", n.user_id)
     .single();
   if (profileErr) console.error("profile lookup failed", profileErr);
@@ -166,14 +266,26 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ ok: false, skipped: "quiet hours" });
   }
 
+  // Hydrate deal display data for the templates (service-role reads, no RLS
+  // user context). Any miss falls back to the notification's body_text.
+  const dealCtx = await hydrateDealContext(
+    supabase,
+    n.event_type,
+    (n.data ?? null) as Record<string, unknown> | null,
+    (profile?.role as string) ?? null,
+  );
+
   // Render + send.
-  const { html, text } = renderEmail({
-    title: n.title,
-    bodyText: n.body_text,
-    linkUrl: n.link_url,
-    firstName,
+  const { subject, html, text } = renderEmail({
     eventType: n.event_type,
+    firstName,
+    linkUrl: n.link_url,
     appBaseUrl: APP_BASE_URL,
+    funderDisplay: dealCtx.funderDisplay,
+    dealReference: dealCtx.dealReference,
+    amount: dealCtx.amount,
+    clientName: dealCtx.clientName,
+    bodyText: n.body_text,
   });
 
   try {
@@ -188,7 +300,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         from: FROM,
         replyTo: REPLY_TO,
         to: email,
-        subject: n.title,
+        subject,
         html,
         text,
       }),
