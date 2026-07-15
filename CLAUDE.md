@@ -43,3 +43,5 @@ NEXT: Phase A10–A13 (activity logging, in-app notifications, Resend emails, Tw
 
 ## Working style
 Small verified stages. One PR per logical change; open PR, WAIT for CodeRabbit, owner merges. After any schema merge: apply migration to live DB, verify, then owner runs smoke test. Tell her what you did and what to test — never chain ten silent changes. Ask before destructive migrations. Never discuss real funder rates in partner-facing code or copy.
+
+Supabase RLS silently returns empty result sets for UPDATE/DELETE without permission. Every mutation must use `.select()` or `RETURNING id` and check the returned row count to catch silent RLS failures loudly. Never assume a mutation succeeded just because no error was thrown.
