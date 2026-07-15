@@ -1,114 +1,119 @@
-# Email templates (A12 — Resend transactional emails)
+# Email templates (A12 — Resend transactional emails, v2)
 
 The `send-notification-email` Edge Function renders every notification email from a
 single **bulletproof, table-based HTML template** with a **plain-text fallback**.
-Source: `supabase/functions/send-notification-email/email-template.ts`.
+Source: `supabase/functions/send-notification-email/email-template.ts`. Canonical
+design system: **SPEC S16**.
 
 ## Why it's built this way
 
 - **Table-based, inline styles only.** No `<style>` block, no CSS classes, no
-  flexbox, no grid. This is the widest-compatibility approach for Outlook (Word
-  rendering engine), Gmail web, Gmail iOS/Android, and Apple Mail.
-- **No `@media` queries** (they require a `<style>` block, which we don't use), so
-  the layout does **not** stack on narrow screens. Font sizes are chosen to stay
-  legible when a mobile client scales the 600px shell down.
-- **Hosted PNG images, not SVG.** Outlook has no SVG support, so the logo and
-  social icons are PNGs in `public/email-assets/` referenced by absolute HTTPS URL
-  built from `APP_BASE_URL` (e.g. `${APP_BASE_URL}/email-assets/logo-white.png`).
-- **Plain-text fallback** is generated for every variant — required for
-  deliverability and for text-only clients.
-- **The template never fetches funder data.** It renders only the strings the
-  caller passes in, so the DB layer's role-aware *fictional* funder names in
-  `body_text` pass straight through. Nothing here can surface a real funder name.
+  flexbox, no grid. Widest-compatibility approach for Outlook (Word engine),
+  Gmail web, Gmail iOS/Android, and Apple Mail.
+- **No `@media` queries** (they need a `<style>` block). The footer columns
+  instead use `<div>` + `display:inline-block` inside an **MSO ghost table**, so
+  they sit side-by-side on desktop, wrap/stack on narrow screens, and stay in a
+  table for Outlook. Other sizes are chosen to stay legible when the 600px shell
+  is scaled down.
+- **Hosted logo (PNG), inline-SVG icons.** The header logo is a hosted PNG
+  referenced by absolute HTTPS URL under `APP_BASE_URL`. The per-variant accent
+  icon and the LinkedIn/TikTok social glyphs are **inline `<svg>`** (`role="img"`
+  + `aria-label`); Outlook 2016+ shows the alt text — an accepted compromise.
+- **Plain-text fallback** for every variant — required for deliverability.
+- **The template never fetches funder data.** The Edge Function hydrates a
+  role-aware funder name (real for owner, fictional `display_name_for_partner`
+  for partner) and passes it in. The template only renders — a real funder name
+  only appears when the caller resolved it for an owner recipient.
 
-## Assets (`public/email-assets/`)
+## Assets (`/public`)
 
 | File | Use |
 | --- | --- |
-| `logo-white.png` | White FN mark (the "n" is carved out as negative space). Header (dark gradient) + footer (deep navy). |
-| `logo-full.png` | Full colour lockup + wordmark. For light backgrounds / future PDFs — not used on the dark email surfaces. |
-| `social-linkedin.png` | White LinkedIn glyph, footer "Connect" column. |
-| `social-tiktok.png` | White TikTok glyph, footer "Connect" column. |
+| `logo-white.png` | White FN mark (the "n" carved out). Header (dark gradient). Hosted PNG. |
+| `logo-full.png` | Full colour lockup — light backgrounds / future PDFs. Not used on the dark email surfaces. |
 
-Served by Vercel from `/public`, so `public/email-assets/x.png` is reachable at
-`${APP_BASE_URL}/email-assets/x.png`. Images only resolve **after** the app is
-deployed with these files present.
+Served by Vercel from `/public`, so `public/logo-white.png` is reachable at
+`${APP_BASE_URL}/logo-white.png`. Images only resolve **after** the app is
+deployed. Social + accent icons are inline SVG (no hosted files).
 
 > **TODO (owner):** confirm the LinkedIn company URL. `LINKEDIN_URL` in
 > `email-template.ts` is a best-guess slug (`.../company/fund-now-capital`); the
 > TikTok URL is derived from the `@fundnowcapital` handle.
 
-## `renderEmail(model)` inputs
+## `renderEmail(model)` interface
 
 ```ts
 type EmailModel = {
-  title: string;              // subject + H1 (from notification.title)
-  bodyText: string | null;    // main message (from notification.body_text)
-  linkUrl: string | null;     // app-relative, e.g. "/deals/123" -> CTA target
-  firstName?: string | null;  // greeting; null => "Hi there,"
-  eventType: string;          // derives variant + footer category when not given
-  appBaseUrl: string;         // e.g. https://fund-now-capital-2026.vercel.app
-  variant?: EmailVariant;     // explicit override (dormant variants / testing)
-  eventCategory?: string;     // footer subscription line; derived if absent
-  ctaLabel?: string;          // default "View in CRM"
-  stats?: { label: string; value: string }[];        // weekly_summary only
-  statusRows?: { label: string; value: string }[];   // weekly_summary only
+  eventType: string;            // derives variant + footer category
+  firstName?: string | null;    // greeting; null => "Hi there,"
+  linkUrl?: string | null;      // app-relative, e.g. "/deals/123" -> CTA target
+  appBaseUrl: string;           // e.g. https://fund-now-capital-2026.vercel.app
+  // hydrated deal context (null for welcome/weekly_summary or on a hydration miss):
+  funderDisplay?: string | null;   // role-aware: real name (owner) / fictional (partner)
+  dealReference?: string | null;   // e.g. "DEAL-001"
+  amount?: string | null;          // pre-formatted, e.g. "R8,000,000"
+  clientName?: string | null;      // e.g. "Mama Mabase JV"
+  bodyText?: string | null;        // fallback only, if a live variant can't hydrate
+  variant?: EmailVariant;          // explicit override (testing dormant variants)
 };
+// returns { subject, html, text } — subject is the locked per-variant subject.
 ```
 
-The Edge Function (`index.ts`) populates this from the notification row + the
-recipient's `profiles` row (`full_name` → `firstName`). It does **not** pass a
-`variant`, so live emails resolve their variant from `eventType` (below).
+The Edge Function (`index.ts`) hydrates the deal context from the notification's
+`data` payload using the **service-role client** (server-side render, no RLS user
+context): `deal_id` / `submission_id` / `commission_record_id` → deal reference,
+role-aware funder, formatted amount, client name. It does **not** pass a
+`variant`, so live emails resolve theirs from `eventType`.
 
-## Variants
+## Variants (locked copy — SPEC S16 / brief Section 7)
 
-Four layout archetypes share the header/footer shell:
+| Variant | Icon | Body |
+| --- | --- | --- |
+| `welcome` | open door | fixed onboarding copy (no deal fields) |
+| `deal_approved` | check-in-circle | `{funderDisplay} has approved {dealReference} for {amount}.` + closing |
+| `deal_funded` | check-in-circle | `{funderDisplay} has funded {dealReference} for {amount}.` + closing |
+| `weekly_summary` | bar chart | fixed digest copy (no deal fields) |
+| `commission_paid` | rand-in-circle | `A commission payment of {amount} has been recorded for {dealReference} ({clientName}).` + closing |
+| `generic` | info | fallback: renders `bodyText` (safety net; production events should map to one of the above) |
 
-| Variant | Body layout |
-| --- | --- |
-| `welcome` | greeting + intro paragraph + CTA |
-| `deal_approved` | greeting + lead-in + **green success band** (holds `body_text`) + CTA |
-| `commission_paid` | greeting + lead-in + **green success band** (holds `body_text`) + CTA |
-| `weekly_summary` | greeting + intro + **stat tiles** (`stats`) + **status rows** (`statusRows`) + CTA |
-| `generic` | greeting + `body_text` paragraph + CTA (fallback) |
+Each variant also carries a locked **subject**, **H1**, and **CTA label** (see
+`variantContent()`). If a live variant's hydrated fields are missing, the body
+gracefully falls back to `bodyText` so an email never breaks.
 
 ### Event type → variant (`resolveVariant`)
 
 | Event type | Variant | Fires today? |
 | --- | --- | --- |
 | `DEAL_APPROVED` | `deal_approved` | ✅ |
-| `DEAL_FUNDED` | `deal_approved` (shared success layout) | ✅ |
+| `DEAL_FUNDED` | `deal_funded` (deal_approved layout, funded copy) | ✅ |
 | `COMMISSION_PAID` | `commission_paid` | ✅ |
-| `LEAD_CREATED_FOR_YOU` | `welcome` | ⬜ (B2) |
+| `LEAD_QUALIFIED` / `LEAD_CREATED_FOR_YOU` | `welcome` | ⬜ (B2) |
+| `WEEKLY_SUMMARY` | `weekly_summary` | ⬜ (C6) |
 | anything else | `generic` | — |
 
-`welcome` and `weekly_summary` are **dormant** until B2 (lead entry) and C6
-(reports) land; the layouts exist and are testable via an explicit `variant`.
+`welcome` and `weekly_summary` are **dormant** until B2 / C6; the layouts exist
+and render when invoked with a matching `eventType` or explicit `variant`.
 
 ## How to add a new event type
 
-1. **DB trigger** — emit the notification via `emit_in_app_notification(...)` with
-   a good `title` (becomes subject + H1) and `body_text` (the message). Keep any
-   funder name role-aware (fictional `display_name_for_partner` for partners).
-2. **Category** — if the event prefix isn't already handled, extend
-   `eventCategory()` so the footer subscription line reads naturally
-   ("...subscribed to *X* notifications").
-3. **Variant** — if the event needs a distinct layout, add a case to
-   `resolveVariant()` (and, if it's a brand-new archetype, a branch in
-   `renderBody()` + `renderTextBody()`). Otherwise it falls through to `generic`,
-   which renders title + body + CTA correctly with no code change.
-4. **Preferences** — make sure the event type exists in the
-   `notification_event_type` enum and that owner/recipient `notification_preferences`
-   are backfilled with `email_enabled` as intended (see the A12 migration).
-5. **Email allow-list** — the Edge Function attempts email for every event that
-   reaches it; SPEC S4 lists which events are *in scope* to actually fire. Add the
-   new event there if it should send email.
+1. **DB trigger** — emit via `emit_in_app_notification(...)` with a `title`,
+   `body_text`, `link_url`, and a `data` payload carrying the entity ids the email
+   needs (e.g. `deal_id`). Keep funder names role-aware.
+2. **Hydration** — if the email needs discrete fields (amount, reference, funder,
+   client), add a branch to `hydrateDealContext()` in `index.ts` for the new event.
+3. **Variant** — map the event in `resolveVariant()`, add locked copy in
+   `variantContent()` (subject / H1 / CTA / paras) and an accent icon in
+   `accentIcon()`. If it needs no special layout it falls through to `generic`.
+4. **Category** — extend `eventCategory()` so the footer line reads naturally.
+5. **Preferences / allow-list** — ensure the event exists in the
+   `notification_event_type` enum, prefs are backfilled, and SPEC S4 lists it as
+   in-scope to send email.
 
-## Locked company facts (used in the footer — do not edit casually)
+## Locked company facts (footer — use exactly)
 
 Fund Now Capital (Pty) Ltd · CIPC 2026/066284/07 · 010 102 0534 ·
 hello@fundnowcapital.africa · www.fundnowcapital.africa ·
-Cedarwood House, 128 Ballyclare Drive, Bryanston 2191 ·
+Cedarwood House, 128 Ballyclare Drive, Bryanston 2191, Sandton ·
 75 Marshall Street, Polokwane 0699 · "Many funders. More approvals."
 
 **Never** put a personal email (e.g. `thapelol@…`) in the notification footer —
