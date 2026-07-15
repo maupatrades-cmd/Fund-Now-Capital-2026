@@ -111,20 +111,44 @@ $$;
 -- ---------------------------------------------------------------------------
 -- 4. Email is on by default now that it's live: align the column default so a
 --    preference row created by toggling any *other* channel doesn't silently
---    turn email off ("no explicit choice ⇒ email on"). Also backstop the email
---    leg against duplicate sends — at most one 'sent' email row per notification.
+--    turn email off ("no explicit choice ⇒ email on"). Backfill seeds only
+--    missing rows (never overwrites an opt-out). A partial unique index gives
+--    the Edge Function an atomic claim so an email is sent at most once.
 -- ---------------------------------------------------------------------------
 alter table public.notification_preferences alter column email_enabled set default true;
 
-create unique index if not exists notification_deliveries_one_email_sent
+-- At most ONE email delivery row per notification. This is the Edge Function's
+-- atomic-claim point: it inserts a 'pending' row before sending, so a duplicate
+-- or concurrent invocation conflicts here and bails — email is sent at most once.
+-- Not CONCURRENTLY: illegal inside a migration transaction, and this table is
+-- tiny (a few rows per notification), so the brief build lock is a non-issue.
+create unique index if not exists notification_deliveries_one_email
   on public.notification_deliveries (notification_id)
-  where channel = 'email' and delivery_status = 'sent';
+  where channel = 'email';
 
--- Owner email preferences default ON for every event type.
+-- Owner email preferences default ON for every event type. Seed only MISSING
+-- rows (do nothing on conflict) so a prior email opt-out is never overwritten.
 insert into public.notification_preferences (user_id, event_type, in_app_enabled, email_enabled)
 select p.id, evt, true, true
   from public.profiles p
   cross join (select unnest(enum_range(null::public.notification_event_type)) as evt) events
  where p.role = 'owner'
-on conflict (user_id, event_type)
-  do update set email_enabled = excluded.email_enabled;
+on conflict (user_id, event_type) do nothing;
+
+-- Postcondition: every (owner, event_type) must now have a preference row.
+do $$
+declare
+  v_missing integer;
+begin
+  select count(*) into v_missing
+    from public.profiles p
+    cross join (select unnest(enum_range(null::public.notification_event_type)) as evt) events
+   where p.role = 'owner'
+     and not exists (
+       select 1 from public.notification_preferences np
+        where np.user_id = p.id and np.event_type = evt
+     );
+  if v_missing > 0 then
+    raise exception 'notification_preferences owner backfill incomplete: % row(s) missing', v_missing;
+  end if;
+end $$;

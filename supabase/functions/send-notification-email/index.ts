@@ -84,42 +84,44 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .single();
   if (nErr || !n) return json({ error: "notification not found" }, 404);
 
-  // Record the email delivery outcome for this notification. Checks the write
-  // (per the CLAUDE.md rule) and logs — never throws, so recording failures
-  // don't mask the send outcome.
-  const record = async (
+  // Atomic claim: insert a 'pending' email delivery row BEFORE doing anything
+  // else. The partial unique index (notification_id) WHERE channel='email' makes
+  // this the single serialization point — a duplicate or concurrent invocation's
+  // insert hits a unique violation (23505) and bails, so the email is sent at
+  // most once even under a race. We then finalize this row to its outcome.
+  const { data: claim, error: claimErr } = await supabase
+    .from("notification_deliveries")
+    .insert({ notification_id: n.id, channel: "email", delivery_status: "pending" })
+    .select("id")
+    .single();
+  if (claimErr) {
+    if (claimErr.code === "23505") return json({ ok: false, skipped: "already processed" });
+    console.error("delivery claim failed", claimErr);
+    return json({ error: "could not claim delivery" }, 500);
+  }
+  const deliveryId = claim!.id;
+
+  // Finalize the claimed row to its terminal outcome. Checks the write (per the
+  // CLAUDE.md rule) and logs — never throws, so a recording failure can't mask
+  // the send outcome.
+  const finalize = async (
     status: "sent" | "failed" | "skipped",
     extra: { error_message?: string; external_id?: string } = {},
   ) => {
     const { data, error } = await supabase
       .from("notification_deliveries")
-      .insert({
-        notification_id: n.id,
-        channel: "email",
+      .update({
         delivery_status: status,
         sent_at: status === "sent" ? new Date().toISOString() : null,
         error_message: extra.error_message ?? null,
         external_id: extra.external_id ?? null,
       })
+      .eq("id", deliveryId)
       .select("id");
     if (error || !data?.length) {
-      console.error("failed to record notification delivery", { status, error });
+      console.error("failed to finalize notification delivery", { status, error });
     }
   };
-
-  // Idempotency: if this notification already has an email delivery row, it has
-  // been processed — don't send (or record) again. Guards against a re-invoke of
-  // the async path producing a duplicate email.
-  const { data: existing, error: existingErr } = await supabase
-    .from("notification_deliveries")
-    .select("id")
-    .eq("notification_id", n.id)
-    .eq("channel", "email")
-    .limit(1);
-  if (existingErr) console.error("delivery lookup failed", existingErr);
-  if (existing && existing.length > 0) {
-    return json({ ok: false, skipped: "already processed" });
-  }
 
   // Recipient email.
   const { data: profile, error: profileErr } = await supabase
@@ -130,7 +132,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (profileErr) console.error("profile lookup failed", profileErr);
   const email = profile?.email as string | undefined;
   if (!email) {
-    await record("skipped", { error_message: "no recipient email on profile" });
+    await finalize("skipped", { error_message: "no recipient email on profile" });
     return json({ ok: false, skipped: "no recipient email" });
   }
 
@@ -145,20 +147,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .maybeSingle();
   if (prefErr) {
     console.error("preference lookup failed", prefErr);
-    await record("failed", { error_message: `preference lookup failed: ${prefErr.message}` });
+    await finalize("failed", { error_message: `preference lookup failed: ${prefErr.message}` });
     return json({ ok: false, error: "preference lookup failed" });
   }
 
   if (pref && pref.email_enabled === false) {
-    await record("skipped", { error_message: "email disabled for this event" });
+    await finalize("skipped", { error_message: "email disabled for this event" });
     return json({ ok: false, skipped: "email disabled" });
   }
   if (pref?.digest_mode === true) {
-    await record("skipped", { error_message: "digest mode — queued for daily digest" });
+    await finalize("skipped", { error_message: "digest mode — queued for daily digest" });
     return json({ ok: false, skipped: "digest mode" });
   }
   if (withinQuietHours(nowMinutesInTz(QUIET_HOURS_TZ), toMinutes(pref?.quiet_hours_start ?? null), toMinutes(pref?.quiet_hours_end ?? null))) {
-    await record("skipped", { error_message: "within quiet hours" });
+    await finalize("skipped", { error_message: "within quiet hours" });
     return json({ ok: false, skipped: "quiet hours" });
   }
 
@@ -190,13 +192,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
       timeout,
     ]);
     if (error) {
-      await record("failed", { error_message: String(error.message ?? error) });
+      await finalize("failed", { error_message: String(error.message ?? error) });
       return json({ ok: false, error: error.message ?? "send failed" });
     }
-    await record("sent", { external_id: data?.id });
+    await finalize("sent", { external_id: data?.id });
     return json({ ok: true, id: data?.id });
   } catch (e) {
-    await record("failed", { error_message: e instanceof Error ? e.message : String(e) });
+    await finalize("failed", { error_message: e instanceof Error ? e.message : String(e) });
     return json({ ok: false, error: "send threw" });
   }
 });
