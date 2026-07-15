@@ -63,7 +63,11 @@ export default function NotificationPreferencesPage() {
                           type="checkbox"
                           className="h-4 w-4 rounded border-border align-middle"
                           checked={channelEnabled(e.value, c.key as ToggleableChannel)}
-                          disabled={setChannel.isPending}
+                          disabled={
+                            setChannel.isPending &&
+                            setChannel.variables?.eventType === e.value &&
+                            setChannel.variables?.channel === c.key
+                          }
                           onChange={(ev) =>
                             onToggle(e.value, c.key as ToggleableChannel, ev.target.checked)
                           }

@@ -54,14 +54,20 @@ begin
     return;
   end if;
 
-  perform net.http_post(
-    url     := v_base_url || '/functions/v1/send-notification-email',
-    headers := jsonb_build_object(
-                 'Content-Type',    'application/json',
-                 'X-Webhook-Secret', v_secret
-               ),
-    body    := jsonb_build_object('notification_id', p_notification_id)
-  );
+  -- Isolate the HTTP enqueue: an email-invocation failure must NEVER roll back
+  -- the caller's in-app notification write (the stated non-blocking invariant).
+  begin
+    perform net.http_post(
+      url     := v_base_url || '/functions/v1/send-notification-email',
+      headers := jsonb_build_object(
+                   'Content-Type',    'application/json',
+                   'X-Webhook-Secret', v_secret
+                 ),
+      body    := jsonb_build_object('notification_id', p_notification_id)
+    );
+  exception when others then
+    raise warning 'invoke_send_notification_email failed for %: %', p_notification_id, sqlerrm;
+  end;
 end;
 $$;
 revoke execute on function public.invoke_send_notification_email(uuid) from public, anon, authenticated;
@@ -103,8 +109,18 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 4. Owner email preferences default ON for every event type.
+-- 4. Email is on by default now that it's live: align the column default so a
+--    preference row created by toggling any *other* channel doesn't silently
+--    turn email off ("no explicit choice ⇒ email on"). Also backstop the email
+--    leg against duplicate sends — at most one 'sent' email row per notification.
 -- ---------------------------------------------------------------------------
+alter table public.notification_preferences alter column email_enabled set default true;
+
+create unique index if not exists notification_deliveries_one_email_sent
+  on public.notification_deliveries (notification_id)
+  where channel = 'email' and delivery_status = 'sent';
+
+-- Owner email preferences default ON for every event type.
 insert into public.notification_preferences (user_id, event_type, in_app_enabled, email_enabled)
 select p.id, evt, true, true
   from public.profiles p

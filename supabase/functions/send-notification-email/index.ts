@@ -84,27 +84,50 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .single();
   if (nErr || !n) return json({ error: "notification not found" }, 404);
 
-  // Record the email delivery outcome for this notification.
+  // Record the email delivery outcome for this notification. Checks the write
+  // (per the CLAUDE.md rule) and logs — never throws, so recording failures
+  // don't mask the send outcome.
   const record = async (
     status: "sent" | "failed" | "skipped",
     extra: { error_message?: string; external_id?: string } = {},
   ) => {
-    await supabase.from("notification_deliveries").insert({
-      notification_id: n.id,
-      channel: "email",
-      delivery_status: status,
-      sent_at: status === "sent" ? new Date().toISOString() : null,
-      error_message: extra.error_message ?? null,
-      external_id: extra.external_id ?? null,
-    });
+    const { data, error } = await supabase
+      .from("notification_deliveries")
+      .insert({
+        notification_id: n.id,
+        channel: "email",
+        delivery_status: status,
+        sent_at: status === "sent" ? new Date().toISOString() : null,
+        error_message: extra.error_message ?? null,
+        external_id: extra.external_id ?? null,
+      })
+      .select("id");
+    if (error || !data?.length) {
+      console.error("failed to record notification delivery", { status, error });
+    }
   };
 
+  // Idempotency: if this notification already has an email delivery row, it has
+  // been processed — don't send (or record) again. Guards against a re-invoke of
+  // the async path producing a duplicate email.
+  const { data: existing, error: existingErr } = await supabase
+    .from("notification_deliveries")
+    .select("id")
+    .eq("notification_id", n.id)
+    .eq("channel", "email")
+    .limit(1);
+  if (existingErr) console.error("delivery lookup failed", existingErr);
+  if (existing && existing.length > 0) {
+    return json({ ok: false, skipped: "already processed" });
+  }
+
   // Recipient email.
-  const { data: profile } = await supabase
+  const { data: profile, error: profileErr } = await supabase
     .from("profiles")
     .select("email")
     .eq("id", n.user_id)
     .single();
+  if (profileErr) console.error("profile lookup failed", profileErr);
   const email = profile?.email as string | undefined;
   if (!email) {
     await record("skipped", { error_message: "no recipient email on profile" });
@@ -112,12 +135,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // Preferences for this event. No row => email on by default (owner default).
-  const { data: pref } = await supabase
+  // A genuine lookup error must not be treated as "no row" (which would send
+  // despite the user's real preference), so fail loudly instead.
+  const { data: pref, error: prefErr } = await supabase
     .from("notification_preferences")
     .select("email_enabled, quiet_hours_start, quiet_hours_end, digest_mode")
     .eq("user_id", n.user_id)
     .eq("event_type", n.event_type)
     .maybeSingle();
+  if (prefErr) {
+    console.error("preference lookup failed", prefErr);
+    await record("failed", { error_message: `preference lookup failed: ${prefErr.message}` });
+    return json({ ok: false, error: "preference lookup failed" });
+  }
 
   if (pref && pref.email_enabled === false) {
     await record("skipped", { error_message: "email disabled for this event" });
@@ -143,14 +173,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   try {
     const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
-    const { data, error } = await resend.emails.send({
-      from: FROM,
-      replyTo: REPLY_TO,
-      to: email,
-      subject: n.title,
-      html,
-      text,
-    });
+    // Bound the call so an unresponsive Resend API records "failed" on our clock
+    // rather than hanging until the platform's own limit.
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("resend request timed out")), 10_000)
+    );
+    const { data, error } = await Promise.race([
+      resend.emails.send({
+        from: FROM,
+        replyTo: REPLY_TO,
+        to: email,
+        subject: n.title,
+        html,
+        text,
+      }),
+      timeout,
+    ]);
     if (error) {
       await record("failed", { error_message: String(error.message ?? error) });
       return json({ ok: false, error: error.message ?? "send failed" });
