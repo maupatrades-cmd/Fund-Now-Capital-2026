@@ -2,6 +2,7 @@ import { useLocation } from "react-router-dom";
 import { LogOut, Menu } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { NAV_ITEMS } from "./navItems";
 
 function currentTitle(pathname: string): string {
@@ -30,6 +31,7 @@ export function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
       <h1 className="text-lg font-semibold text-brand-navy">{currentTitle(pathname)}</h1>
 
       <div className="ml-auto flex items-center gap-3">
+        <NotificationBell />
         <div className="hidden sm:flex flex-col items-end leading-tight">
           <span className="text-sm font-medium text-brand-navy">{email}</span>
           <span className="text-[11px] text-muted-foreground">Owner</span>

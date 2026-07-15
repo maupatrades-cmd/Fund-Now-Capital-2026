@@ -97,6 +97,15 @@ Phase D scope: Twilio WhatsApp (pre-approved templates, emoji style per Part 4, 
 
 **CRITICAL: partner-facing notification bodies use fictional funder names only.**
 
+**A11 implementation notes (as built):**
+- Only the **in-app** channel is emitted in Phase A. Each in-app notification writes one `notification_deliveries` row with `channel='in_app', delivery_status='delivered'`. Email/WhatsApp/SMS delivery is A12/D6.
+- Emitted by SECURITY DEFINER triggers: **DEAL_APPROVED** (a `deal_funder_submissions` row → `approved`), **DEAL_FUNDED** (a deal → `funded` stage), **COMMISSION_PAID** (a `commission_records` row gets `payment_received_date` set). **LEAD_CREATED_FOR_YOU** is a documented placeholder in the migration — its trigger activates in **B2** when the `leads` table exists.
+- **Recipient resolution** (`notify_recipient`): the partner's profile when the deal/commission is linked to a referral partner, otherwise the owner. Bodies use the funder's `display_name_for_partner` (never the real name).
+- **`commission_records.payment_received_date`** (date, nullable) is added by the A11 migration so COMMISSION_PAID has a trigger condition; it's fully wired in C2/C3.
+- RLS: a user sees only their own `notifications` / `notification_deliveries` (own via parent) / `notification_preferences`. Direct table writes are blocked; marking-read goes through `mark_notification_read` / `mark_notifications_read` / `mark_all_notifications_read` RPCs (SECURITY DEFINER, scoped to `auth.uid()`), so bodies can't be tampered with.
+- The bell badge updates live via **Supabase Realtime** (`notifications` added to the `supabase_realtime` publication; the client subscribes filtered by `user_id`).
+- `notification_preferences` matrix: only `in_app_enabled` is toggleable now (default on); the other channels render "coming soon".
+
 ---
 
 ## S5. ACTIVITY LOGGING (Part 4 — Roadmap A10)

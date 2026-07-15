@@ -14,6 +14,8 @@ import FunderDetailPage from "@/pages/FunderDetailPage";
 import FunderFormPage from "@/pages/FunderFormPage";
 import CalculatorPage from "@/pages/CalculatorPage";
 import ActivityPage from "@/pages/ActivityPage";
+import NotificationsPage from "@/pages/NotificationsPage";
+import NotificationPreferencesPage from "@/pages/NotificationPreferencesPage";
 import { useSession } from "@/lib/useSession";
 import { queryClient } from "@/lib/queryClient";
 
@@ -51,6 +53,8 @@ function AppRoutes() {
         <Route path="/funders/:id/edit" element={<FunderFormPage />} />
         <Route path="/calculator" element={<CalculatorPage />} />
         <Route path="/activity" element={<ActivityPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/settings/notifications" element={<NotificationPreferencesPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
