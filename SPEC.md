@@ -457,13 +457,13 @@ Fund Now Capital (Pty) Ltd · CIPC 2026/066284/07 · 010 102 0534 · hello@fundn
 - **Deal-state notifications** (`DEAL_APPROVED`, `DEAL_FUNDED`, `LEAD_CREATED_FOR_YOU`) → **`deal_approved`** layout.
 - **Money notifications** (`COMMISSION_PAID`, invoice paid, payment received) → **`commission_paid`** layout.
 - **Digests / summaries** (weekly summary, Doctor's monthly statements) → **`weekly_summary`** layout.
-- **Onboarding / first-touch** (welcome, new-lead-qualified, client Trust Pack cover) → **`welcome`** layout.
+- **Onboarding / first-touch** (welcome, `LEAD_QUALIFIED`, client Trust Pack cover) → **`welcome`** layout.
 
 (`deal_approved` + `commission_paid` share the green-success-band renderer; `welcome` + `weekly_summary` are live-dormant until B2 / C6.)
 
 ### S16.5 Adding a new event type
 1. Add the value to the `notification_event_type` enum.
-2. Pick the layout variant (S16.4) — or fall through to `generic` (title + body + CTA), no code change.
+2. Pick one of the four canonical layout variants (S16.4). Every **production** email event must map to one of the four. `generic` is an internal safety-net fallback only — the same shared shell (header / footer / tokens) with a plain title + body + CTA and no variant-specific block; it exists so an unmapped event still renders on-brand rather than breaking, and is not a fifth brand template to design against.
 3. Emit it via `emit_in_app_notification(...)` with a good `title`, `body_text`, optional `link_url` (keep funder names role-aware — fictional `display_name_for_partner` for partners).
 4. Map it in `resolveVariant()` if it needs a specific layout; add its category to `eventCategory()` for the footer line.
 5. If it should send email, confirm it's in the S4 email allow-list and that `notification_preferences` are backfilled.
