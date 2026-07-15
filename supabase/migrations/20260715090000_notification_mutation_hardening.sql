@@ -16,12 +16,23 @@
 --    needs to know an event happened, regardless of who caused it. notify_recipient
 --    is retained for Phase D.
 --
+-- 3. Funder names in notification bodies are RESOLVED BY RECIPIENT ROLE via
+--    funder_display_name(funder_id, recipient): the real funders.name for an
+--    owner (funder identity is owner-only), the fictional display_name_for_partner
+--    for a partner. Today every recipient is the owner, so this shows the real
+--    name — identical in effect to a hardcoded real name, but already correct for
+--    Phase D partner recipients without a further migration. Only DEAL_APPROVED
+--    names a funder today; the pattern is documented on the trigger section so
+--    LEAD_CREATED_FOR_YOU (B2) and any Phase D partner notification inherit it.
+--
 --   >>> PHASE D REQUIREMENT <<<
 --   When Doctor's (Bright Destiny) partner portal ships, extend DEAL_APPROVED,
 --   DEAL_FUNDED, COMMISSION_PAID and the (then-active) LEAD_CREATED_FOR_YOU so
 --   that the referring partner is ALSO notified where applicable — in addition to
 --   the owner, not instead of. Use notify_recipient(referral_partner_id) for the
---   partner leg. The owner must keep receiving every event.
+--   partner leg, and funder_display_name(funder_id, partner_recipient) for any
+--   funder name in that leg (it will resolve to the fictional alias). The owner
+--   must keep receiving every event.
 
 -- ---------------------------------------------------------------------------
 -- 1. Mark-read RPCs return what they touched.
@@ -98,6 +109,42 @@ as $$
 $$;
 revoke execute on function public.notify_owner() from public, anon, authenticated;
 
+-- Role-aware funder identity for a notification body. The anonymisation rule is
+-- partner-facing only: owners may see the real funder name, partners must only
+-- ever see the fictional alias.
+--   recipient role = 'owner'   -> funders.name                 (real)
+--   recipient role = 'partner' -> funders.display_name_for_partner (fictional)
+-- Unknown/missing recipient falls through to the fictional alias (fail closed).
+create or replace function public.funder_display_name(p_funder_id uuid, p_recipient uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select case
+           when (select p.role from public.profiles p where p.id = p_recipient) = 'owner'
+             then f.name
+           else f.display_name_for_partner
+         end
+    from public.funders f
+   where f.id = p_funder_id;
+$$;
+revoke execute on function public.funder_display_name(uuid, uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Notification triggers — SHARED PATTERN for future triggers to inherit:
+--   * Resolve the recipient first (notify_owner() today; also the referring
+--     partner in Phase D — see the header's PHASE D REQUIREMENT).
+--   * Any funder name in the body MUST come from
+--     funder_display_name(funder_id, recipient) so it is role-aware — real name
+--     for owners, fictional alias for partners — never a raw funders.name select.
+--   * Only DEAL_APPROVED names a funder today. DEAL_FUNDED / COMMISSION_PAID name
+--     no funder, so they don't call the helper — but if a future trigger
+--     (LEAD_CREATED_FOR_YOU in B2, or a Phase D partner leg) shows a funder, it
+--     must go through funder_display_name.
+-- ---------------------------------------------------------------------------
+
 -- DEAL_APPROVED: a funder submission moves to 'approved'.
 create or replace function public.notify_deal_approved()
 returns trigger language plpgsql security definer set search_path = '' as $$
@@ -111,10 +158,9 @@ begin
       from public.deals d
       left join public.clients c on c.id = d.client_id
      where d.id = new.deal_id;
-    -- Owner-facing notification: real funder name is fine (funder identity is
-    -- owner-only). The Phase D partner leg must use display_name_for_partner.
-    select name into v_funder from public.funders where id = new.funder_id;
     v_recipient := public.notify_owner();  -- Phase D: also notify referring partner
+    -- Role-aware: real funder name for the owner, fictional alias for a partner.
+    v_funder := public.funder_display_name(new.funder_id, v_recipient);
     perform public.emit_in_app_notification(
       v_recipient, 'DEAL_APPROVED', 'Deal approved',
       coalesce(v_funder, 'A funder') || ' approved ' || coalesce(v_ref, 'a deal')
