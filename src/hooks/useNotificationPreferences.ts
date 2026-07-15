@@ -28,26 +28,41 @@ export function useNotificationPreferences() {
   });
 }
 
-// Only in_app is toggleable in Phase A; email/whatsapp/sms are wired in A12/D6.
-export function useSetInAppPreference() {
+// Channels toggleable from the preferences page. in_app (A11) + email (A12).
+export type ToggleableChannel = "in_app_enabled" | "email_enabled";
+
+// Upserts a single channel column for (user, event). Only the toggled column is
+// written; the row's other columns keep their values (or table defaults on
+// insert). RLS scopes writes to the caller's own rows. Returns the affected row
+// so a silent RLS no-op surfaces loudly (see CLAUDE.md working-style rule).
+export function useSetChannelPreference() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
       userId,
       eventType,
+      channel,
       enabled,
     }: {
       userId: string;
       eventType: string;
+      channel: ToggleableChannel;
       enabled: boolean;
     }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("notification_preferences")
         .upsert(
-          { user_id: userId, event_type: eventType, in_app_enabled: enabled, updated_at: new Date().toISOString() },
+          {
+            user_id: userId,
+            event_type: eventType,
+            [channel]: enabled,
+            updated_at: new Date().toISOString(),
+          },
           { onConflict: "user_id,event_type" },
-        );
+        )
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Preference was not saved");
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notification-preferences"] }),
   });

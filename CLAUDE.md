@@ -33,9 +33,9 @@ Navy `#1a3a52` · Teal `#2da8b8` · Green `#5dba5d` · Tagline "Many funders. Mo
 New Lead → Qualifying → Document Collection → Deal Review → Submitted → In Credit → Approved/Quote Received → Client Deciding → Verification/KYC → Contract Signed → Advance Pending → Funded → Invoiced → Commission Paid → Declined
 
 ## Current build state (update this section as phases complete)
-DONE: schema+RLS+engine+21 funders · auth/login · dashboard · funder panel · client DB · pipeline kanban + deal detail + calculators (PR #9, merged) · deal_pipeline migration applied to live.
-IN FLIGHT: declined-terminal fix + PR #9 review fixes (PR #10, awaiting CodeRabbit — its migration not yet applied to live) · Mama Mabase smoke test.
-NEXT: Phase A10–A13 (activity logging, in-app notifications, Resend emails, Twilio paperwork).
+DONE (applied + verified live): schema+RLS+engine+21 funders · auth/login · dashboard · funder panel · client DB · pipeline kanban + deal detail + calculators · A10 activity logging · A11 in-app notifications (bell/list/prefs, Realtime, owner-targeted role-aware triggers, mark-read RPCs return affected rows — PRs #18, #19).
+IN FLIGHT: A12 Resend email notifications (send-notification-email Edge Function via pg_net, branded template, per-event email prefs) — in PR, awaiting CodeRabbit; migration + function not yet applied/deployed to live.
+NEXT: A13 (Twilio paperwork, parallel) · Phase B.
 
 ## Open decisions (do not build past these without owner's answer)
 1. Doctor's Commission Estimator "Business View" transparency (blocks D5).

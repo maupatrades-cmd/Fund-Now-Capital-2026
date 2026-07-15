@@ -4,21 +4,24 @@ import { useSession } from "@/lib/useSession";
 import { NOTIFICATION_EVENT_TYPES, NOTIFICATION_CHANNELS } from "@/lib/notifications";
 import {
   useNotificationPreferences,
-  useSetInAppPreference,
+  useSetChannelPreference,
+  type ToggleableChannel,
 } from "@/hooks/useNotificationPreferences";
 
 export default function NotificationPreferencesPage() {
   const session = useSession();
   const userId = session?.user?.id;
   const { data: prefs, isLoading } = useNotificationPreferences();
-  const setInApp = useSetInAppPreference();
+  const setChannel = useSetChannelPreference();
 
-  const inAppEnabled = (eventType: string) => prefs?.[eventType]?.in_app_enabled ?? true;
+  // Live channels default ON when no preference row exists yet.
+  const channelEnabled = (eventType: string, channel: ToggleableChannel) =>
+    (prefs?.[eventType]?.[channel] as boolean | undefined) ?? true;
 
-  const onToggle = (eventType: string, enabled: boolean) => {
+  const onToggle = (eventType: string, channel: ToggleableChannel, enabled: boolean) => {
     if (!userId) return;
-    setInApp.mutate(
-      { userId, eventType, enabled },
+    setChannel.mutate(
+      { userId, eventType, channel, enabled },
       { onError: (e) => toast.error(e instanceof Error ? e.message : "Could not save preference") },
     );
   };
@@ -28,7 +31,7 @@ export default function NotificationPreferencesPage() {
       <div>
         <h1 className="text-2xl font-bold text-brand-navy">Notification preferences</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Choose how you're notified per event. In-app is live now; email, WhatsApp, and SMS are coming soon.
+          Choose how you're notified per event. In-app and email are live; WhatsApp and SMS are coming soon.
         </p>
       </div>
 
@@ -59,10 +62,12 @@ export default function NotificationPreferencesPage() {
                         <input
                           type="checkbox"
                           className="h-4 w-4 rounded border-border align-middle"
-                          checked={inAppEnabled(e.value)}
-                          disabled={setInApp.isPending}
-                          onChange={(ev) => onToggle(e.value, ev.target.checked)}
-                          aria-label={`In-app notifications for ${e.label}`}
+                          checked={channelEnabled(e.value, c.key as ToggleableChannel)}
+                          disabled={setChannel.isPending}
+                          onChange={(ev) =>
+                            onToggle(e.value, c.key as ToggleableChannel, ev.target.checked)
+                          }
+                          aria-label={`${c.label} notifications for ${e.label}`}
                         />
                       </td>
                     ) : (
