@@ -36,9 +36,10 @@ Served by Vercel from `/public`, so `public/logo-white.png` is reachable at
 `${APP_BASE_URL}/logo-white.png`. Images only resolve **after** the app is
 deployed. Social + accent icons are inline SVG (no hosted files).
 
-> **TODO (owner):** confirm the LinkedIn company URL. `LINKEDIN_URL` in
-> `email-template.ts` is a best-guess slug (`.../company/fund-now-capital`); the
-> TikTok URL is derived from the `@fundnowcapital` handle.
+> **TODO (owner):** provide the LinkedIn company URL. `LINKEDIN_URL` in
+> `email-template.ts` is currently the **domain-only fallback**
+> (`https://www.linkedin.com/`) because the company URL wasn't supplied — no slug
+> is invented. The TikTok URL is `https://www.tiktok.com/@fundnowcapital`.
 
 ## `renderEmail(model)` interface
 
@@ -71,7 +72,7 @@ role-aware funder, formatted amount, client name. It does **not** pass a
 | --- | --- | --- |
 | `welcome` | open door | fixed onboarding copy (no deal fields) |
 | `deal_approved` | check-in-circle | `{funderDisplay} has approved {dealReference} for {amount}.` + closing |
-| `deal_funded` | check-in-circle | `{funderDisplay} has funded {dealReference} for {amount}.` + closing |
+| `deal_funded` | check-in-circle | `{funderDisplay} has funded {dealReference} for {amount}. The advance to {clientName} is complete.` + "record the funded date and start the commission process" closing |
 | `weekly_summary` | bar chart | fixed digest copy (no deal fields) |
 | `commission_paid` | rand-in-circle | `A commission payment of {amount} has been recorded for {dealReference} ({clientName}).` + closing |
 | `generic` | info | fallback: renders `bodyText` (safety net; production events should map to one of the above) |

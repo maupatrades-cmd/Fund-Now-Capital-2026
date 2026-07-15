@@ -43,7 +43,8 @@ const CONTACT_EMAIL = "hello@fundnowcapital.africa";
 const WEBSITE_LABEL = "www.fundnowcapital.africa";
 const WEBSITE_URL = "https://www.fundnowcapital.africa";
 const TAGLINE = "Many funders. More approvals.";
-const LINKEDIN_URL = "https://www.linkedin.com/company/fund-now-capital"; // owner to confirm slug
+// Owner didn't supply the company URL — domain-only fallback (do NOT invent a slug).
+const LINKEDIN_URL = "https://www.linkedin.com/";
 const TIKTOK_URL = "https://www.tiktok.com/@fundnowcapital";
 
 export type EmailVariant =
@@ -208,12 +209,10 @@ function variantContent(m: EmailModel, variant: EmailVariant): VariantContent {
         ctaLabel: "View deal in CRM",
         category: "deal",
         paras: [
-          fd && ref && amt
-            ? `${fd} has funded ${ref} for ${amt}.`
-            : ref && client
-            ? `${ref} for ${client} is now funded.`
+          fd && ref && amt && client
+            ? `${fd} has funded ${ref} for ${amt}. The advance to ${client} is complete.`
             : (fallback || "A deal has been funded."),
-          "Open the deal to view the funding details.",
+          "Open the deal to record the funded date and start the commission process.",
         ],
       };
     case "weekly_summary":

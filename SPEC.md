@@ -455,7 +455,8 @@ Header gradient navy `#1a3a52`→teal `#2da8b8` (135°) · cyan accent bar `#3ec
 Fund Now Capital (Pty) Ltd · CIPC 2026/066284/07 · 010 102 0534 · hello@fundnowcapital.africa · www.fundnowcapital.africa · Cedarwood House, 128 Ballyclare Drive, Bryanston 2191 (Sandton) · 75 Marshall Street, Polokwane 0699 · LinkedIn (Fund Now Capital) + TikTok @fundnowcapital · tagline "Many funders. More approvals." **Never** put a personal email (e.g. `thapelol@…`) on an automated footer — `hello@` is the shared reply inbox.
 
 ### S16.4 Which variant each future email extends
-- **Deal-state notifications** (`DEAL_APPROVED`, `DEAL_FUNDED`, `LEAD_CREATED_FOR_YOU`) → **`deal_approved`** layout.
+- **Deal-state notifications** (`DEAL_APPROVED`, `LEAD_CREATED_FOR_YOU`) → **`deal_approved`** layout.
+- **`DEAL_FUNDED`** → **`deal_funded`** (a fifth variant reusing the `deal_approved` layout + check-in-circle icon), with locked copy: subject/H1 "Deal funded"; body "`{funder_display}` has funded `{deal_reference}` for `{amount}`. The advance to `{client_name}` is complete." then "Open the deal to record the funded date and start the commission process."; CTA "View deal in CRM"; category `deal`.
 - **Money notifications** (`COMMISSION_PAID`, invoice paid, payment received) → **`commission_paid`** layout.
 - **Digests / summaries** (weekly summary, Doctor's monthly statements) → **`weekly_summary`** layout.
 - **Onboarding / first-touch** (welcome, `LEAD_QUALIFIED`, client Trust Pack cover) → **`welcome`** layout.
