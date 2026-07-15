@@ -100,11 +100,22 @@ Phase D scope: Twilio WhatsApp (pre-approved templates, emoji style per Part 4, 
 **A11 implementation notes (as built):**
 - Only the **in-app** channel is emitted in Phase A. Each in-app notification writes one `notification_deliveries` row with `channel='in_app', delivery_status='delivered'`. Email/WhatsApp/SMS delivery is A12/D6.
 - Emitted by SECURITY DEFINER triggers: **DEAL_APPROVED** (a `deal_funder_submissions` row → `approved`), **DEAL_FUNDED** (a deal → `funded` stage), **COMMISSION_PAID** (a `commission_records` row gets `payment_received_date` set). **LEAD_CREATED_FOR_YOU** is a documented placeholder in the migration — its trigger activates in **B2** when the `leads` table exists.
-- **Recipient resolution** (`notify_recipient`): the partner's profile when the deal/commission is linked to a referral partner, otherwise the owner. Bodies use the funder's `display_name_for_partner` (never the real name).
+- **Recipient resolution**: the A11 hardening PR retargeted the three active triggers to the **owner** explicitly via `notify_owner()` (owner-only phase — the owner needs to know every event). `notify_recipient(referral_partner_id)` is retained for Phase D, when the referring partner is *also* notified. Funder names in bodies are role-aware via `funder_display_name(funder_id, recipient)`: the **real** `funders.name` for an owner (funder identity is owner-only), `display_name_for_partner` for a partner.
+- **Mark-read RPCs return their affected rows** (the updated id / row count) so a silent RLS/ownership no-op surfaces as an error in the client instead of a false success.
 - **`commission_records.payment_received_date`** (date, nullable) is added by the A11 migration so COMMISSION_PAID has a trigger condition; it's fully wired in C2/C3.
 - RLS: a user sees only their own `notifications` / `notification_deliveries` (own via parent) / `notification_preferences`. Direct table writes are blocked; marking-read goes through `mark_notification_read` / `mark_notifications_read` / `mark_all_notifications_read` RPCs (SECURITY DEFINER, scoped to `auth.uid()`), so bodies can't be tampered with.
 - The bell badge updates live via **Supabase Realtime** (`notifications` added to the `supabase_realtime` publication; the client subscribes filtered by `user_id`).
 - `notification_preferences` matrix: only `in_app_enabled` is toggleable now (default on); the other channels render "coming soon".
+
+**A12 implementation notes (as built — email via Resend):**
+- **Delivery flow:** after `emit_in_app_notification()` writes the in-app rows, it calls `invoke_send_notification_email(notification_id)`, which fires an **async** `pg_net` POST to the **`send-notification-email`** Edge Function. Async by design — email never blocks the writing transaction. All four A-phase events flow through this single path.
+- **Edge Function** (Deno) loads the notification, the recipient's `profiles.email`, and their `notification_preferences` row, then decides:
+  - **skip** (write a `notification_deliveries` row `channel='email', delivery_status='skipped'`, `error_message` = reason) when `email_enabled=false`, `digest_mode=true` (queued for the future daily-digest sender), or the current time is **within quiet hours** (evaluated in `Africa/Johannesburg`). No preference row ⇒ email **on** by default.
+  - otherwise **send** via Resend and write `delivery_status='sent'` (`external_id` = Resend id) or `'failed'` (`error_message`).
+- New enum value **`skipped`** added to `notification_delivery_status`.
+- **Template:** branded HTML + plain-text fallback — navy `#1a3a52` header with an "FN" mark, title H1, body paragraph, teal→green gradient "View in CRM" CTA to `APP_BASE_URL + link_url`, navy footer with the per-event-category subscription line + prefs link, "Many funders. More approvals." tagline, and the CIPC copyright line. From **"Fund Now Capital" <hello@fundnowcapital.africa>**, reply-to the same.
+- **Preferences:** the owner is backfilled with `email_enabled=true` for every event type; the prefs page **email column is now live** and toggleable per event (in-app + email).
+- **Auth / secrets:** the function is deployed `verify_jwt=false` and validates a shared **`X-Webhook-Secret`** header; the function URL + secret live in **Vault** (never in the repo). `RESEND_API_KEY` is a function env var. No service-role key is stored in the DB.
 
 ---
 

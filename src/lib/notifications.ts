@@ -87,10 +87,11 @@ export function eventIconClass(value: string): string {
   }
 }
 
-// The channels shown in the preferences matrix. Only in_app is live in Phase A.
+// The channels shown in the preferences matrix. In-app (A11) and email (A12)
+// are live; WhatsApp and SMS arrive in Phase D.
 export const NOTIFICATION_CHANNELS = [
   { key: "in_app_enabled", label: "In-app", live: true },
-  { key: "email_enabled", label: "Email", live: false },
+  { key: "email_enabled", label: "Email", live: true },
   { key: "whatsapp_enabled", label: "WhatsApp", live: false },
   { key: "sms_enabled", label: "SMS", live: false },
 ] as const;

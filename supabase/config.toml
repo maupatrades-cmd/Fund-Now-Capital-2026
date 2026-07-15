@@ -1,0 +1,7 @@
+project_id = "fund-now-capital-2026"
+
+# send-notification-email is invoked server-to-server by the DB (pg_net), not by
+# a signed-in user, so it authenticates via the shared X-Webhook-Secret header
+# instead of a JWT. Keep verify_jwt = false.
+[functions.send-notification-email]
+verify_jwt = false
