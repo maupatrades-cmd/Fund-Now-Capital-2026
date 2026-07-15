@@ -60,7 +60,13 @@ export function useFundersMinimal() {
   return useQuery({
     queryKey: ["funders-minimal"],
     queryFn: async (): Promise<{ id: string; name: string }[]> => {
-      const { data, error } = await supabase.from("funders").select("id, name").order("name");
+      // Matrix loads all funders — 200 limit gives headroom above current 43+.
+      // If panel exceeds ~150 funders, revisit with virtualisation.
+      const { data, error } = await supabase
+        .from("funders")
+        .select("id, name")
+        .order("name")
+        .limit(200);
       if (error) throw error;
       return (data ?? []) as { id: string; name: string }[];
     },
