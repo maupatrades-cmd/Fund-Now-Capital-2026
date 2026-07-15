@@ -5,6 +5,7 @@ import {
   Landmark,
   Calculator,
   Activity,
+  Factory,
   type LucideIcon,
 } from "lucide-react";
 
@@ -22,4 +23,5 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/funders", label: "Funders", icon: Landmark },
   { to: "/calculator", label: "Calculator", icon: Calculator },
   { to: "/activity", label: "Activity", icon: Activity },
+  { to: "/settings/industries", label: "Industries", icon: Factory },
 ];

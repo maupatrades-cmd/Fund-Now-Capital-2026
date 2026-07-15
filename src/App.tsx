@@ -16,6 +16,7 @@ import CalculatorPage from "@/pages/CalculatorPage";
 import ActivityPage from "@/pages/ActivityPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import NotificationPreferencesPage from "@/pages/NotificationPreferencesPage";
+import IndustriesPage from "@/pages/IndustriesPage";
 import { useSession } from "@/lib/useSession";
 import { queryClient } from "@/lib/queryClient";
 
@@ -55,6 +56,7 @@ function AppRoutes() {
         <Route path="/activity" element={<ActivityPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings/notifications" element={<NotificationPreferencesPage />} />
+        <Route path="/settings/industries" element={<IndustriesPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
