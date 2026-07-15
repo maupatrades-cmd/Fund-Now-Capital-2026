@@ -434,30 +434,32 @@ Steps 1–2 are one atomic DB transaction; step 3 is a client reaction to Realti
 
 Every automated email FNC sends is built from **one shared, bulletproof template** with swappable content variants. Established in A12 (PR #24). **Future email work — Phase C invoicing/statements, Phase D portal notifications, Phase E welcome/nurture flows — extends one of these four variants; nothing is designed from scratch.** Implementation: `supabase/functions/send-notification-email/email-template.ts`; contributor guide: `docs/email-templates.md`.
 
-### S16.1 The four canonical layouts (PR #24)
-A shared shell (header + content card + footer) wraps four body variants, each emitting **HTML + a matching plain-text body**:
-- **`welcome`** — greeting + intro paragraph + CTA. Onboarding / first-touch.
-- **`deal_approved`** — greeting + lead-in + green success band (holds the message) + CTA. Deal-state good news.
-- **`weekly_summary`** — greeting + intro + stat tiles (a table row of cells) + status rows + CTA. Digests.
-- **`commission_paid`** — greeting + lead-in + green success band + CTA. Money events.
+### S16.1 Canonical layouts (refined in email-templates-v2)
+A shared shell (gradient header → cyan bar → white content card → deep-navy 3-column footer) wraps the variants, each emitting **HTML + a matching plain-text body**. Variants differ only by a 40px accent icon + locked copy:
+- **`welcome`** (open-door icon) — onboarding / first-touch.
+- **`deal_approved`** (check-in-circle) — deal-state good news. `DEAL_FUNDED` reuses this layout with funded copy.
+- **`weekly_summary`** (bar-chart) — digests.
+- **`commission_paid`** (rand-in-circle) — money events.
 
-**Structural blocks (all table-based, inline styles only):**
-- **Gradient header block** — navy→teal linear-gradient (solid navy `bgcolor` fallback for Outlook), centered hosted **white FN mark**, "Many funders. More approvals." tagline (green-tint + cyan-tint spans), a 40×2px cyan accent bar, 3px cyan bottom border.
-- **Content card** — white card, H1 title, "Hi {first_name}," greeting, body, bulletproof CTA button (role=presentation table + padded `<a>`).
-- **Three-column footer block** — deep-navy; brand row (white mark + wordmark); three `<td>` columns **Offices / Contact / Connect** (Connect holds hosted white LinkedIn + TikTok PNGs); divider; legal row (© + CIPC + per-category subscription line + prefs link).
-- **Plain-text fallback pattern** — wordmark + tagline, title, variant body (success line, or stat/status lines for digests), CTA URL, subscription + prefs URL, full contact block, © + CIPC.
+**Structural blocks (table-based, inline styles only):**
+- **Gradient header** — navy→teal 135° linear-gradient (solid navy `bgcolor` fallback for Outlook), centered hosted **white FN mark** (40px), "Many funders. More approvals." tagline.
+- **Cyan accent bar** — 3px `#3ec6d9`, full width.
+- **Content card** — white; 40px accent icon (inline SVG), H1, "Hi {first_name}," greeting, body paragraphs, green→teal gradient CTA button (padded `<a>` + MSO VML fallback), muted subscription/prefs line.
+- **Three-column footer** — deep-navy `#0f2233`; **Offices / Contact / Connect** columns as `<div>`+`inline-block` inside an MSO ghost table (side-by-side on desktop, wrap on mobile, tables for Outlook); Connect holds inline-SVG white LinkedIn + TikTok glyphs; divider; legal row (© + CIPC).
+- **Plain-text fallback** — subject, greeting, body paragraphs, CTA URL, subscription + prefs URL, full contact block, © + CIPC.
 
 ### S16.2 Design tokens (shared with the CRM UI)
-Navy `#1a3a52` (header / headings) · Teal `#2da8b8` + Cyan `#00C9D4` (accents) · Green `#5dba5d`→Teal gradient CTA · Deep-navy `#0d2438` (footer) · white `#ffffff` content card on `#e5e7eb`/`#f8f9fb` page · body ink `#334155` · muted `#8B95A5`. Typography: **Inter** (matching the app), declared `'Inter', Arial, Helvetica, sans-serif` — most email clients lack the web font and fall back to Arial/Helvetica, so never rely on Inter-only styling. 600px shell.
+Header gradient navy `#1a3a52`→teal `#2da8b8` (135°) · cyan accent bar `#3ec6d9` · CTA gradient green `#5dba5d`→teal `#2da8b8` (90°) · footer deep-navy `#0f2233` · white `#ffffff` content card · body ink `#1e293b` · H1 `#1a3a52` · small print `#64748b` · icon accent `#2da8b8`. Typography: **Inter** (matching the app), declared `Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif` — clients that lack Inter fall back to the web-safe stack, so never rely on Inter-only styling. 600px shell.
 
 ### S16.3 Locked contact block (Phase A closure — use exactly)
 Fund Now Capital (Pty) Ltd · CIPC 2026/066284/07 · 010 102 0534 · hello@fundnowcapital.africa · www.fundnowcapital.africa · Cedarwood House, 128 Ballyclare Drive, Bryanston 2191 (Sandton) · 75 Marshall Street, Polokwane 0699 · LinkedIn (Fund Now Capital) + TikTok @fundnowcapital · tagline "Many funders. More approvals." **Never** put a personal email (e.g. `thapelol@…`) on an automated footer — `hello@` is the shared reply inbox.
 
 ### S16.4 Which variant each future email extends
-- **Deal-state notifications** (`DEAL_APPROVED`, `DEAL_FUNDED`, `LEAD_CREATED_FOR_YOU`) → **`deal_approved`** layout.
+- **Deal-state notifications** (`DEAL_APPROVED`) → **`deal_approved`** layout.
+- **`DEAL_FUNDED`** → **`deal_funded`** (a fifth variant reusing the `deal_approved` layout + check-in-circle icon), with locked copy: subject/H1 "Deal funded"; body "`{funder_display}` has funded `{deal_reference}` for `{amount}`. The advance to `{client_name}` is complete." then "Open the deal to record the funded date and start the commission process."; CTA "View deal in CRM"; category `deal`.
 - **Money notifications** (`COMMISSION_PAID`, invoice paid, payment received) → **`commission_paid`** layout.
 - **Digests / summaries** (weekly summary, Doctor's monthly statements) → **`weekly_summary`** layout.
-- **Onboarding / first-touch** (welcome, `LEAD_QUALIFIED`, client Trust Pack cover) → **`welcome`** layout.
+- **Onboarding / first-touch** (welcome, `LEAD_QUALIFIED`, `LEAD_CREATED_FOR_YOU`, client Trust Pack cover) → **`welcome`** layout.
 
 (`deal_approved` + `commission_paid` share the green-success-band renderer; `welcome` + `weekly_summary` are live-dormant until B2 / C6.)
 
@@ -468,15 +470,17 @@ Fund Now Capital (Pty) Ltd · CIPC 2026/066284/07 · 010 102 0534 · hello@fundn
 4. Map it in `resolveVariant()` if it needs a specific layout; add its category to `eventCategory()` for the footer line.
 5. If it should send email, confirm it's in the S4 email allow-list and that `notification_preferences` are backfilled.
 
-### S16.6 Logo assets
-`/public/logo-white.png` (white mark — dark backgrounds: header + footer) and `/public/logo-full.png` (colour lockup — light backgrounds: future PDFs / signatures). Social icons are hosted white PNGs (Outlook has no SVG). **Always reference logos/icons by absolute HTTPS URL** built from `APP_BASE_URL` — never inline-embed or use `data:` URIs.
+**Template interface (v2).** The Edge Function hydrates typed display variables and passes them to `renderEmail(model)` → `{subject, html, text}`: `firstName`, `funderDisplay` (role-aware — real `funders.name` for owner, `display_name_for_partner` for partner), `dealReference`, `amount` (pre-formatted en-ZA, e.g. `R8,000,000`), `clientName`, `linkUrl`, `eventType`, `appBaseUrl`. Hydration reads the notification's `data` payload (`deal_id` / `submission_id` / `commission_record_id`) with the service-role client — triggers stay simple (they still fire `body_text` for the in-app bell); only the email is enriched. Any hydration miss falls back to `body_text`.
+
+### S16.6 Logo & icon assets
+`/public/logo-white.png` (white mark — dark header) and `/public/logo-full.png` (colour lockup — light backgrounds: future PDFs / signatures). The **header logo is a hosted PNG** referenced by absolute HTTPS URL built from `APP_BASE_URL` — never inline-embed or use `data:` URIs for the logo. The per-variant accent icon and the LinkedIn/TikTok social glyphs are **inline SVG** (`role="img"` + `aria-label` for SVG-capable clients). **Outlook 2016+ does not render inline SVG**, so these icons are simply absent there — an accepted compromise (no PNG fallback, per brief).
 
 ### S16.7 Deliverability & compatibility rules (non-negotiable)
 - **Plain-text fallback for every variant** (spam score + text-only clients).
-- **Tables + inline styles only** — no CSS classes, no `<style>` block, no flexbox, no grid. (Consequence: no `@media` queries, so the layout does not stack on narrow screens; sizes are chosen to stay legible when the 600px shell is scaled down.)
-- **Hosted PNG images**, absolute HTTPS, with `alt` text (SVG unsupported in Outlook/Gmail).
-- Outlook fallbacks for gradient (`bgcolor`); don't rely on `border-radius`/`box-shadow` for legibility.
-- Tested against Outlook, Gmail web, Gmail iOS/Android, Apple Mail.
+- **Tables + inline styles only** — no CSS classes, no `<style>` block, no flexbox, no grid. No `@media` queries; the footer columns instead stack via `<div>`+`inline-block` inside an MSO ghost table.
+- **Hosted logo PNG** (absolute HTTPS, `alt` text); **accent + social icons are inline SVG** with `role="img"`/`aria-label` for SVG-capable clients. Outlook 2016+ does not render inline SVG (icons absent there) — accepted compromise, no PNG fallback.
+- Outlook fallbacks for gradients (`bgcolor`) and a VML CTA button; don't rely on `border-radius`/`box-shadow` for legibility.
+- Tested against Outlook 2016+, Gmail web, Gmail iOS/Android, Apple Mail.
 
 ---
 

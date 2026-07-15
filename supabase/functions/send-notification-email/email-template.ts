@@ -1,84 +1,77 @@
-// Fund Now Capital — bulletproof transactional email template (A12 / SPEC S4).
+// Fund Now Capital — bulletproof transactional email template v2 (A12 / SPEC S16).
 //
-// TABLE-BASED, INLINE-STYLES-ONLY. No <style> block, no CSS classes, no flexbox,
-// no grid — every style is an inline attribute on a <table>/<td>. This is the
-// widest-compatibility approach for Outlook (Word rendering engine), Gmail web,
-// Gmail iOS/Android, and Apple Mail.
+// Content-locked per BUILD-BRIEF email-templates-v2. Table-based, inline styles
+// only. One shared shell (gradient header → cyan bar → white content card →
+// deep-navy 3-column footer) wrapping four variants that differ only by a 40px
+// accent icon + locked copy: welcome · deal_approved · weekly_summary ·
+// commission_paid. (DEAL_FUNDED reuses the deal_approved layout with funded
+// copy — the brief is silent on it; documented decision.)
 //
-// Because there is no <style> block we cannot use @media queries, so the layout
-// does not "stack" on narrow screens; sizes are chosen to stay legible when a
-// mobile client scales the 600px shell down. Logos/icons are hosted PNGs (Outlook
-// has no SVG support) referenced by absolute HTTPS URL under APP_BASE_URL.
+// The Edge Function hydrates display data (role-aware funder name, deal
+// reference, formatted amount, client name) and passes it in; the template only
+// renders. It never reads funder data itself, so a real funder name only ever
+// appears when the caller resolved it for an owner recipient.
 //
-// One shared header + footer shell wraps four content variants:
-//   welcome · deal_approved · weekly_summary · commission_paid
-// Only DEAL_APPROVED / DEAL_FUNDED / COMMISSION_PAID fire today (DEAL_FUNDED
-// reuses the deal_approved success layout); welcome + weekly_summary lie dormant
-// until B2 (lead entry) and C6 (reports) land.
-//
-// The template renders whatever the caller supplies (title, body text, link,
-// recipient first name) — it never fetches funder data itself, so the DB layer's
-// role-aware fictional funder names in `body_text` pass straight through
-// unchanged. Nothing here can surface a real funder name.
+// COMPROMISE LOG (pre-approved, Section 12):
+//   - CTA border-radius squares in Outlook 2016 → acceptable.
+//   - Header/CTA gradients render as solid navy/teal in Outlook → bgcolor fallback.
+//   - Inline SVG icons don't render in Outlook 2016+ (Microsoft dropped inline
+//     SVG in 2025) → the accent + social icons are simply absent there; no PNG
+//     fallback (accepted per brief). aria-label serves SVG-capable clients only.
+//   - Footer columns stack via <div>+inline-block wrapped in an MSO ghost table
+//     (no @media, since no <style> block) → documented at the use site.
 
-// ---- Brand tokens ----
-const NAVY = "#1a3a52"; // primary navy
-const NAVY_DEEP = "#0d2438"; // footer
+// ---- Design tokens (locked, Section 4) ----
+const NAVY = "#1a3a52";
 const TEAL = "#2da8b8";
-const CYAN = "#00C9D4";
+const CYAN = "#3ec6d9";
 const GREEN = "#5dba5d";
-const GREEN_TINT = "#9fe09f";
-const CYAN_TINT = "#c6f4f7";
-const INK = "#1a3a52";
-const BODY_INK = "#334155";
-const MUTED = "#8B95A5";
+const FOOTER_BG = "#0f2233";
 const CARD = "#ffffff";
-const PAGE_BG = "#e5e7eb";
-const SHELL_BG = "#f8f9fb";
-const TILE_BG = "#f8f9fb";
-const BORDER = "#e5e7eb";
-const FONT = "Arial, Helvetica, sans-serif";
+const BODY_INK = "#1e293b";
+const H1_INK = "#1a3a52";
+const SMALL_INK = "#64748b";
+const ICON = "#2da8b8";
+const PAGE_BG = "#e8ebef";
+// Single quotes around 'Segoe UI' — double quotes would terminate the enclosing
+// inline style="…" attribute and corrupt the markup.
+const FONT = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
-// ---- Locked company facts (owner-confirmed; do NOT add personal emails here) ----
+// ---- Locked contact block (Section 9) ----
 const LEGAL_NAME = "Fund Now Capital (Pty) Ltd";
 const CIPC = "2026/066284/07";
 const PHONE = "010 102 0534";
 const CONTACT_EMAIL = "hello@fundnowcapital.africa";
 const WEBSITE_LABEL = "www.fundnowcapital.africa";
 const WEBSITE_URL = "https://www.fundnowcapital.africa";
-const ADDRESS_SANDTON = "Cedarwood House, 128 Ballyclare Drive, Bryanston 2191";
-const ADDRESS_POLOKWANE = "75 Marshall Street, Polokwane 0699";
-const TAGLINE_A = "Many funders."; // green tint
-const TAGLINE_B = "More approvals."; // cyan tint
-// NOTE: confirm the LinkedIn company URL with the owner — best-guess slug for now.
-const LINKEDIN_URL = "https://www.linkedin.com/company/fund-now-capital";
-const TIKTOK_URL = "https://www.tiktok.com/@fundnowcapital"; // derived from @fundnowcapital
+const TAGLINE = "Many funders. More approvals.";
+// Owner didn't supply the company URL — domain-only fallback (do NOT invent a slug).
+const LINKEDIN_URL = "https://www.linkedin.com/";
+const TIKTOK_URL = "https://www.tiktok.com/@fundnowcapital";
 
 export type EmailVariant =
   | "welcome"
   | "deal_approved"
+  | "deal_funded"
   | "weekly_summary"
   | "commission_paid"
   | "generic";
 
-export type StatTile = { label: string; value: string };
-
 export type EmailModel = {
-  title: string;
-  bodyText: string | null;
-  linkUrl: string | null; // app-relative, e.g. "/deals/123"
+  eventType: string; // derives variant + category when not given
   firstName?: string | null;
-  eventType: string; // used to derive variant + category when not given explicitly
-  appBaseUrl: string; // e.g. "https://fund-now-capital-2026.vercel.app"
-  variant?: EmailVariant; // explicit override (dormant variants / testing)
-  eventCategory?: string; // footer subscription line; derived from eventType if absent
-  ctaLabel?: string; // default "View in CRM"
-  // weekly_summary only:
-  stats?: StatTile[];
-  statusRows?: { label: string; value: string }[];
+  linkUrl?: string | null; // app-relative, e.g. "/deals/123"
+  appBaseUrl: string;
+  // hydrated deal context (null for welcome / weekly_summary or on hydration miss):
+  funderDisplay?: string | null;
+  dealReference?: string | null;
+  amount?: string | null; // pre-formatted, e.g. "R8,000,000"
+  clientName?: string | null;
+  // fallbacks / overrides:
+  bodyText?: string | null; // used only if a live variant can't hydrate
+  variant?: EmailVariant; // explicit override (testing dormant variants)
 };
 
-// Friendly category for the footer subscription line.
 export function eventCategory(eventType: string): string {
   if (eventType.startsWith("LEAD_")) return "lead";
   if (eventType.startsWith("DEAL_")) return "deal";
@@ -86,26 +79,25 @@ export function eventCategory(eventType: string): string {
   if (eventType.startsWith("FUNDER_")) return "funder";
   if (eventType.startsWith("CLIENT_")) return "client";
   if (eventType.startsWith("DOCUMENT_")) return "document";
-  if (
-    eventType.startsWith("MONTHLY_") ||
-    eventType.startsWith("TIER_") ||
-    eventType === "BADGE_EARNED"
-  ) {
+  if (eventType.startsWith("MONTHLY_") || eventType.startsWith("TIER_") || eventType === "BADGE_EARNED") {
     return "performance";
   }
   return "account";
 }
 
-// Map a notification event type to a layout variant.
 export function resolveVariant(eventType: string): EmailVariant {
   switch (eventType) {
     case "DEAL_APPROVED":
+      return "deal_approved";
     case "DEAL_FUNDED":
-      return "deal_approved"; // shared green success layout
+      return "deal_funded";
     case "COMMISSION_PAID":
       return "commission_paid";
+    case "LEAD_QUALIFIED":
     case "LEAD_CREATED_FOR_YOU":
       return "welcome";
+    case "WEEKLY_SUMMARY":
+      return "weekly_summary";
     default:
       return "generic";
   }
@@ -120,249 +112,263 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-// Join the app base and an app-relative path without doubling the slash.
 function absoluteUrl(base: string, path: string): string {
   return `${base.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
 }
 
-function greeting(firstName?: string | null): string {
-  const name = (firstName ?? "").trim();
-  return name ? `Hi ${escapeHtml(name)},` : "Hi there,";
+function greetingName(firstName?: string | null): string {
+  const n = (firstName ?? "").trim();
+  return n ? `Hi ${n},` : "Hi there,";
 }
 
-// Bulletproof CTA button: role=presentation table + padded anchor (Outlook-safe).
-function ctaButton(url: string, label: string): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px auto 0;"><tr>
-    <td align="center" bgcolor="${TEAL}" style="border-radius:8px;background-image:linear-gradient(90deg,${GREEN},${TEAL});">
-      <a href="${escapeHtml(url)}" target="_blank" style="display:inline-block;padding:14px 32px;font-family:${FONT};font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:8px;">${escapeHtml(label)}</a>
-    </td></tr></table>`;
+// ---- 40px accent icons (inline SVG, monoline, stroke #2da8b8). Outlook shows alt. ----
+function accentIcon(variant: EmailVariant): { svg: string; label: string } {
+  const open = `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" role="img"`;
+  const s = `stroke="${ICON}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"`;
+  switch (variant) {
+    case "welcome":
+      // Open door
+      return {
+        label: "Welcome",
+        svg: `${open} aria-label="Welcome"><path d="M4 21h16" ${s}/><path d="M15 21V4a1 1 0 0 0-1.2-1L6.5 4.5A1 1 0 0 0 6 5.4V21" ${s}/><circle cx="12.4" cy="12" r="0.9" fill="${ICON}"/></svg>`,
+      };
+    case "deal_approved":
+    case "deal_funded":
+      // Check in circle
+      return {
+        label: "Approved",
+        svg: `${open} aria-label="Approved"><circle cx="12" cy="12" r="9" ${s}/><path d="M8 12l2.5 2.5L16 9" ${s}/></svg>`,
+      };
+    case "weekly_summary":
+      // Bar chart
+      return {
+        label: "Summary",
+        svg: `${open} aria-label="Weekly summary"><path d="M4 20h16" ${s}/><rect x="6" y="12" width="3" height="6" rx="1" ${s}/><rect x="11" y="8" width="3" height="10" rx="1" ${s}/><rect x="16" y="4" width="3" height="14" rx="1" ${s}/></svg>`,
+      };
+    case "commission_paid":
+      // Rand in circle
+      return {
+        label: "Commission",
+        svg: `${open} aria-label="Commission paid"><circle cx="12" cy="12" r="9" ${s}/><text x="12" y="16" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="${ICON}">R</text></svg>`,
+      };
+    default:
+      return {
+        label: "Notification",
+        svg: `${open} aria-label="Notification"><circle cx="12" cy="12" r="9" ${s}/><path d="M12 8v5" ${s}/><circle cx="12" cy="16" r="0.6" fill="${ICON}"/></svg>`,
+      };
+  }
 }
 
-function paragraph(text: string): string {
-  return `<p style="margin:0 0 16px;font-family:${FONT};font-size:16px;line-height:1.65;color:${BODY_INK};">${escapeHtml(text)}</p>`;
-}
+// ---- White social glyphs (inline SVG, 24px). Outlook shows alt text. ----
+const SOCIAL_LINKEDIN = `<svg width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="LinkedIn" xmlns="http://www.w3.org/2000/svg"><path fill="#ffffff" d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>`;
+const SOCIAL_TIKTOK = `<svg width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="TikTok" xmlns="http://www.w3.org/2000/svg"><path fill="#ffffff" d="M12.53.02C13.84 0 15.14.01 16.44 0c.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.08-.14 1.62.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>`;
 
-// Green "success band" wrapping the key message (deal_approved / commission_paid).
-function successBand(heading: string, body: string): string {
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;"><tr>
-    <td style="background-color:#f0fdf4;border-left:4px solid ${GREEN};border-radius:0 8px 8px 0;padding:16px 18px;">
-      <p style="margin:0 0 6px;font-family:${FONT};font-size:13px;font-weight:bold;letter-spacing:0.5px;color:#3d8f3d;text-transform:uppercase;">${escapeHtml(heading)}</p>
-      <p style="margin:0;font-family:${FONT};font-size:16px;line-height:1.6;color:${INK};">${escapeHtml(body)}</p>
-    </td></tr></table>`;
-}
+type VariantContent = {
+  subject: string;
+  h1: string;
+  ctaLabel: string;
+  category: string;
+  paras: string[]; // dynamic body paragraphs (after the greeting)
+};
 
-// Weekly stat tiles rendered as a table row of cells (no flex/grid).
-function statTiles(stats: StatTile[]): string {
-  if (!stats.length) return "";
-  const cells = stats
-    .map(
-      (s) => `<td width="33%" valign="top" style="padding:4px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${TILE_BG};border:1px solid ${BORDER};border-radius:8px;"><tr>
-          <td style="padding:14px 12px;text-align:center;">
-            <div style="font-family:${FONT};font-size:24px;font-weight:bold;color:${INK};">${escapeHtml(s.value)}</div>
-            <div style="font-family:${FONT};font-size:11px;font-weight:bold;letter-spacing:1px;color:#6b7280;text-transform:uppercase;padding-top:4px;">${escapeHtml(s.label)}</div>
-          </td></tr></table></td>`,
-    )
-    .join("");
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;"><tr>${cells}</tr></table>`;
-}
-
-function statusRows(rows: { label: string; value: string }[]): string {
-  if (!rows.length) return "";
-  const trs = rows
-    .map(
-      (r) => `<tr>
-        <td style="padding:12px 0;border-bottom:1px solid ${BORDER};font-family:${FONT};font-size:14px;color:${BODY_INK};">${escapeHtml(r.label)}</td>
-        <td align="right" style="padding:12px 0;border-bottom:1px solid ${BORDER};font-family:${FONT};font-size:14px;font-weight:bold;color:${INK};">${escapeHtml(r.value)}</td>
-      </tr>`,
-    )
-    .join("");
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">${trs}</table>`;
-}
-
-// ---- Body renderers per variant ----
-function renderBody(m: EmailModel, variant: EmailVariant, ctaUrl: string | null, ctaLabel: string): string {
-  const hello = `<p style="margin:0 0 16px;font-family:${FONT};font-size:18px;font-weight:bold;color:${INK};">${greeting(m.firstName)}</p>`;
-  const body = m.bodyText ? escapeHtml(m.bodyText) : "";
-  const cta = ctaUrl ? ctaButton(ctaUrl, ctaLabel) : "";
+// Build the locked per-variant content (Section 7). Live variants interpolate
+// hydrated fields; if a required field is missing, fall back to bodyText so an
+// email never breaks.
+function variantContent(m: EmailModel, variant: EmailVariant): VariantContent {
+  const fd = m.funderDisplay?.trim();
+  const ref = m.dealReference?.trim();
+  const amt = m.amount?.trim();
+  const client = m.clientName?.trim();
+  const fallback = (m.bodyText ?? "").trim();
 
   switch (variant) {
-    case "deal_approved":
-      return (
-        hello +
-        paragraph("Here's a quick update from your pipeline:") +
-        (m.bodyText ? successBand("Deal update", m.bodyText) : "") +
-        cta
-      );
-    case "commission_paid":
-      return (
-        hello +
-        paragraph("Good news — a commission payment has been recorded:") +
-        (m.bodyText ? successBand("Commission paid", m.bodyText) : "") +
-        cta
-      );
-    case "weekly_summary":
-      return (
-        hello +
-        (m.bodyText ? paragraph(m.bodyText) : "") +
-        statTiles(m.stats ?? []) +
-        statusRows(m.statusRows ?? []) +
-        cta
-      );
     case "welcome":
-      return (
-        hello +
-        (m.bodyText ? paragraph(m.bodyText) : "") +
-        cta
-      );
-    case "generic":
+      return {
+        subject: "Welcome to Fund Now Capital",
+        h1: "Welcome to Fund Now Capital",
+        ctaLabel: "Open your dashboard",
+        category: "onboarding",
+        paras: [
+          "Thanks for joining Fund Now Capital. We help South African SMEs access funding through a panel of 21+ alternative funders — working capital, invoice discounting, PO finance, asset finance, and more.",
+          "Your account is ready. Sign in to explore the CRM, review your deals, and stay on top of every stage.",
+        ],
+      };
+    case "deal_approved":
+      return {
+        subject: "Deal approved",
+        h1: "Deal approved",
+        ctaLabel: "View deal in CRM",
+        category: "deal",
+        paras: [
+          fd && ref && amt ? `${fd} has approved ${ref} for ${amt}.` : (fallback || "A deal has been approved."),
+          "Open the deal to review the approval terms and move the deal forward.",
+        ],
+      };
+    case "deal_funded":
+      return {
+        subject: "Deal funded",
+        h1: "Deal funded",
+        ctaLabel: "View deal in CRM",
+        category: "deal",
+        paras: [
+          fd && ref && amt && client
+            ? `${fd} has funded ${ref} for ${amt}. The advance to ${client} is complete.`
+            : (fallback || "A deal has been funded."),
+          "Open the deal to record the funded date and start the commission process.",
+        ],
+      };
+    case "weekly_summary":
+      return {
+        subject: "Your weekly summary",
+        h1: "Your week at a glance",
+        ctaLabel: "View full report",
+        category: "weekly summary",
+        paras: [
+          "Here's how last week went at Fund Now Capital. Numbers, wins, and what's moving in the pipeline.",
+          "Open the report to see funders, sectors, and next actions in detail.",
+        ],
+      };
+    case "commission_paid":
+      return {
+        subject: "Commission paid",
+        h1: "Commission paid",
+        ctaLabel: "View deal in CRM",
+        category: "commission",
+        paras: [
+          amt && ref && client
+            ? `A commission payment of ${amt} has been recorded for ${ref} (${client}).`
+            : (fallback || "A commission payment has been recorded."),
+          "Open the deal to see the payment breakdown and confirm the split.",
+        ],
+      };
     default:
-      return hello + (m.bodyText ? paragraph(m.bodyText) : "") + cta;
+      return {
+        subject: "Fund Now Capital",
+        h1: "Fund Now Capital",
+        ctaLabel: "View in CRM",
+        category: eventCategory(m.eventType),
+        paras: fallback ? [fallback] : [],
+      };
   }
 }
 
-// Plain-text body per variant (deliverability requirement).
-function renderTextBody(m: EmailModel, variant: EmailVariant, ctaUrl: string | null, ctaLabel: string): string[] {
-  const lines: string[] = [greeting(m.firstName).replace(/&#39;/g, "'"), ""];
-  if (variant === "weekly_summary") {
-    if (m.bodyText) lines.push(m.bodyText, "");
-    for (const s of m.stats ?? []) lines.push(`- ${s.label}: ${s.value}`);
-    if ((m.stats ?? []).length) lines.push("");
-    for (const r of m.statusRows ?? []) lines.push(`- ${r.label}: ${r.value}`);
-    if ((m.statusRows ?? []).length) lines.push("");
-  } else if (m.bodyText) {
-    lines.push(m.bodyText, "");
-  }
-  if (ctaUrl) lines.push(`${ctaLabel}: ${ctaUrl}`, "");
-  return lines;
+// Bulletproof CTA (MSO padded VML fallback + padded anchor).
+function ctaButton(url: string, label: string): string {
+  const e = escapeHtml(url);
+  const l = escapeHtml(label);
+  return `<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${e}" style="height:48px;v-text-anchor:middle;width:220px;" arcsize="17%" strokecolor="${TEAL}" fillcolor="${TEAL}"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">${l}</center></v:roundrect><![endif]-->
+<!--[if !mso]><!-- --><a href="${e}" target="_blank" style="background-color:${TEAL};background-image:linear-gradient(90deg,${GREEN},${TEAL});border-radius:8px;color:#ffffff;display:inline-block;font-family:${FONT};font-size:15px;font-weight:600;letter-spacing:0.3px;line-height:20px;padding:14px 32px;text-decoration:none;">${l}</a>
+<!--<![endif]-->`;
 }
 
-export function renderEmail(m: EmailModel): { html: string; text: string } {
+export function renderEmail(m: EmailModel): { subject: string; html: string; text: string } {
   const variant = m.variant ?? resolveVariant(m.eventType);
-  const category = m.eventCategory ?? eventCategory(m.eventType);
-  const ctaLabel = m.ctaLabel ?? "View in CRM";
+  const c = variantContent(m, variant);
   const base = m.appBaseUrl.replace(/\/$/, "");
-  const ctaUrl = m.linkUrl ? absoluteUrl(base, m.linkUrl) : null;
+  const ctaUrl = m.linkUrl ? absoluteUrl(base, m.linkUrl) : base;
   const prefsUrl = absoluteUrl(base, "/settings/notifications");
-  const logoWhite = `${base}/email-assets/logo-white.png`;
-  const iconLinkedIn = `${base}/email-assets/social-linkedin.png`;
-  const iconTikTok = `${base}/email-assets/social-tiktok.png`;
+  const logoWhite = `${base}/logo-white.png`;
+  const icon = accentIcon(variant);
 
-  const bodyHtml = renderBody(m, variant, ctaUrl, ctaLabel);
+  const greeting = greetingName(m.firstName);
+  const paraHtml = c.paras
+    .map(
+      (p) =>
+        `<p style="margin:0 0 16px;font-family:${FONT};font-size:16px;font-weight:400;line-height:1.6;color:${BODY_INK};">${escapeHtml(p)}</p>`,
+    )
+    .join("");
+
+  // Footer 3 columns: inline-block <div>s (spongy/stack on mobile) inside an MSO
+  // ghost table so Outlook keeps them side-by-side. No @media (no <style> block).
+  const footerCols = `<!--[if mso]><table role="presentation" width="536" cellpadding="0" cellspacing="0" border="0"><tr><td width="250" valign="top"><![endif]-->
+<div style="display:inline-block;vertical-align:top;width:250px;max-width:250px;">
+  <p style="margin:0 0 4px;font-family:${FONT};font-size:13px;font-weight:700;line-height:1.6;color:#ffffff;">${LEGAL_NAME}</p>
+  <p style="margin:0 0 10px;font-family:${FONT};font-size:13px;font-weight:400;line-height:1.6;color:rgba(255,255,255,0.6);">Cedarwood House<br>128 Ballyclare Drive<br>Bryanston 2191, Sandton</p>
+  <p style="margin:0;font-family:${FONT};font-size:13px;font-weight:400;line-height:1.6;color:rgba(255,255,255,0.6);">75 Marshall Street<br>Polokwane 0699</p>
+</div>
+<!--[if mso]></td><td width="170" valign="top"><![endif]-->
+<div style="display:inline-block;vertical-align:top;width:170px;max-width:170px;">
+  <p style="margin:0 0 6px;font-family:${FONT};font-size:13px;font-weight:400;line-height:1.6;color:#ffffff;">${PHONE}</p>
+  <p style="margin:0 0 6px;font-family:${FONT};font-size:13px;font-weight:400;line-height:1.6;"><a href="mailto:${CONTACT_EMAIL}" style="color:#ffffff;text-decoration:none;overflow-wrap:anywhere;">${CONTACT_EMAIL}</a></p>
+  <p style="margin:0;font-family:${FONT};font-size:13px;font-weight:400;line-height:1.6;"><a href="${WEBSITE_URL}" target="_blank" style="color:${CYAN};text-decoration:none;">${WEBSITE_LABEL}</a></p>
+</div>
+<!--[if mso]></td><td width="110" valign="top" align="right"><![endif]-->
+<div style="display:inline-block;vertical-align:top;width:110px;max-width:110px;text-align:right;">
+  <a href="${LINKEDIN_URL}" target="_blank" style="text-decoration:none;">${SOCIAL_LINKEDIN}</a>
+  <span style="display:inline-block;width:12px;"></span>
+  <a href="${TIKTOK_URL}" target="_blank" style="text-decoration:none;">${SOCIAL_TIKTOK}</a>
+</div>
+<!--[if mso]></td></tr></table><![endif]-->`;
 
   const html = `<!DOCTYPE html>
-<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="color-scheme" content="light only">
 <meta name="supported-color-schemes" content="light only">
-<title>${escapeHtml(m.title)}</title>
+<!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+<title>${escapeHtml(c.subject)}</title>
 </head>
 <body style="margin:0;padding:0;background-color:${PAGE_BG};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${PAGE_BG};">
 <tr><td align="center" style="padding:24px 12px;">
+<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background-color:${CARD};">
 
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background-color:${SHELL_BG};border-radius:12px;overflow:hidden;">
+  <!-- Block A: gradient header -->
+  <tr><td align="center" bgcolor="${NAVY}" style="background-color:${NAVY};background-image:linear-gradient(135deg,${NAVY} 0%,${TEAL} 100%);padding:32px 24px 28px;">
+    <img src="${logoWhite}" width="40" height="41" alt="Fund Now Capital" style="display:block;border:0;outline:none;text-decoration:none;height:41px;width:auto;margin:0 auto 12px;">
+    <div style="font-family:${FONT};font-size:13px;font-weight:500;letter-spacing:0.5px;color:rgba(255,255,255,0.85);">${TAGLINE}</div>
+  </td></tr>
 
-<!-- Header: navy->teal gradient (solid navy fallback for Outlook) -->
-<tr>
-<td align="center" bgcolor="${NAVY}" style="background-color:${NAVY};background-image:linear-gradient(135deg,${NAVY},${TEAL});border-bottom:3px solid ${CYAN};padding:30px 24px 26px;">
-  <img src="${logoWhite}" width="52" height="54" alt="Fund Now Capital" style="display:block;border:0;outline:none;text-decoration:none;height:auto;margin:0 auto 12px;">
-  <div style="font-family:${FONT};font-size:15px;font-weight:600;letter-spacing:0.5px;line-height:1.4;">
-    <span style="color:${GREEN_TINT};">${TAGLINE_A}</span> <span style="color:${CYAN_TINT};">${TAGLINE_B}</span>
-  </div>
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:12px auto 0;"><tr>
-    <td width="40" height="2" style="width:40px;height:2px;background-color:${CYAN};font-size:0;line-height:0;">&nbsp;</td>
-  </tr></table>
-</td>
-</tr>
+  <!-- Block B: cyan accent bar -->
+  <tr><td height="3" bgcolor="${CYAN}" style="height:3px;line-height:3px;font-size:0;background-color:${CYAN};">&nbsp;</td></tr>
 
-<!-- Body card -->
-<tr>
-<td style="padding:32px 24px;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${CARD};border-radius:12px;"><tr>
-    <td style="padding:32px 28px;">
-      <h1 style="margin:0 0 16px;font-family:${FONT};font-size:26px;line-height:1.3;color:${INK};">${escapeHtml(m.title)}</h1>
-      ${bodyHtml}
-    </td>
-  </tr></table>
-</td>
-</tr>
+  <!-- Block C: content card -->
+  <tr><td style="background-color:${CARD};padding:40px 40px 32px;">
+    <div style="margin:0 0 16px;">${icon.svg}</div>
+    <h1 style="margin:0 0 16px;font-family:${FONT};font-size:24px;font-weight:700;line-height:1.3;color:${H1_INK};">${escapeHtml(c.h1)}</h1>
+    <p style="margin:0 0 16px;font-family:${FONT};font-size:16px;font-weight:400;line-height:1.6;color:${BODY_INK};">${escapeHtml(greeting)}</p>
+    ${paraHtml}
+    <div style="margin:32px 0 0;">${ctaButton(ctaUrl, c.ctaLabel)}</div>
+    <p style="margin:40px 0 0;font-family:${FONT};font-size:12px;font-weight:400;line-height:1.6;color:${SMALL_INK};">You're receiving this because you're subscribed to ${escapeHtml(c.category)} notifications. <a href="${escapeHtml(prefsUrl)}" target="_blank" style="color:${SMALL_INK};text-decoration:underline;">Update preferences in your CRM.</a></p>
+  </td></tr>
 
-<!-- Footer: deep navy -->
-<tr>
-<td bgcolor="${NAVY_DEEP}" style="background-color:${NAVY_DEEP};padding:32px 24px;">
-
-  <!-- brand row -->
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;"><tr>
-    <td valign="middle"><img src="${logoWhite}" width="30" height="31" alt="Fund Now Capital" style="display:block;border:0;height:auto;"></td>
-    <td valign="middle" style="padding-left:10px;font-family:${FONT};font-size:18px;font-weight:bold;color:#ffffff;">Fund Now Capital</td>
-  </tr></table>
-
-  <!-- 3 columns -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-    <td width="40%" valign="top" style="padding:0 12px 0 0;">
-      <p style="margin:0 0 10px;font-family:${FONT};font-size:11px;font-weight:bold;letter-spacing:1.5px;color:${CYAN};text-transform:uppercase;">Offices</p>
-      <p style="margin:0 0 4px;font-family:${FONT};font-size:13px;font-weight:bold;color:#f8f9fb;">${LEGAL_NAME}</p>
-      <p style="margin:0 0 8px;font-family:${FONT};font-size:13px;line-height:1.6;color:${MUTED};">${ADDRESS_SANDTON}</p>
-      <p style="margin:0;font-family:${FONT};font-size:13px;line-height:1.6;color:${MUTED};">${ADDRESS_POLOKWANE}</p>
-    </td>
-    <td width="35%" valign="top" style="padding:0 12px;">
-      <p style="margin:0 0 10px;font-family:${FONT};font-size:11px;font-weight:bold;letter-spacing:1.5px;color:${CYAN};text-transform:uppercase;">Contact</p>
-      <p style="margin:0 0 8px;font-family:${FONT};font-size:13px;line-height:1.6;color:#f8f9fb;">${PHONE}</p>
-      <p style="margin:0 0 8px;font-family:${FONT};font-size:13px;line-height:1.6;"><a href="mailto:${CONTACT_EMAIL}" style="color:#f8f9fb;text-decoration:none;overflow-wrap:anywhere;">${CONTACT_EMAIL}</a></p>
-      <p style="margin:0;font-family:${FONT};font-size:13px;line-height:1.6;"><a href="${WEBSITE_URL}" target="_blank" style="color:${CYAN};text-decoration:none;">${WEBSITE_LABEL}</a></p>
-    </td>
-    <td width="25%" valign="top" style="padding:0 0 0 12px;">
-      <p style="margin:0 0 10px;font-family:${FONT};font-size:11px;font-weight:bold;letter-spacing:1.5px;color:${CYAN};text-transform:uppercase;">Connect</p>
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-        <td style="padding-right:12px;"><a href="${LINKEDIN_URL}" target="_blank"><img src="${iconLinkedIn}" width="26" height="26" alt="LinkedIn" style="display:block;border:0;height:auto;"></a></td>
-        <td><a href="${TIKTOK_URL}" target="_blank"><img src="${iconTikTok}" width="26" height="26" alt="TikTok" style="display:block;border:0;height:auto;"></a></td>
-      </tr></table>
-    </td>
-  </tr></table>
-
-  <!-- divider -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;"><tr>
-    <td height="1" style="height:1px;background-color:#22415a;font-size:0;line-height:0;">&nbsp;</td>
-  </tr></table>
-
-  <!-- legal + subscription -->
-  <p style="margin:0 0 10px;font-family:${FONT};font-size:12px;line-height:1.6;color:${MUTED};">
-    You're receiving this because you're subscribed to ${escapeHtml(category)} notifications. <a href="${prefsUrl}" target="_blank" style="color:${CYAN};text-decoration:underline;">Update your preferences in your CRM.</a>
-  </p>
-  <p style="margin:0 0 4px;font-family:${FONT};font-size:13px;font-weight:bold;color:#ffffff;">${TAGLINE_A} ${TAGLINE_B}</p>
-  <p style="margin:0;font-family:${FONT};font-size:11px;line-height:1.5;color:${MUTED};">&copy; 2026 ${LEGAL_NAME} &middot; CIPC ${CIPC}</p>
-
-</td>
-</tr>
+  <!-- Block D: footer -->
+  <tr><td bgcolor="${FOOTER_BG}" style="background-color:${FOOTER_BG};padding:32px 32px 24px;">
+    <div style="font-size:0;">${footerCols}</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;"><tr>
+      <td style="padding-top:16px;border-top:1px solid rgba(255,255,255,0.12);font-family:${FONT};font-size:11px;font-weight:400;line-height:1.5;color:rgba(255,255,255,0.5);">&copy; 2026 ${LEGAL_NAME} &middot; CIPC ${CIPC}</td>
+    </tr></table>
+  </td></tr>
 
 </table>
-
+<!--[if mso]></td></tr></table><![endif]-->
 </td></tr>
 </table>
 </body>
 </html>`;
 
+  // ---- Plain-text fallback (Section 8) ----
   const textLines = [
-    "FUND NOW CAPITAL",
-    `${TAGLINE_A} ${TAGLINE_B}`,
+    c.subject,
     "",
-    m.title,
+    greeting,
     "",
-    ...renderTextBody(m, variant, ctaUrl, ctaLabel),
-    "—",
-    `You're receiving this because you're subscribed to ${category} notifications.`,
-    `Update your preferences: ${prefsUrl}`,
+    ...c.paras.flatMap((p) => [p, ""]),
+    `${c.ctaLabel}: ${ctaUrl}`,
     "",
-    `${LEGAL_NAME}`,
-    `${ADDRESS_SANDTON}`,
-    `${ADDRESS_POLOKWANE}`,
-    `${PHONE} · ${CONTACT_EMAIL} · ${WEBSITE_LABEL}`,
+    "---",
+    `You're receiving this because you're subscribed to ${c.category}`,
+    `notifications. Update preferences: ${prefsUrl}`,
+    "",
     `© 2026 ${LEGAL_NAME} · CIPC ${CIPC}`,
+    "Cedarwood House, 128 Ballyclare Drive, Bryanston 2191, Sandton",
+    "75 Marshall Street, Polokwane 0699",
+    `${PHONE} · ${CONTACT_EMAIL} · ${WEBSITE_LABEL}`,
   ];
 
-  return { html, text: textLines.join("\n") };
+  return { subject: c.subject, html, text: textLines.join("\n") };
 }
