@@ -116,6 +116,7 @@ Phase D scope: Twilio WhatsApp (pre-approved templates, emoji style per Part 4, 
 - **Template:** branded HTML + plain-text fallback — navy `#1a3a52` header with an "FN" mark, title H1, body paragraph, teal→green gradient "View in CRM" CTA to `APP_BASE_URL + link_url`, navy footer with the per-event-category subscription line + prefs link, "Many funders. More approvals." tagline, and the CIPC copyright line. From **"Fund Now Capital" <hello@fundnowcapital.africa>**, reply-to the same.
 - **Preferences:** the owner is backfilled with `email_enabled=true` for every event type; the prefs page **email column is now live** and toggleable per event (in-app + email).
 - **Auth / secrets:** the function is deployed `verify_jwt=false` and validates a shared **`X-Webhook-Secret`** header; the function URL + secret live in **Vault** (never in the repo). `RESEND_API_KEY` is a function env var. No service-role key is stored in the DB.
+- **`APP_BASE_URL`** currently points to the Vercel URL (`https://fund-now-capital-2026.vercel.app`) for the email's "View in CRM" / preferences links. Migrate to `crm.fundnowcapital.africa` in **Phase C/D** via a custom domain in Vercel + a CNAME in Cloudflare, then update the `APP_BASE_URL` Edge Function secret.
 
 ---
 
