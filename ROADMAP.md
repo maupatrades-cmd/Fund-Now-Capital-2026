@@ -89,6 +89,10 @@ _Email design: welcome flow (E5) + nurture sequences (E9) extend a **SPEC S16** 
 ## PART 7 (future, deliberately deferred)
 Client-facing portal, client self-service applications, client dashboards.
 
+## DEFERRED POLISH
+Small quality-of-life items intentionally deferred until real production volume warrants them.
+- Add an owner-only "archive deal" action for accidental duplicates / test data. Not urgent, deferred until real production volume warrants it. Alternative for now: continue owner-requested cleanups via SQL (small scale, controlled).
+
 ## OPEN DECISIONS
 1. Doctor's Commission Estimator "Business View": full ranged internal-split breakdown (Part 3 spec) vs Doctor's-own-number-only. Blocks D5. Owner to decide.
 2. Password expiry policy (Part 6 suggests 90 days; modern guidance disfavours forced rotation — recommend long unique passwords + 2FA instead). Owner to decide at F2.
