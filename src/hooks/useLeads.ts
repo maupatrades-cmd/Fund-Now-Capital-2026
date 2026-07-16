@@ -131,8 +131,11 @@ export function useLeads(filters: LeadFilters = {}) {
       // upper bound at the start of the following SAST day.
       if (filters.from) q = q.gte("created_at", `${filters.from}T00:00:00+02:00`);
       if (filters.to) {
+        // Advance the parsed SAST instant by one day in UTC terms (setUTCDate,
+        // not setDate) so the cutoff can't drift by an hour in a browser whose
+        // local zone observes DST.
         const end = new Date(`${filters.to}T00:00:00+02:00`);
-        end.setDate(end.getDate() + 1);
+        end.setUTCDate(end.getUTCDate() + 1);
         q = q.lt("created_at", end.toISOString());
       }
 
@@ -193,8 +196,9 @@ export function useCreateLead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: LeadInput): Promise<Lead> => {
-      // entered_by is set authoritatively by a BEFORE INSERT trigger
-      // (new.entered_by := auth.uid()), so it can't be spoofed from the client.
+      // entered_by is authoritative in the DB: the column defaults to auth.uid()
+      // and a restrictive INSERT policy (leads_entered_by_is_caller) requires
+      // entered_by = auth.uid(), so it can't be spoofed from the client.
       const { data, error } = await supabase
         .from("leads")
         .insert(input)

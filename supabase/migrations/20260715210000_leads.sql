@@ -82,9 +82,12 @@ create table if not exists public.leads (
   security_available       jsonb not null default '[]'::jsonb,
   referred_by             public.lead_referred_by not null default 'self',
   -- Free-text name captured when referred_by = 'other' (the S2 "other + name"
-  -- case). Not in the original column list, but the form requires somewhere to
-  -- persist the typed name — flagged for owner review.
+  -- case). May be set ONLY when referred_by = 'other'; must be null for
+  -- self / bright_destiny. Partial capture is allowed — 'other' itself may still
+  -- be blank at entry and completed later — so this does not force a value.
   referred_by_other       text,
+  constraint leads_referred_by_other_scope
+    check (referred_by = 'other' or referred_by_other is null),
   referral_partner_id     uuid,
   -- Audit field: defaults to the caller and is pinned to auth.uid() by the
   -- restrictive INSERT policy below, so a client can't spoof it.
