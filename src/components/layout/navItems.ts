@@ -6,6 +6,7 @@ import {
   Calculator,
   Activity,
   Factory,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 
@@ -18,6 +19,7 @@ export type NavItem = {
 // Primary navigation, shared by the sidebar across all screens.
 export const NAV_ITEMS: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/leads", label: "Leads", icon: ClipboardList },
   { to: "/pipeline", label: "Pipeline", icon: GitBranch },
   { to: "/clients", label: "Clients", icon: Users },
   { to: "/funders", label: "Funders", icon: Landmark },

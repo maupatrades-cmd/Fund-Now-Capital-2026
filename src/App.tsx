@@ -9,6 +9,9 @@ import DealDetailPage from "@/pages/DealDetailPage";
 import ClientsPage from "@/pages/ClientsPage";
 import ClientDetailPage from "@/pages/ClientDetailPage";
 import ClientFormPage from "@/pages/ClientFormPage";
+import LeadsPage from "@/pages/LeadsPage";
+import LeadFormPage from "@/pages/LeadFormPage";
+import LeadDetailPage from "@/pages/LeadDetailPage";
 import FundersPage from "@/pages/FundersPage";
 import FunderDetailPage from "@/pages/FunderDetailPage";
 import FunderFormPage from "@/pages/FunderFormPage";
@@ -52,6 +55,10 @@ function AppRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/deals/:id" element={<DealDetailPage />} />
+        <Route path="/leads" element={<LeadsPage />} />
+        <Route path="/leads/new" element={<LeadFormPage />} />
+        <Route path="/leads/:id" element={<LeadDetailPage />} />
+        <Route path="/leads/:id/edit" element={<LeadFormPage />} />
         <Route path="/clients" element={<ClientsPage />} />
         <Route path="/clients/new" element={<ClientFormPage />} />
         <Route path="/clients/:id" element={<ClientDetailPage />} />

@@ -71,11 +71,11 @@ export function useReferralPartners() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("referral_partners")
-        .select("id, name")
+        .select("id, name, slug")
         .eq("is_active", true)
         .order("name");
       if (error) throw error;
-      return (data ?? []) as { id: string; name: string }[];
+      return (data ?? []) as { id: string; name: string; slug: string | null }[];
     },
   });
 }
