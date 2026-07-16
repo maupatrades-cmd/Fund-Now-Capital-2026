@@ -74,6 +74,8 @@ When `referred_by = 'other'`, `referred_by_other` captures the free-text referre
 
 On `qualification_stage → qualified`: auto-create linked `deals` row at stage 'Qualifying', copy/attach client (create client if new, duplicate-check first per S6-lite).
 
+**B2.2 (built):** implemented as the atomic `qualify_lead(lead_id)` RPC — matches an existing client by case-insensitive `business_name` or creates one (+ primary `client_contacts` row) from the lead, then creates the deal at `qualifying` linked via `deals.lead_id` (also carrying `funding_purpose`/`funding_timeline` copied from the lead), and marks the lead qualified. **Idempotent** (one-deal-per-lead unique index; re-qualifying returns the existing deal). The `leads_qualification_guard` trigger makes `qualified` terminal, rejects a null `not_qualified_reason`, and stamps `qualified_at`/`qualified_by` server-side. `not_qualified_notes` is optional (relaxed from the S6 "required if reason=other" note for B2.2 partial capture). Deeper duplicate detection on name/CIPC/email is B2.3.
+
 Not-qualified standard reasons (enum, exact list): no_cipc · trading_history_too_short · turnover_too_low · sector_not_serviced · over_leveraged · bank_statement_issues · client_unresponsive · unrealistic_expectations · already_declined_by_likely_funders · no_security_for_asset_needs · timing_not_right · sector_risk_too_high · documentation_impossible · compliance_concern · other
 
 Partner view (Phase D): sees his own not-qualified leads + reason (educational); auto-archive unqualified after 6 months.

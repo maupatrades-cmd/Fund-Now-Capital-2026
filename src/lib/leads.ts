@@ -79,6 +79,14 @@ export const QUALIFICATION_STAGES: Option[] = [
   { value: "not_qualified", label: "Not qualified" },
 ];
 
+// Quick-filters for the leads list. "awaiting" spans new_lead + under_qualification
+// (handled in useLeads); the other two map to a single stage each.
+export const LEAD_STAGE_FILTERS: Option[] = [
+  { value: "awaiting", label: "Awaiting qualification" },
+  { value: "qualified", label: "Qualified" },
+  { value: "not_qualified", label: "Not qualified" },
+];
+
 // Colour-coded badge classes per qualification stage (matches the app's pill style).
 export const QUALIFICATION_BADGE: Record<string, string> = {
   new_lead: "bg-slate-100 text-slate-600 ring-slate-500/20",
