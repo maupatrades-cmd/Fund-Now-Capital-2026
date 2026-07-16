@@ -64,6 +64,8 @@ export type Lead = {
   sub_industry: Named;
   referral_partner: Named;
   original_referrer: Named;
+  // Deal(s) created from this lead on qualify (one-per-lead by unique index).
+  linked_deals: { id: string; reference: string | null; stage: string }[];
 };
 
 // Everything the owner form can write. entered_by is set server-side-ish by the
@@ -123,7 +125,12 @@ export function useLeads(filters: LeadFilters = {}) {
         )
         .order("created_at", { ascending: false });
 
-      if (filters.qualificationStage) q = q.eq("qualification_stage", filters.qualificationStage);
+      // "awaiting" is a quick-filter spanning both pre-decision stages.
+      if (filters.qualificationStage === "awaiting") {
+        q = q.in("qualification_stage", ["new_lead", "under_qualification"]);
+      } else if (filters.qualificationStage) {
+        q = q.eq("qualification_stage", filters.qualificationStage);
+      }
       if (filters.referredBy) q = q.eq("referred_by", filters.referredBy);
       // Date filters are calendar days in SAST (UTC+2, no DST). Anchor both
       // bounds to SAST midnight so a lead created in the first ~2 hours of a
@@ -163,7 +170,8 @@ export function useLead(id: string | undefined) {
            industry:industries!left(name),
            sub_industry:sub_industries!left(name),
            referral_partner:referral_partners!leads_referral_partner_id_fkey(name),
-           original_referrer:referral_partners!leads_original_referrer_id_fkey(name)`,
+           original_referrer:referral_partners!leads_original_referrer_id_fkey(name),
+           linked_deals:deals!deals_lead_id_fkey(id, reference, stage)`,
         )
         .eq("id", id!)
         .single();
@@ -227,6 +235,74 @@ export function useUpdateLead() {
     onSuccess: (lead) => {
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["lead", lead.id] });
+    },
+  });
+}
+
+// ---- Qualification workflow (B2.2) ----
+
+// new_lead -> under_qualification. Guarded to only fire from new_lead so a stale
+// button can't skip stages; the returned-row check surfaces a no-op loudly.
+export function useStartQualifying() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .from("leads")
+        .update({ qualification_stage: "under_qualification" })
+        .eq("id", id)
+        .eq("qualification_stage", "new_lead")
+        .select("id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("Lead was not updated — it may have already moved on.");
+    },
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ["lead", id] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
+    },
+  });
+}
+
+// Qualify → atomic client + deal creation via the qualify_lead RPC. Returns the
+// deal id (existing one if the lead was already qualified — idempotent).
+export function useQualifyLead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string): Promise<string> => {
+      const { data, error } = await supabase.rpc("qualify_lead", { p_lead_id: id });
+      if (error) throw error;
+      if (!data) throw new Error("Qualification did not return a deal");
+      return data as string;
+    },
+    onSuccess: (_dealId, id) => {
+      qc.invalidateQueries({ queryKey: ["lead", id] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["deals"] });
+    },
+  });
+}
+
+// Mark not qualified with a reason (+ optional notes). The DB trigger stamps
+// qualified_at / qualified_by and rejects a null reason.
+export function useMarkNotQualified() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason, notes }: { id: string; reason: string; notes: string | null }) => {
+      const { data, error } = await supabase
+        .from("leads")
+        .update({
+          qualification_stage: "not_qualified",
+          not_qualified_reason: reason,
+          not_qualified_notes: notes,
+        })
+        .eq("id", id)
+        .select("id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("Lead was not updated");
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["lead", vars.id] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
     },
   });
 }

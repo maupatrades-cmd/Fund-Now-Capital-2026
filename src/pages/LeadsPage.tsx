@@ -6,6 +6,7 @@ import { formatZAR } from "@/lib/format";
 import {
   QUALIFICATION_STAGES,
   QUALIFICATION_BADGE,
+  LEAD_STAGE_FILTERS,
   REFERRED_BY,
   FUNDING_TIMELINES,
   labelFor,
@@ -49,7 +50,7 @@ export default function LeadsPage() {
             onChange={(e) => set({ qualificationStage: e.target.value || undefined })}
           >
             <option value="">All stages</option>
-            {QUALIFICATION_STAGES.map((s) => (
+            {LEAD_STAGE_FILTERS.map((s) => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
