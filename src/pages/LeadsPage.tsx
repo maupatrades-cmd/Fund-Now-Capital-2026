@@ -10,14 +10,15 @@ import {
   FUNDING_TIMELINES,
   labelFor,
 } from "@/lib/leads";
-import { useLeads, useProfileNames, type LeadFilters, one } from "@/hooks/useLeads";
+import { useLeads, useProfileNames, type LeadFilters } from "@/hooks/useLeads";
+import { one } from "@/hooks/useClients";
 
 const inputCls =
   "rounded-lg border border-border bg-white px-3 py-2 text-sm text-brand-navy outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
 
 export default function LeadsPage() {
   const [filters, setFilters] = useState<LeadFilters>({});
-  const { data: leads, isLoading } = useLeads(filters);
+  const { data: leads, isLoading, isError } = useLeads(filters);
   const { data: names } = useProfileNames();
 
   const set = (patch: Partial<LeadFilters>) => setFilters((f) => ({ ...f, ...patch }));
@@ -95,6 +96,10 @@ export default function LeadsPage() {
       {isLoading ? (
         <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-white py-16 text-sm text-muted-foreground shadow-sm">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading leads…
+        </div>
+      ) : isError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center text-sm text-red-700 shadow-sm">
+          Couldn't load leads. Please retry.
         </div>
       ) : !leads?.length ? (
         <div className="rounded-xl border border-border bg-white p-8 text-center text-sm text-muted-foreground shadow-sm">

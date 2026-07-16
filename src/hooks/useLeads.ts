@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { one } from "@/hooks/useClients";
 
 type Named = { name: string } | { name: string }[] | null;
 
@@ -126,9 +125,16 @@ export function useLeads(filters: LeadFilters = {}) {
 
       if (filters.qualificationStage) q = q.eq("qualification_stage", filters.qualificationStage);
       if (filters.referredBy) q = q.eq("referred_by", filters.referredBy);
-      if (filters.from) q = q.gte("created_at", filters.from);
-      // `to` is a date; include the whole day by comparing against the next midnight.
-      if (filters.to) q = q.lt("created_at", `${filters.to}T23:59:59.999Z`);
+      // Date filters are calendar days in SAST (UTC+2, no DST). Anchor both
+      // bounds to SAST midnight so a lead created in the first ~2 hours of a
+      // local day isn't dropped: from = start of that SAST day; to = exclusive
+      // upper bound at the start of the following SAST day.
+      if (filters.from) q = q.gte("created_at", `${filters.from}T00:00:00+02:00`);
+      if (filters.to) {
+        const end = new Date(`${filters.to}T00:00:00+02:00`);
+        end.setDate(end.getDate() + 1);
+        q = q.lt("created_at", end.toISOString());
+      }
 
       const { data, error } = await q;
       if (error) throw error;
@@ -187,11 +193,11 @@ export function useCreateLead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: LeadInput): Promise<Lead> => {
-      const { data: userData } = await supabase.auth.getUser();
-      const enteredBy = userData.user?.id ?? null;
+      // entered_by is set authoritatively by a BEFORE INSERT trigger
+      // (new.entered_by := auth.uid()), so it can't be spoofed from the client.
       const { data, error } = await supabase
         .from("leads")
-        .insert({ ...input, entered_by: enteredBy })
+        .insert(input)
         .select()
         .single();
       if (error) throw error;
@@ -220,5 +226,3 @@ export function useUpdateLead() {
     },
   });
 }
-
-export { one };

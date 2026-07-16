@@ -86,7 +86,9 @@ create table if not exists public.leads (
   -- persist the typed name — flagged for owner review.
   referred_by_other       text,
   referral_partner_id     uuid,
-  entered_by              uuid,
+  -- Audit field: defaults to the caller and is pinned to auth.uid() by the
+  -- restrictive INSERT policy below, so a client can't spoof it.
+  entered_by              uuid default auth.uid(),
   loaded_on_behalf        boolean not null default false,
   original_referrer_id    uuid,
   initial_notes           text,
@@ -134,8 +136,11 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- RLS: owner full; partner READ-ONLY on their own referred / originally-referred
--- leads. Partners get no INSERT/UPDATE/DELETE here (portal submission is Phase D).
+-- RLS. Owner has full access to the base table. Partners get NO direct access
+-- to `leads` — it holds POPIA-relevant PII (national ID, cell, email, physical
+-- addresses) that a referring partner must not see. Partners instead read a
+-- PII-safe projection of their own referred leads via public.partner_leads_view
+-- (below). Partner writes are Phase D (portal).
 -- ---------------------------------------------------------------------------
 alter table public.leads enable row level security;
 
@@ -143,9 +148,44 @@ create policy "leads_owner_all" on public.leads
   for all to authenticated
   using (public.is_owner()) with check (public.is_owner());
 
-create policy "leads_partner_read_own" on public.leads
-  for select to authenticated
-  using (
-    referral_partner_id = public.current_partner_id()
-    or original_referrer_id = public.current_partner_id()
-  );
+-- Pin entered_by to the caller on INSERT. RESTRICTIVE so it AND-composes with
+-- leads_owner_all: the owner can only insert rows whose entered_by is their own
+-- auth.uid() (the column default fills it; a spoofed value is rejected).
+create policy "leads_entered_by_is_caller" on public.leads
+  as restrictive for insert to authenticated
+  with check (entered_by = (select auth.uid()));
+
+-- ---------------------------------------------------------------------------
+-- Partner-safe lead projection (POPIA): a referring partner sees only non-PII
+-- business/funding fields for their OWN referred leads — never contact_name /
+-- contact_role / contact_id_number / contact_email / contact_cell / addresses /
+-- entered_by / initial_notes / turnover detail. Runs with the view owner's
+-- privileges (security_invoker off) to read the owner-only base table;
+-- security_barrier blocks predicate push-down leaks; the WHERE enforces scope.
+-- ---------------------------------------------------------------------------
+create view public.partner_leads_view
+with (security_barrier = true) as
+  select
+    l.id,
+    l.business_name,
+    l.industry_id,
+    l.sub_industry_id,
+    l.sector_notes,
+    l.funding_amount,
+    l.funding_purpose,
+    l.funding_timeline,
+    l.qualification_stage,
+    l.referred_by,
+    l.referral_partner_id,
+    l.original_referrer_id,
+    l.created_at,
+    l.updated_at
+  from public.leads l
+  where public.is_owner()
+     or l.referral_partner_id = public.current_partner_id()
+     or l.original_referrer_id = public.current_partner_id();
+
+comment on view public.partner_leads_view is
+  'Partner-safe projection of leads: non-PII business/funding fields for the partner''s own referred leads only. Excludes all contact PII (name, ID number, email, cell), addresses, entered_by, initial_notes, and turnover detail beyond funding_amount. Owner reads the base table directly.';
+
+grant select on public.partner_leads_view to authenticated;

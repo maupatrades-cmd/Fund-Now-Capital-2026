@@ -53,7 +53,7 @@ const schema = z.object({
     .string()
     .optional()
     .default("")
-    .refine((v) => !v || z.string().email().safeParse(v).success, "Enter a valid email"),
+    .refine((v) => !v || z.email().safeParse(v).success, "Enter a valid email"),
   contact_id_number: z
     .string()
     .optional()
@@ -103,7 +103,26 @@ export default function LeadFormPage() {
     return <div className="text-sm text-muted-foreground">Loading…</div>;
   }
 
-  const brightDestinyId = partners.data?.find((p) => p.name === "Bright Destiny")?.id ?? null;
+  // If the lead we're editing fails to load, never fall through to blank
+  // defaults — a save would overwrite the real record with empty values.
+  if (isEdit && existing.isError) {
+    return (
+      <div className="max-w-3xl space-y-3">
+        <Link to="/leads" className="inline-flex items-center gap-1.5 text-sm text-brand-teal hover:underline">
+          <ArrowLeft className="h-4 w-4" /> Back to leads
+        </Link>
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Couldn't load this lead to edit: {(existing.error as Error)?.message ?? "not found"}.{" "}
+          <button type="button" onClick={() => existing.refetch()} className="font-medium underline">
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Match on the stable slug, not the display name (rename-safe).
+  const brightDestinyId = partners.data?.find((p) => p.slug === "bright_destiny")?.id ?? null;
   const l = existing.data;
 
   const defaults: FormValues = {

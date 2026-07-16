@@ -13,7 +13,8 @@ import {
   QUALIFICATION_BADGE,
   labelFor,
 } from "@/lib/leads";
-import { useLead, one } from "@/hooks/useLeads";
+import { useLead } from "@/hooks/useLeads";
+import { one } from "@/hooks/useClients";
 
 const labelList = (options: { value: string; label: string }[], values: string[] | null) =>
   values && values.length ? values.map((v) => labelFor(options, v)).join(", ") : null;
@@ -119,7 +120,10 @@ export default function LeadDetailPage() {
         </Section>
 
         <Section title="Notes & follow-up">
-          <Info label="Follow-up date" value={lead.follow_up_date} />
+          <Info
+            label="Follow-up date"
+            value={lead.follow_up_date ? new Date(lead.follow_up_date).toLocaleDateString("en-ZA") : null}
+          />
           <Info label="Initial notes" value={lead.initial_notes} />
         </Section>
       </div>
