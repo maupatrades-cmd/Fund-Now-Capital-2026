@@ -264,7 +264,9 @@ alter table public.documents
     check (
       case
         when public.document_type_is_period_scoped(document_type)
-          then period_start is not null and period_end is not null
+          then period_start is not null
+           and period_end is not null
+           and period_start <= period_end
         else period_start is null and period_end is null
       end
     );
@@ -277,8 +279,10 @@ begin
       foreign key (uploaded_by) references public.profiles(id) on delete restrict not valid;
   end if;
   if not exists (select 1 from pg_constraint where conname = 'documents_lead_id_fkey') then
+    -- RESTRICT (not CASCADE): governed documents must not silently vanish when a
+    -- lead is deleted — the owner deals with them explicitly first.
     alter table public.documents add constraint documents_lead_id_fkey
-      foreign key (lead_id) references public.leads(id) on delete cascade not valid;
+      foreign key (lead_id) references public.leads(id) on delete restrict not valid;
   end if;
   if not exists (select 1 from pg_constraint where conname = 'documents_superseded_by_fkey') then
     alter table public.documents add constraint documents_superseded_by_fkey
@@ -296,22 +300,43 @@ create trigger documents_set_updated_at
   before update on public.documents
   for each row execute function public.set_updated_at();
 
--- 5b. Immutability: uploaded_by and upload_source are audit-truth and can NEVER
---     be rewritten — by any role, including the owner. Everything else the owner
---     may edit (document_type, expiry_date, status, notes, tags, verification
---     fields in B3.2) passes through.
+-- 5b. Immutability on UPDATE:
+--       * uploaded_by / upload_source — audit-truth; can NEVER change, any role.
+--       * version_number — managed by the versioning trigger at INSERT; never
+--         changed by anything afterwards, so it is hard-locked (no bypass).
+--       * is_current_version / superseded_by — managed by the versioning trigger's
+--         internal supersede UPDATE. That path sets the transaction-local flag
+--         `fnc.documents_superseding`; a direct owner UPDATE (flag off) is blocked.
+--     Deliberately NOT locked (owner-editable): document_type (reclassification),
+--     expiry_date, status, notes, tags, verification fields (B3.2), and
+--     period_start / period_end / lead_id / client_id (the B3.2 lead→client
+--     migration path moves ownership; period corrections are allowed).
 create or replace function public.documents_prevent_audit_rewrite()
 returns trigger
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_superseding boolean :=
+    coalesce(current_setting('fnc.documents_superseding', true) = 'on', false);
 begin
   if new.uploaded_by is distinct from old.uploaded_by then
     raise exception 'documents.uploaded_by is immutable (audit-truth) and cannot be changed';
   end if;
   if new.upload_source is distinct from old.upload_source then
     raise exception 'documents.upload_source is immutable (audit-truth) and cannot be changed';
+  end if;
+  if new.version_number is distinct from old.version_number then
+    raise exception 'documents.version_number is versioning-managed and cannot be changed directly';
+  end if;
+  if not v_superseding then
+    if new.is_current_version is distinct from old.is_current_version then
+      raise exception 'documents.is_current_version is versioning-managed and cannot be changed directly';
+    end if;
+    if new.superseded_by is distinct from old.superseded_by then
+      raise exception 'documents.superseded_by is versioning-managed and cannot be changed directly';
+    end if;
   end if;
   return new;
 end;
@@ -340,6 +365,16 @@ declare
   v_period boolean := public.document_type_is_period_scoped(new.document_type);
   v_next   integer;
 begin
+  -- Serialize version allocation for this supersede key so two concurrent
+  -- same-key inserts can't both read the same max(version_number) and race (one
+  -- would otherwise fail the partial-unique index instead of superseding). Coarse
+  -- by design — keyed on entity+type (not period) — which only over-serializes
+  -- (e.g. two different bank-statement periods) and never under-locks. The '|'
+  -- separator avoids concat ambiguity. Transaction-scoped: released at commit.
+  perform pg_advisory_xact_lock(
+    hashtext(v_owning::text || '|' || new.document_type::text)
+  );
+
   -- Default expiry unless the owner supplied one.
   if new.expiry_date is null then
     new.expiry_date := public.document_default_expiry(
@@ -348,6 +383,11 @@ begin
       new.period_end
     );
   end if;
+
+  -- Bracket the internal supersede UPDATEs with the trusted-operation flag so the
+  -- immutability trigger permits is_current_version/superseded_by changes ONLY on
+  -- this path (direct owner UPDATEs of those columns stay blocked).
+  perform set_config('fnc.documents_superseding', 'on', true);
 
   if v_period then
     select coalesce(max(d.version_number), 0) + 1
@@ -381,6 +421,8 @@ begin
        and d.is_current_version;
   end if;
 
+  perform set_config('fnc.documents_superseding', 'off', true);
+
   new.version_number     := v_next;
   new.is_current_version := true;
   return new;
@@ -398,13 +440,28 @@ create trigger documents_versioning
 -- documents_owner_all (FOR ALL using is_owner()) is unchanged and still grants
 -- the owner full CRUD. Below we replace the partner surface.
 
--- Partner SELECT: ONLY their own uploads. In B3.1 partners cannot upload yet, so
--- this resolves to zero rows for them (every existing document is owner-uploaded)
--- — exactly the "RLS ready, portal later" state.
+-- Partner SELECT: ONLY their own partner-sourced uploads, and NEVER document
+-- types containing structured client transaction/financial PII — even if the
+-- partner uploaded them as a temporary conduit, they must not become a permanent
+-- viewer of that PII (CLAUDE.md rule 7, extended). In B3.1 partners cannot upload
+-- yet, so this resolves to zero rows for them ("RLS ready, portal later").
 drop policy if exists "documents_partner_read_own_uploads" on public.documents;
 create policy "documents_partner_read_own_uploads" on public.documents
   for select to authenticated
-  using (uploaded_by = (select auth.uid()));
+  using (
+    public.current_partner_id() is not null
+    and uploaded_by = (select auth.uid())
+    and upload_source = 'partner'
+    and document_type <> all (array[
+      'bank_statement',
+      'mgmt_accounts',
+      'debtors_ageing',
+      'creditors_ageing',
+      'financial_statements',
+      'personal_financials',
+      'source_of_funds'
+    ]::public.document_type[])
+  );
 
 -- Partner INSERT: structurally present but DISABLED until the Phase D portal.
 -- Phase D flips WITH CHECK to the intended predicate below:
@@ -509,8 +566,9 @@ begin
      or not (select is_current_version from public.documents where id = v_c) then
     raise exception 'B3.1 assert FAIL: concurrent bank-statement periods should both stay current';
   end if;
-  -- default expiry = period_end + 3 months
-  if (select expiry_date from public.documents where id = v_a) <> date '2026-04-01' then
+  -- default expiry = period_end + 3 months (2026-01-31 + 3mo = 2026-04-30 in
+  -- Postgres — the day clamps to the last day of April, it is NOT 2026-04-01).
+  if (select expiry_date from public.documents where id = v_a) <> date '2026-04-30' then
     raise exception 'B3.1 assert FAIL: bank_statement default expiry (period_end + 3mo) wrong';
   end if;
 
