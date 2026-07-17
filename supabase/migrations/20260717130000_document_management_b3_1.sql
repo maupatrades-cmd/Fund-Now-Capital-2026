@@ -243,12 +243,14 @@ alter table public.documents
 -- 4. Constraints
 -- ===========================================================================
 
--- Exactly one owning entity: a document belongs to a client XOR a lead.
--- Replaces the old documents_link_ck (which allowed deal-only, client-less rows).
--- deal_id is orthogonal to (lead_id, client_id) — it points to specific deal
--- context when documents are used in deal submissions (a client's bank statement
--- can belong to the client AND be part of a deal's submission pack), so it is
--- deliberately NOT part of this CHECK. Deal-side attachment workflow is Phase E3.
+-- CHECK constraints in this section are added inline (not deferred to a
+-- validation migration) because the table is empty at migration time — there are
+-- no existing rows to validate against, so the write-blocking table scan the
+-- NOT VALID + VALIDATE pattern avoids does not exist here. When we ever backfill
+-- legacy documents in a future POPIA pass, follow the standard NOT VALID +
+-- VALIDATE pattern strictly.
+--
+-- CHECK below enforces (lead_id XOR client_id). deal_id is INTENTIONALLY EXCLUDED — a document can attach to a client AND a deal simultaneously (e.g., bank statement on client Fepa Sechaba that's part of DEAL-002 submission pack). Deal-side attachment workflow is Phase E3.
 alter table public.documents drop constraint if exists documents_link_ck;
 alter table public.documents
   add constraint documents_owner_entity_ck
@@ -446,6 +448,10 @@ drop policy if exists "documents_bucket_partner_insert" on storage.objects;
 create policy "documents_bucket_partner_insert" on storage.objects
   for insert to authenticated
   with check (false);  -- Disabled until Phase D partner portal ships
+
+-- Reload PostgREST so the storage RLS changes are picked up immediately
+-- (standing rule 9).
+notify pgrst, 'reload schema';
 
 -- ===========================================================================
 -- 7. In-migration assertions (production check — the whole migration rolls back
