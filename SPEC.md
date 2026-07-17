@@ -507,3 +507,45 @@ Fund Now Capital (Pty) Ltd · CIPC 2026/066284/07 · 010 102 0534 · hello@fundn
 - **VAT:** 10 digits starting 4.
 - **Cell:** +27/0 then 6/7/8, normalised storage.
 - **Postal code:** 4 digits.
+
+---
+
+## S17. FUNDER FORM AUTO-FILL + CLIENT E-SIGNATURE (Roadmap E4 — Phase E, deferred)
+
+**Status: scope locked, NOT started.** Documented now so it's build-ready when Phase E arrives. No implementation until then. This is the refined scope for what ROADMAP Phase E4 calls **"Client Onboarding & Submission Automation."**
+
+**Purpose.** Remove client paperwork friction on funder submissions. Take each funder's ORIGINAL application PDF, auto-fill the fields we already know from CRM data, mark the client-fill and signature fields, send the client a signing link, capture the signed original, and deliver it to the funder. Each funder's real form is preserved — never rebuilt.
+
+**Technical approach — AcroForm-first.**
+- Each funder is uploaded as a "form template" with their real PDF (AcroForm expected — Pollen confirmed).
+- **Field-mapping wizard:** on upload, auto-detect the AcroForm field names and map each to one of — `crm_auto_fill` (data source: client / deal / contact / owner-supplied), `client_fill` (left blank for the client), `owner_fill` (owner completes before sending), `signature` (client draws or types).
+- Flat/scanned PDFs (no AcroForm) are **deferred** until the first non-fillable funder is actually needed; the `position_x/position_y` fields on `funder_form_fields` exist for that future case only.
+
+**Workflow.**
+1. Owner triggers a submission to a funder from the deal detail page.
+2. System fetches the funder template and generates a pre-filled PDF using CRM data.
+3. Client receives a time-limited unique link (email + WhatsApp once D6 lands).
+4. Client opens the link and sees the actual funder form with the auto-fills already done.
+5. Client completes the remaining fields and draws a signature (touchscreen or mouse).
+6. The signed PDF returns to the CRM, attaches to the deal, and a notification fires.
+7. Owner reviews and sends to the funder's submission address (or the CRM sends automatically per funder config).
+
+**Legal / POPIA.**
+- Owner never signs on the client's behalf.
+- Client review + explicit confirm required before signing.
+- Per-signature audit trail: timestamp, IP, session token, form version.
+- South Africa ECT Act compliance — a draw-signature is valid; retain the original PDF byte-for-byte.
+- An owner-only **"voided signing session"** state for aborted flows.
+
+**Data model (indicative — build in Phase E).**
+- `funder_forms` (id, funder_id FK, form_name, form_pdf_url, active_from, active_to, current_version)
+- `funder_form_fields` (id, form_id FK, field_name, field_type, source, position_x, position_y — position only used for flat PDFs)
+- `form_signing_sessions` (id, deal_id FK, client_id FK, funder_form_id FK, token, expires_at, status, signed_at, signed_pdf_url)
+- `signed_submissions` (id, session_id FK, deal_funder_submission_id FK, delivered_to_funder_at)
+
+**Owner intent.** This addresses the single biggest friction point in the brokerage workflow — client paperwork. High priority for Phase E, but sequenced correctly: **after** Phase C money operations (so we have real deal volume) and **after** Phase D Doctor's portal (so partners can trigger flows too). Estimated 2–3 weeks of focused build.
+
+**Explicit non-goals.**
+- NOT rebuilding funder forms — always work with the funder's original PDF.
+- NOT signing owner-side on behalf of the client.
+- NOT automating funder-to-funder submissions without owner review.

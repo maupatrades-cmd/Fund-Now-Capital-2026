@@ -65,7 +65,7 @@ _Email design: welcome flow (E5) + nurture sequences (E9) extend a **SPEC S16** 
 - ⬜ E1. Gmail integration (two-way, auto-attach to deals)
 - ⬜ E2. Email template library + funder submission templates (Part 6 M3)
 - ⬜ E3. Deal packaging & submission automation (Part 6 M3): validation checks, auto-bundled PDF, multi-funder submit
-- ⬜ E4. Client onboarding workflow tracker (Part 6 M4, 10 steps) + document request links
+- ⬜ E4. Client Onboarding & Submission Automation (Part 6 M4): client onboarding workflow tracker (10 steps) + document request links, plus **funder form auto-fill + client e-signature** — take each funder's original PDF, auto-fill known CRM fields, mark client-fill/signature fields, send a time-limited signing link, capture the signed original, deliver to funder. AcroForm-first; never rebuilds the funder's form. Scope locked in SPEC **S17**. Sequenced after Phase C (deal volume) and Phase D (partner-triggered flows). Est. 2–3 weeks.
 - ⬜ E5. Automated welcome flow (website form → CRM → Resend)
 - ⬜ E6. AI features (Part 1 P3): email drafter, bank statement analyser, funder routing recommender; Best Fit AI Advisor for Doctor (Part 3 F4)
 - ⬜ E7. Reports v2 (Part 5 R3–R5): sector analysis, velocity/conversion, cash flow projection; scheduled email reports
