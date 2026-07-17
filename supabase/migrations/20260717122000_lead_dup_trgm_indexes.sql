@@ -18,10 +18,10 @@
 -- share a btrim(cipc_number) — verified before applying (only 3 leads live).
 
 create index concurrently if not exists leads_business_name_trgm_idx
-  on public.leads using gin (lower(business_name) gin_trgm_ops);
+  on public.leads using gin (lower(business_name) extensions.gin_trgm_ops);
 
 create index concurrently if not exists clients_business_name_trgm_idx
-  on public.clients using gin (lower(business_name) gin_trgm_ops);
+  on public.clients using gin (lower(business_name) extensions.gin_trgm_ops);
 
 create unique index concurrently if not exists leads_cipc_number_unique_idx
   on public.leads (btrim(cipc_number))
