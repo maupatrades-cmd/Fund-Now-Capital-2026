@@ -167,20 +167,45 @@ Views: owner chronological timeline (filter user/event/entity/date, export CSV);
 
 ## S6. DOCUMENT MANAGEMENT UPGRADE (Part 6 M1 — Roadmap B3 core, E/F extras)
 
-B3 core slice — extend `documents` table: `document_type` becomes full taxonomy enum —
-- Business: cipc_cert, company_profile, business_plan, shareholders_cert, moi, tax_clearance, bee_cert, trading_license.
-- Financial: bank_statement (+period_start/period_end), financial_statements, mgmt_accounts, debtors_ageing, creditors_ageing, balance_sheet, cashflow_projection, mgmt_report.
-- Personal: id_copy, proof_of_address, marriage_cert, anc_contract, personal_financials, personal_bank_statement.
-- Deal: application_form, credit_consent, purchase_order, invoice_doc, buyer_contract, cession, suretyship, personal_guarantee.
-- Asset: natis, title_deed, property_valuation, equipment_invoice, stock_take.
-- Compliance: fica_pack, popia_consent, aml_screening, sanctions_screening.
-- Funder comms: submission_email, approval_letter, decline_letter, offer_doc, rate_confirmation.
-- FNC business: funder_agreement, partner_agreement, commission_invoice, payment_confirmation.
-- Other: other.
+B3 core slice — turn the thin `documents` table into a governed store: full
+taxonomy enum, audit-truth provenance, type-aware version control, period-scoped
+"packs", expiry defaults + alerts, and a partner-aware RLS matrix. Split into
+**B3.1** (this foundation) and **B3.2** (per-document verification workflow +
+qualification gate — follow-up).
 
-Add columns: version_number int default 1, is_current_version bool default true, status enum(active/archived/expired/rejected), expiry_date, tags jsonb, received_from, shared_with jsonb, notes. New upload of same type+entity → new version, old marked is_current_version=false, never deleted. Expiry defaults: bank_statement/proof_of_address 3 months from period end; tax_clearance/bee_cert 12 months; fica_pack 12 months. Alerts at 30d/7d/expiry (via notifications). Expired docs blocked from new submission packages.
+**B3.1 taxonomy (as built — `document_type` enum, 52 values across 8 categories + `other`):**
+- **business:** cipc_cert, company_profile, tax_clearance, bee_cert, moi, trading_license, shareholder_register, director_appointment
+- **financial:** bank_statement, financial_statements, mgmt_accounts, debtors_ageing, creditors_ageing, cashflow_projection, budget
+- **personal:** id_copy, proof_of_address, anc_contract, personal_financials, spousal_consent, marriage_cert
+- **deal:** application_form, credit_consent, purchase_order, cession, suretyship, personal_guarantee, business_plan, quotation, invoice_doc
+- **asset:** natis, vehicle_license, title_deed, valuation_report, equipment_schedule, livestock_inventory
+- **compliance:** fica_pack, popia_consent, source_of_funds, tax_residency
+- **funder_comms:** approval_letter, decline_letter, offer_letter, term_sheet, funder_agreement, submission_cover
+- **fnc_business:** invoice_sent, commission_agreement, referral_agreement, msa, welcome_pack
+- **other:** other
+
+The type→category mapping is the IMMUTABLE `document_type_category()` function (single source of truth; hardcoded for B3.1, a configurable metadata table deferred to Phase F). `category` is a **stored generated column** (`document_category` enum) so category filters are indexable and can never drift. The 8 named categories are the UI filter chips; `other` is the catch-all bucket.
+
+**B3.1 columns (as built).** `doc_type` (text) was dropped and recreated as `document_type` (enum, NOT NULL); `file_name` renamed → `filename`. Added:
+- **Provenance (audit-truth, immutable):** `uploaded_by uuid NOT NULL DEFAULT auth.uid()` (FK → `profiles(id)` ON DELETE RESTRICT — profiles.id === auth.users.id, and the profiles FK is what the UI joins for the owner/partner "uploaded by" badge), `upload_source` enum(owner/partner/client/funder) NOT NULL DEFAULT 'owner'. A BEFORE-UPDATE trigger (`documents_prevent_audit_rewrite`) blocks any change to these two for **every** role including owner.
+- **Ownership:** `lead_id uuid` FK → leads (nullable). `client_id` unchanged. CHECK `num_nonnulls(lead_id, client_id) = 1` (exactly one owning entity; replaces the old client-or-deal check). `deal_id` stays an orthogonal optional pointer. `owning_entity_id` is a **stored generated** `coalesce(client_id, lead_id)` so version/supersede logic works whether a doc hangs off a lead or a client.
+- **Periods:** `period_start`, `period_end` dates. CHECK: period-scoped types **must** carry a period; non-period types must not.
+- **Versioning:** `version_number int NOT NULL DEFAULT 1`, `is_current_version bool NOT NULL DEFAULT true`, `superseded_by uuid` FK → documents, `is_period_scoped` stored generated bool.
+- **Lifecycle + metadata:** `status` enum(active/archived/expired/rejected) NOT NULL DEFAULT 'active', `expiry_date date`, `received_from text`, `notes text`, `tags text[]`, `shared_with text[]`, `updated_at timestamptz`.
+
+**Type-aware version supersede (Postgres trigger `documents_apply_versioning`, race-safe):** on insert, a **non-period** type supersedes on key `(owning_entity_id, document_type)` — the prior current version flips `is_current_version=false` + `superseded_by=<new>`, the new row becomes version N+1. A **period-scoped** type (bank_statement, financial_statements, mgmt_accounts, debtors_ageing, creditors_ageing, cashflow_projection) keys on `(owning_entity_id, document_type, period_start, period_end)` — so multiple concurrent periods (a 12-month SA bank-statement pack) all stay current; only a re-upload of the **same** period supersedes. Race safety is guaranteed at the DB layer by two partial unique indexes (`documents_current_nonperiod_uq`, `documents_current_period_uq`) — the trigger keeps at most one current version per key and the indexes enforce it under concurrency. Documents are never deleted.
+
+**Default expiry (IMMUTABLE `document_default_expiry()`, applied at insert unless the owner supplies one):** bank_statement → period_end + 3mo · proof_of_address → upload + 3mo · tax_clearance / bee_cert / fica_pack → upload + 12mo · financial_statements → period_end + 12mo · cipc_cert / moi / title_deed / popia_consent / anc_contract → no expiry · everything else → null (owner sets manually).
+
+**RLS matrix (partner-aware from day one):** Owner — full CRUD (`documents_owner_all`). Partner SELECT — **only their own uploads** (`uploaded_by = auth.uid()`); a partner never sees owner/other-partner/other-source documents. Since partners cannot upload until Phase D, this resolves to zero rows for them today (RLS ready, portal later). Partner INSERT — a structural policy exists with `WITH CHECK (false)` and the intended Phase-D predicate in a comment above it (Phase D just flips the check). Partner UPDATE/DELETE — no policy (not permitted in B3.1). The migration carries DO-block assertions (trigger/supersede/CHECK correctness + a role-simulated owner-sees-all / partner-sees-only-own / partner-INSERT-blocked check) that RAISE and roll the whole migration back on failure; the RLS-simulation block is guarded to skip on a fresh/CI DB (replay-safe) and runs against the live DB.
+
+**Expiry alerts (follow-up backend PR, immediately after this schema lands):** DOCUMENT_EXPIRING_30D / _7D / _EXPIRED via a scheduled backend job (pg_cron / Scheduled Edge Function — never client-render), one-function-per-event per A11/A12/B2.3. Alert bodies are **pack-aware** for period-scoped types (a bank-statement pack alert names the expiring month + prompts the next upload to keep a 12-month current pack); non-period alerts are the simple "your CIPC expires on [date]". Email extends the existing `deal_approved` template variant per the S16 four-layout rule — no new template. Expired docs blocked from new submission packages (E3).
+
+**B3.2 (follow-up, not built here):** per-document `verification_status` enum(unverified/accepted/rejected) + `verification_notes` + `verified_by` + `verified_at`; owner accept/reject UI on lead detail; qualification gate blocking "Qualify" when required-category docs (Business: CIPC + tax clearance · Financial: bank statements · Personal: ID copy + proof of address) are unverified; LEAD_DOCUMENT_REJECTED partner notification (reason category only, POPIA pattern); lead→client document migration at qualification.
 
 Deferred to E3/F: OCR text extraction, external share links w/ expiry+tracking, watermarks, e-signature integration, document request links (E4), bundled PDF (E3).
+
+**Frontend (separate UI PR, after this schema is merged + applied + verified):** Client-detail Documents tab (taxonomy dropdown, expiry-defaulting date input, version-history toggle, expiry status pill, tag filter, uploaded-by owner/partner badge); global owner-only `/documents` route (filter by client/category/type/expiry/tag, 8 category chips); pack view UX grouping concurrent period-scoped docs with a coverage indicator; deal-detail read-only view of the linked client's documents with expiry warnings. Row-count checks (`.select()`/RETURNING) added to the existing document mutations. Activity logging on documents lands with this UI PR (write-side), alongside S5 READ-logging for sensitive docs in Phase E/F.
 
 ---
 
@@ -239,6 +264,8 @@ Screens (Part 1 spec): Dashboard (KPI cards: leads this month, deals in progress
 Visual pattern reference: horizontal step-progression with numbered/coloured tiles and directional arrows, similar to standard project-milestone infographics. Use brand colours: navy #1a3a52 for completed, teal #2da8b8 for current step, brand green #5dba5d for upcoming/pending steps, cyan #3ec6d9 for accents. Icon per step. Label + status timestamp below each tile. See owner's saved reference (Envato milestone infographic) for visual language.
 
 **Submission decline (data model live from Roadmap A9.5; partner surface built here in Phase D):** each funder submission carries a partner-safe `decline_reason_category` (affordability / documentation_gaps / sector_appetite / credit_profile / security_insufficient / funder_criteria_not_met / other) and an owner-only `decline_notes_internal`. On the partner deal timeline a declined submission reads **"Declined by [fictional name] — [generic reason category]"**, sourced from `partner_submission_view` (fictional funder name + status + reason category only — never the real funder name, the internal notes, or any commission figures). When the last active submission on a deal is declined, the deal auto-moves to the terminal Declined stage.
+
+**Partner document upload (RLS ready from B3.1):** the `documents` RLS matrix and columns are provisioned so a partner can attach documents at lead submission — partner SELECT is scoped to `uploaded_by = auth.uid()` (own uploads only, tagged `upload_source = 'partner'`), and the partner INSERT policy is present but `WITH CHECK (false)` until Phase D flips it to the intended predicate (own upload, `upload_source='partner'`, on a client the partner referred). The actual portal upload form is built here in Phase D; B3.1 only made the data layer ready (see S6).
 
 Part 3 F1 Client Estimator: inputs (deal size slider R50k–10M, industry+sub dropdown, turnover range, trading history slider 0–60mo, security multi-select, timeline, existing debt toggle) → outputs: fundability gauge (green 80-100/amber 50-79/red 0-49 + natural-language explanation), suggested funder cards (fictional name, fit, product icon, turnaround, ticket range, why-line), estimated client cost (APR range, term, total cost bar), timeline prediction, document checklist + "Download Client Prep Sheet" PDF, HIS estimated commission (tight range). Save Scenario → `calculator_scenarios` (id, doctor_id, scenario_name, calculator_type, inputs jsonb, outputs_snapshot jsonb, created/updated_at).
 
