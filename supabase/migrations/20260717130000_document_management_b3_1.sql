@@ -243,9 +243,12 @@ alter table public.documents
 -- 4. Constraints
 -- ===========================================================================
 
--- Exactly one owning entity: a document belongs to a client XOR a lead. deal_id
--- stays an orthogonal optional pointer. Replaces the old documents_link_ck
--- (which allowed deal-only, client-less rows).
+-- Exactly one owning entity: a document belongs to a client XOR a lead.
+-- Replaces the old documents_link_ck (which allowed deal-only, client-less rows).
+-- deal_id is orthogonal to (lead_id, client_id) — it points to specific deal
+-- context when documents are used in deal submissions (a client's bank statement
+-- can belong to the client AND be part of a deal's submission pack), so it is
+-- deliberately NOT part of this CHECK. Deal-side attachment workflow is Phase E3.
 alter table public.documents drop constraint if exists documents_link_ck;
 alter table public.documents
   add constraint documents_owner_entity_ck
@@ -416,6 +419,33 @@ create policy "documents_partner_insert" on public.documents
   with check (false);  -- Disabled until Phase D partner portal ships
 
 -- (Partner UPDATE / DELETE: intentionally no policy — not permitted in B3.1.)
+
+-- ===========================================================================
+-- 6b. Storage bucket RLS — mirror the table matrix onto storage.objects so file
+--     access can never diverge from document-row access. The owner already has
+--     full CRUD on the 'documents' bucket (20260713120800). Here we add the
+--     partner surface so it matches the table:
+--       * partner SELECT — only objects they uploaded (storage.objects.owner =
+--         auth.uid()), mirroring the table's uploaded_by = auth.uid() rule. In
+--         B3.1 partners cannot upload, so this reads zero objects (RLS ready).
+--       * partner INSERT — structurally present but DISABLED (WITH CHECK false)
+--         until Phase D, mirroring documents_partner_insert. Phase D flips the
+--         check to validate the scoped storage path
+--         {owning_entity_type}/{owning_entity_id}/{document_id}/{filename} — e.g.
+--         require (storage.foldername(name))[1] in ('clients','leads') and the
+--         owning entity to be one the partner referred (join current_partner_id()).
+--     Partner UPDATE / DELETE on the bucket: intentionally no policy in B3.1.
+--     (Path convention itself is set by the upload helper in the UI PR.)
+-- ===========================================================================
+drop policy if exists "documents_bucket_partner_select" on storage.objects;
+create policy "documents_bucket_partner_select" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'documents' and owner = (select auth.uid()));
+
+drop policy if exists "documents_bucket_partner_insert" on storage.objects;
+create policy "documents_bucket_partner_insert" on storage.objects
+  for insert to authenticated
+  with check (false);  -- Disabled until Phase D partner portal ships
 
 -- ===========================================================================
 -- 7. In-migration assertions (production check — the whole migration rolls back
