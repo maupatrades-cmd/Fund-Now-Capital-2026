@@ -194,6 +194,29 @@ Flow: deal → Funded stage ⇒ auto-draft invoice (pending_approval) ⇒ owner 
 
 ---
 
+## S7A. COMMISSION RECORDS AUTO-WIRE (Part 5 — Roadmap C2)
+
+**Status: planned, NOT built.** Details captured here so C2 is build-ready. `commission_records` is wired on Funded; `commission_records.payment_received_date` already exists (added in A11 so COMMISSION_PAID has a trigger condition — S4). All money recomputed server-side via the `calculate_commission()` DB function (RPC) — client values never trusted; all monetary columns `numeric(14,2)`.
+
+**Rationale (why lifecycle amounts, not just one number):** commission is a percentage of the **funded** amount, not the **requested** amount. Tracking `amount_approved` and `amount_funded` separately is required to compute honest *potential* earnings and honest *realised* commission.
+
+**Lifecycle amount columns added to `deal_funder_submissions` when C2 lands:**
+- `amount_approved` `numeric(14,2)` nullable — set when submission status → **Approved**. This is what the funder offered.
+- `amount_funded` `numeric(14,2)` nullable — set when submission status → **Funded**. What actually got drawn (may differ from approved due to fees/costs).
+- `approved_at` `timestamptz` nullable — audit stamp for the approval.
+- `funded_at` `timestamptz` nullable — audit stamp for the draw.
+
+**Commission calculation rule (which amount feeds `calculate_commission()` at each stage):**
+- **Submitted** → `potential_commission = calculate_commission(amount_requested)` — best estimate we have.
+- **Approved** → `potential_commission = calculate_commission(amount_approved)` — accurate to the funder's offer.
+- **Funded** → `actual_commission = calculate_commission(amount_funded)` — the real number; feeds invoicing (S7/C1) and Doctor's earnings (S8/C3).
+
+**Product intent — track what the client actually receives:** funders regularly approve lower amounts than requested. Commission tracking must reflect what the client actually receives, not what they requested. *Owner requested this during the B2.3 smoke test — real broker-world scenario.*
+
+**Product intent — potential earnings visible from deal creation:** potential earnings should be visible on the deal detail page and per funder submission from the moment a deal is created, not just after the Funded stage. When `commission_records` lands, each `deal_funder_submission` should surface an `estimated_commission` display (recomputed if the amount changes) so the owner can see "what this is worth" while chasing an approval. *Requested by owner during the B2.3 smoke test — high-value UX signal for pipeline prioritisation decisions.*
+
+---
+
 ## S8. DOCTOR'S PAYROLL (Part 5 M3 — Roadmap C3–C5, portal screens D2)
 
 `doctor_earnings`: id, deal_id, deal_funder_submission_id, doctor_id FK referral_partners, commission_amount, tier_applied, status enum(earned/ready_to_invoice/invoiced/paid), earned_at (deal funded), ready_to_invoice_at (FNC received funder payment), invoiced_at, paid_at. Computed server-side from `calculate_commission` — never client-supplied.
