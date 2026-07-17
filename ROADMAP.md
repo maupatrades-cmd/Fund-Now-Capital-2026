@@ -85,7 +85,7 @@ _Email design: welcome flow (E5) + nurture sequences (E9) extend a **SPEC S16** 
 - ⬜ F7. Integrations (Part 6 M10): CIPC validation, Absa matching, Chrome extension, webhooks
 - ⬜ F8. Advanced BI (Part 6 M11) + institutional wiki (Part 6 M12)
 - ⬜ F9. Data quality full suite (Part 6 M6): completeness scoring, hygiene prompts, merge
-- ⬜ F10. POPIA Audit Trail Compliance Pass — redact PII from `before/after` snapshots on `activity_logs` (uniformly across `leads` + `clients` + `client_contacts`). Includes: redaction of sensitive columns on write, a migration to redact existing rows if any already contain PII, right-to-erasure workflow documentation, and a POPIA data-handling SPEC section. Est. 1–2 focused PRs. Blocked by: first sensitive-PII edit on live (current volume: minimal). Current behaviour documented in SPEC S5.
+- ⬜ F10. POPIA Audit Trail Compliance Pass (post-deployment compliance follow-up) — redact PII from before/after snapshots on activity_logs across leads + clients + client_contacts. Includes: assessment + redaction of existing rows that may already contain PII (A10 has been live), write-time redaction of sensitive columns going forward, right-to-erasure workflow documentation, and a POPIA data-handling SPEC section. Est. 1–2 focused PRs. Current before/after behaviour documented in SPEC S5.
 
 ## PART 7 (future, deliberately deferred)
 Client-facing portal, client self-service applications, client dashboards.
