@@ -27,7 +27,10 @@
 -- follow-up 20260717122000 (CONCURRENTLY cannot run inside this migration's
 -- transaction). The lookup works without them (seq scan on small tables).
 
-create extension if not exists pg_trgm;
+-- Install into the `extensions` schema (Supabase convention) so its functions
+-- and operator classes are resolvable when a SECURITY-scoped function runs with
+-- search_path = '' — the similarity() calls below are extensions-qualified to match.
+create extension if not exists pg_trgm with schema extensions;
 
 -- ---------------------------------------------------------------------------
 -- 1a. Duplicate lookup (advisory). Read-only, SECURITY INVOKER so RLS applies
@@ -71,18 +74,18 @@ as $$
   union all
   -- Fuzzy business-name similarity ≥ 0.75 → warn (leads).
   select 'name', 'warn', 'lead', l.id, l.business_name,
-         similarity(lower(l.business_name), lower(p_business_name))
+         extensions.similarity(lower(l.business_name), lower(p_business_name))
     from public.leads l
    where p_business_name is not null and btrim(p_business_name) <> ''
      and (p_exclude_lead_id is null or l.id <> p_exclude_lead_id)
-     and similarity(lower(l.business_name), lower(p_business_name)) >= 0.75
+     and extensions.similarity(lower(l.business_name), lower(p_business_name)) >= 0.75
   union all
   -- Fuzzy business-name similarity ≥ 0.75 → warn (clients).
   select 'name', 'warn', 'client', c.id, c.business_name,
-         similarity(lower(c.business_name), lower(p_business_name))
+         extensions.similarity(lower(c.business_name), lower(p_business_name))
     from public.clients c
    where p_business_name is not null and btrim(p_business_name) <> ''
-     and similarity(lower(c.business_name), lower(p_business_name)) >= 0.75
+     and extensions.similarity(lower(c.business_name), lower(p_business_name)) >= 0.75
   union all
   -- Exact contact email → warn (leads carry the contact email directly).
   select 'email', 'warn', 'lead', l.id, l.business_name, 1.0::real
