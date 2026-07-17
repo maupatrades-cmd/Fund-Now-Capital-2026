@@ -1,8 +1,9 @@
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, AlertTriangle, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { useReferralPartners } from "@/hooks/useClients";
 import { useIndustries, type IndustryWithSubs } from "@/hooks/useIndustries";
@@ -10,7 +11,9 @@ import {
   useLead,
   useCreateLead,
   useUpdateLead,
+  useCheckLeadDuplicates,
   type LeadInput,
+  type LeadDuplicate,
 } from "@/hooks/useLeads";
 import {
   ENTITY_TYPES,
@@ -207,6 +210,7 @@ export default function LeadFormPage() {
       key={l?.id ?? "new"}
       defaults={defaults}
       isEdit={isEdit}
+      excludeLeadId={isEdit ? id! : null}
       industries={industries.data ?? []}
       partners={partners.data ?? []}
       submitting={createLead.isPending || updateLead.isPending}
@@ -234,6 +238,7 @@ export default function LeadFormPage() {
 function LeadForm({
   defaults,
   isEdit,
+  excludeLeadId,
   industries,
   partners,
   submitting,
@@ -242,6 +247,7 @@ function LeadForm({
 }: {
   defaults: FormValues;
   isEdit: boolean;
+  excludeLeadId: string | null;
   industries: IndustryWithSubs[];
   partners: { id: string; name: string }[];
   submitting: boolean;
@@ -256,11 +262,76 @@ function LeadForm({
     formState: { errors },
   } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: defaults });
 
+  const checkDuplicates = useCheckLeadDuplicates();
+  // Duplicate-detection gate (B2.3). A CIPC-vs-lead collision blocks the save;
+  // fuzzy-name / email / cell matches warn and require typed confirmation.
+  const [blockMatch, setBlockMatch] = useState<LeadDuplicate | null>(null);
+  const [warnMatches, setWarnMatches] = useState<LeadDuplicate[] | null>(null);
+  const [pending, setPending] = useState<FormValues | null>(null);
+  const [confirmText, setConfirmText] = useState("");
+
   const industryId = watch("industry_id");
   const referredBy = watch("referred_by");
   const hasDebt = watch("has_existing_debt");
   const loadedOnBehalf = watch("loaded_on_behalf");
   const subOptions = industries.find((i) => i.id === industryId)?.sub_industries ?? [];
+
+  const clearGate = () => {
+    setBlockMatch(null);
+    setWarnMatches(null);
+    setPending(null);
+    setConfirmText("");
+  };
+
+  // Invalidate the duplicate gate whenever ANY lead field changes while a block
+  // or warn is showing. Editing a field can change the duplicate outcome, so the
+  // stashed `pending` snapshot (and the shown matches) would be stale — force a
+  // fresh check on the next Save instead of confirming against old values. The
+  // typed-confirm box is separate React state, so it doesn't trigger this.
+  const gateActive = !!blockMatch || !!warnMatches;
+  useEffect(() => {
+    if (!gateActive) return;
+    const sub = watch(() => clearGate());
+    return () => sub.unsubscribe();
+  }, [gateActive, watch]);
+
+  // Client-side pre-check before the write. The server independently rejects a
+  // CIPC-vs-lead duplicate, so a failed/bypassed check can never create one.
+  const guardedSubmit = async (v: FormValues) => {
+    clearGate();
+    const cell = v.contact_cell && isValidSaCell(v.contact_cell) ? normaliseSaCell(v.contact_cell) : null;
+    let matches: LeadDuplicate[] = [];
+    try {
+      matches = await checkDuplicates.mutateAsync({
+        business_name: v.business_name!.trim(),
+        cipc_number: strOrNull(v.cipc_number),
+        contact_email: strOrNull(v.contact_email),
+        contact_cell: cell,
+        exclude_lead_id: excludeLeadId,
+      });
+    } catch (e) {
+      // Duplicate check couldn't run — do NOT save, or we'd silently skip the
+      // soft-warn confirmation. Ask the owner to retry. (The server CIPC trigger
+      // remains the ultimate hard-block regardless of this client-side check.)
+      console.warn("duplicate check failed", e);
+      toast.error("Couldn't check for duplicates — please try again.");
+      return;
+    }
+    const block = matches.find((m) => m.severity === "block");
+    if (block) {
+      setBlockMatch(block);
+      return;
+    }
+    const warns = matches.filter((m) => m.severity === "warn");
+    if (warns.length) {
+      setWarnMatches(warns);
+      setPending(v);
+      return;
+    }
+    onSubmit(v);
+  };
+
+  const checking = checkDuplicates.isPending;
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -268,7 +339,7 @@ function LeadForm({
         <ArrowLeft className="h-4 w-4" /> Back to leads
       </Link>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(guardedSubmit)} className="space-y-6">
         <h2 className="text-lg font-semibold text-brand-navy">{isEdit ? "Edit lead" : "Add lead"}</h2>
 
         {/* Business info */}
@@ -443,25 +514,123 @@ function LeadForm({
           </Field>
         </Fieldset>
 
+        {/* Hard block: an exact CIPC match against an existing lead. */}
+        {blockMatch && (
+          <div className="flex items-start gap-3 rounded-xl border border-red-300 bg-red-50 p-4 text-sm">
+            <Ban className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+            <div className="space-y-1">
+              <p className="font-semibold text-red-800">
+                A lead already exists for this CIPC number — {blockMatch.business_name}.
+              </p>
+              <p className="text-red-700">
+                A CIPC number is a unique legal identifier, so this is the same business.{" "}
+                <Link to={`/leads/${blockMatch.entity_id}`} className="font-medium underline">
+                  Open the existing lead
+                </Link>{" "}
+                instead, or correct the CIPC number to continue.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Soft warn: fuzzy-name / email / cell matches — save allowed after typed confirmation. */}
+        {warnMatches && (
+          <div className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <div>
+                <p className="font-semibold text-amber-900">This looks like a possible duplicate.</p>
+                <p className="text-amber-800">
+                  We found {warnMatches.length} similar {warnMatches.length === 1 ? "record" : "records"}.
+                  Check it isn't the same business before saving.
+                </p>
+              </div>
+            </div>
+            <ul className="space-y-1.5 pl-8">
+              {warnMatches.map((m) => (
+                <li key={`${m.entity}-${m.entity_id}-${m.match_kind}`} className="text-amber-900">
+                  <Link
+                    to={m.entity === "client" ? `/clients/${m.entity_id}` : `/leads/${m.entity_id}`}
+                    className="font-medium underline"
+                  >
+                    {m.business_name}
+                  </Link>{" "}
+                  <span className="text-amber-700">— {matchLabel(m)}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="pl-8">
+              <label className="block font-medium text-amber-900 mb-1.5">
+                Type <span className="font-mono font-bold">SAVE</span> to add this lead anyway
+              </label>
+              <input
+                className="w-40 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-brand-navy outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder="SAVE"
+              />
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-lg bg-brand-teal px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60"
-          >
-            {submitting ? "Saving…" : isEdit ? "Save changes" : "Add lead"}
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-brand-navy hover:bg-slate-50"
-          >
-            Cancel
-          </button>
+          {warnMatches ? (
+            <>
+              <button
+                type="button"
+                disabled={submitting || confirmText.trim().toUpperCase() !== "SAVE"}
+                onClick={() => pending && onSubmit(pending)}
+                className="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+              >
+                {submitting ? "Saving…" : "Save anyway"}
+              </button>
+              <button
+                type="button"
+                onClick={clearGate}
+                className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-brand-navy hover:bg-slate-50"
+              >
+                Go back
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="submit"
+                disabled={submitting || checking}
+                className="rounded-lg bg-brand-teal px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60"
+              >
+                {checking ? "Checking…" : submitting ? "Saving…" : isEdit ? "Save changes" : "Add lead"}
+              </button>
+              <button
+                type="button"
+                onClick={onCancel}
+                className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-brand-navy hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+            </>
+          )}
         </div>
       </form>
     </div>
   );
+}
+
+// Human label for why a duplicate candidate matched.
+function matchLabel(m: LeadDuplicate): string {
+  const where = m.entity === "client" ? "existing client" : "existing lead";
+  switch (m.match_kind) {
+    case "cipc":
+      return `same CIPC number (${where})`;
+    case "name":
+      return `similar business name (${where})`;
+    case "email":
+      return `same contact email (${where})`;
+    case "cell":
+      return `same contact cell (${where})`;
+    default:
+      return where;
+  }
 }
 
 function Fieldset({ title, children }: { title: string; children: React.ReactNode }) {

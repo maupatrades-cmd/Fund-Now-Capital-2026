@@ -28,7 +28,7 @@ Goal: the original 5-screen CRM works end-to-end with a real deal, plus the two 
 Goal: the data structures every later feature assumes.
 
 - ✅ B1. Industry Classification (Part 2): `industries` + `sub_industries` + `funder_industry_preferences` tables, seed all 25 industries + sub-industries + baseline appetite matrix. Clients gain `industry_id` (migrate free-text sector). (Applied + verified live.)
-- 🔨 B2. Lead Entry + Qualification (Part 2): `leads` table, owner manual-entry form (full field set), qualification workflow (4 stages, 15 standard reasons), auto-create deal on "Qualified". Loaded-on-behalf fields (Part 4) included now. Fires LEAD_CREATED_FOR_YOU notification (owner-entered for Doctor). — B2.1 (lead entry) + B2.2 (`qualify_lead` workflow) DONE and live; B2.3 (duplicate detection at entry, activity logging + notifications on lead events) NEXT.
+- 🔨 B2. Lead Entry + Qualification (Part 2): `leads` table, owner manual-entry form (full field set), qualification workflow (4 stages, 15 standard reasons), auto-create deal on "Qualified". Loaded-on-behalf fields (Part 4) included now. Fires LEAD_CREATED_FOR_YOU notification (owner-entered for Doctor). — B2.1 (lead entry) + B2.2 (`qualify_lead` workflow) DONE and live; B2.3 (CIPC hard-block + advisory duplicate detection at entry, activity logging on lead events, and lead-lifecycle notifications with email) BUILT — pending live migration apply + Edge Function redeploy + smoke test.
 - ⬜ B3. Document Management upgrade (Part 6 M1, core slice): full taxonomy enum, version control, expiry dates + expiry alerts, metadata fields. (OCR, external share links, e-signatures deferred to Phase E/F.)
 - ⬜ B4. Client Story basic (Part 2): `client_stories` + `call_logs` tables, Story tab + Call Log tab on client detail. First real capture: Fepa Sechaba (Tumi).
 - ⬜ B5. Data validation pass (Part 6 M6, core slice): SA ID Luhn check, CIPC format, cell format, duplicate detection on client/lead creation.
@@ -85,12 +85,15 @@ _Email design: welcome flow (E5) + nurture sequences (E9) extend a **SPEC S16** 
 - ⬜ F7. Integrations (Part 6 M10): CIPC validation, Absa matching, Chrome extension, webhooks
 - ⬜ F8. Advanced BI (Part 6 M11) + institutional wiki (Part 6 M12)
 - ⬜ F9. Data quality full suite (Part 6 M6): completeness scoring, hygiene prompts, merge
+- ⬜ F10. POPIA Audit Trail Compliance Pass (post-deployment compliance follow-up) — redact PII from before/after snapshots on activity_logs across leads + clients + client_contacts. Includes: assessment + redaction of existing rows that may already contain PII (A10 has been live), write-time redaction of sensitive columns going forward, right-to-erasure workflow documentation, and a POPIA data-handling SPEC section. Est. 1–2 focused PRs. Current before/after behaviour documented in SPEC S5.
 
 ## PART 7 (future, deliberately deferred)
 Client-facing portal, client self-service applications, client dashboards.
 
 ## DEFERRED POLISH
 Small quality-of-life items intentionally deferred until real production volume warrants them.
+- Owner-side dashboard to review dismissed duplicate warnings. Useful at scale — not urgent at current lead volume. Revisit when weekly warning count justifies. (B2.3 surfaces duplicate warnings at entry but doesn't log dismissals; this would capture and surface them.)
+- Sole-trader business name PII flag — surface a confirmation dialog when qualifying a lead where entity_type = sole_prop, warning that business_name may be personal data. Not urgent, current lead volume is corporate. Revisit when first sole-trader lead is entered.
 - Add an owner-only "archive deal" action for accidental duplicates / test data. Not urgent, deferred until real production volume warrants it. Alternative for now: continue owner-requested cleanups via SQL (small scale, controlled). Retention/audit semantics when built: archiving is a soft state (sets an `archived_at`/`archived_by` flag) that **preserves** the deal's `activity_logs` trail and child records (submissions, `deal_stage_history`, commission rows) rather than deleting them; archived deals are **excluded from pipeline KPIs and dashboards** but remain queryable owner-side; the action is **owner-only (RLS `is_owner()`)** and writes a `DELETE`/`UPDATE` `activity_logs` row — the same authorization and audit guarantees as the interim SQL cleanup, minus the irreversible row deletion.
 
 ## OPEN DECISIONS
