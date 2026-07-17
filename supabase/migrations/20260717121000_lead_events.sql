@@ -299,6 +299,38 @@ as $$
 $$;
 revoke execute on function public.partner_profile_id(uuid) from public, anon, authenticated;
 
+-- LEAD_CREATED_FOR_YOU — its own INSERT trigger (activates the A11 placeholder,
+-- which predicted exactly this trigger name). Fires when a lead is LOADED on
+-- behalf of a referrer, not later at qualify time — one function per event,
+-- consistent with the notify_deal_* / notify_commission_paid pattern.
+create or replace function public.notify_lead_created_for_you()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_partner uuid;
+begin
+  if new.loaded_on_behalf and new.original_referrer_id is not null then
+    v_partner := public.partner_profile_id(new.original_referrer_id);
+    perform public.emit_in_app_notification(
+      v_partner, 'LEAD_CREATED_FOR_YOU', 'A new lead has been loaded for you',
+      'A new lead, ' || new.business_name || ', has been loaded on your behalf.',
+      '/leads/' || new.id::text, jsonb_build_object('lead_id', new.id));
+  end if;
+  return null;
+end;
+$$;
+revoke execute on function public.notify_lead_created_for_you() from public, anon, authenticated;
+
+create trigger notify_lead_created_for_you
+  after insert on public.leads
+  for each row execute function public.notify_lead_created_for_you();
+
+-- Qualification-lifecycle notifications on UPDATE: STARTED_QUALIFICATION,
+-- QUALIFIED, NOT_QUALIFIED (each with its partner leg where applicable), and the
+-- catch-all LEAD_UPDATED for any other edit.
 create or replace function public.notify_lead_events()
 returns trigger
 language plpgsql
@@ -310,21 +342,9 @@ declare
   v_partner uuid;
   v_reason  text;
   v_ref     text;
-  v_link    text := '/leads/' || coalesce(new.id, old.id)::text;
-  v_data    jsonb := jsonb_build_object('lead_id', coalesce(new.id, old.id));
+  v_link    text := '/leads/' || new.id::text;
+  v_data    jsonb := jsonb_build_object('lead_id', new.id);
 begin
-  -- INSERT: fire LEAD_CREATED_FOR_YOU only when loaded on behalf of a referrer.
-  if tg_op = 'INSERT' then
-    if new.loaded_on_behalf and new.original_referrer_id is not null then
-      v_partner := public.partner_profile_id(new.original_referrer_id);
-      perform public.emit_in_app_notification(
-        v_partner, 'LEAD_CREATED_FOR_YOU', 'A new lead has been loaded for you',
-        'A new lead, ' || new.business_name || ', has been loaded on your behalf.',
-        v_link, v_data);
-    end if;
-    return null;
-  end if;
-
   -- UPDATE with a qualification-stage transition → the matching stage event(s).
   if new.qualification_stage is distinct from old.qualification_stage then
     if new.qualification_stage = 'under_qualification' then
@@ -378,7 +398,7 @@ $$;
 revoke execute on function public.notify_lead_events() from public, anon, authenticated;
 
 create trigger notify_lead_events
-  after insert or update on public.leads
+  after update on public.leads
   for each row execute function public.notify_lead_events();
 
 -- ---------------------------------------------------------------------------
