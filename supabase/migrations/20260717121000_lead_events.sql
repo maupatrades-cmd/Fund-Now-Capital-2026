@@ -314,6 +314,8 @@ declare
 begin
   if new.loaded_on_behalf and new.original_referrer_id is not null then
     v_partner := public.partner_profile_id(new.original_referrer_id);
+    -- Partner receives the LEAD's business_name only — no contact PII (mirrors
+    -- the partner PII contract on notify_lead_events).
     perform public.emit_in_app_notification(
       v_partner, 'LEAD_CREATED_FOR_YOU', 'A new lead has been loaded for you',
       'A new lead, ' || new.business_name || ', has been loaded on your behalf.',
@@ -331,6 +333,16 @@ create trigger notify_lead_created_for_you
 -- Qualification-lifecycle notifications on UPDATE: STARTED_QUALIFICATION,
 -- QUALIFIED, NOT_QUALIFIED (each with its partner leg where applicable), and the
 -- catch-all LEAD_UPDATED for any other edit.
+--
+-- PARTNER PII CONTRACT (partner legs only — the owner sees everything):
+--   * The business identifier is ALWAYS `new.business_name` — the LEAD's name,
+--     i.e. the business the partner referred, never the client record we may
+--     create at qualification. (Usually the same string; semantically the
+--     partner is told about "the business I referred".)
+--   * Partner bodies carry ONLY: business_name + (not-qualified) the reason
+--     CATEGORY. They NEVER carry contact_name / contact_id_number / contact_cell
+--     / contact_email / contact_role, physical/registered address, initial_notes,
+--     not_qualified_notes, or any funder identity. This mirrors partner_leads_view.
 create or replace function public.notify_lead_events()
 returns trigger
 language plpgsql
@@ -358,7 +370,8 @@ begin
         v_owner, 'LEAD_QUALIFIED', 'Lead qualified',
         new.business_name || ' has been qualified' || coalesce(' — deal ' || v_ref, '') || '.',
         v_link, v_data);
-      -- Partner leg (not self-referred): business name only, no internal detail.
+      -- Partner leg (not self-referred): LEAD business_name only + progressing
+      -- message. No contact PII, no funder identity (see PII contract above).
       if new.referred_by <> 'self' and new.referral_partner_id is not null then
         v_partner := public.partner_profile_id(new.referral_partner_id);
         perform public.emit_in_app_notification(
@@ -374,8 +387,9 @@ begin
         new.business_name || ' was not qualified. Reason: ' || v_reason
           || coalesce('. Notes: ' || new.not_qualified_notes, '') || '.',
         v_link, v_data);
-      -- Partner leg: reason category only, NEVER not_qualified_notes (owner-internal,
-      -- excluded from partner_leads_view).
+      -- Partner leg: LEAD business_name + reason CATEGORY only. NEVER
+      -- not_qualified_notes or any contact PII (owner-internal; excluded from
+      -- partner_leads_view). See PII contract above.
       if new.referred_by <> 'self' and new.referral_partner_id is not null then
         v_partner := public.partner_profile_id(new.referral_partner_id);
         perform public.emit_in_app_notification(
