@@ -91,7 +91,7 @@ Client-facing portal, client self-service applications, client dashboards.
 
 ## DEFERRED POLISH
 Small quality-of-life items intentionally deferred until real production volume warrants them.
-- Add an owner-only "archive deal" action for accidental duplicates / test data. Not urgent, deferred until real production volume warrants it. Alternative for now: continue owner-requested cleanups via SQL (small scale, controlled).
+- Add an owner-only "archive deal" action for accidental duplicates / test data. Not urgent, deferred until real production volume warrants it. Alternative for now: continue owner-requested cleanups via SQL (small scale, controlled). Retention/audit semantics when built: archiving is a soft state (sets an `archived_at`/`archived_by` flag) that **preserves** the deal's `activity_logs` trail and child records (submissions, `deal_stage_history`, commission rows) rather than deleting them; archived deals are **excluded from pipeline KPIs and dashboards** but remain queryable owner-side; the action is **owner-only (RLS `is_owner()`)** and writes a `DELETE`/`UPDATE` `activity_logs` row — the same authorization and audit guarantees as the interim SQL cleanup, minus the irreversible row deletion.
 
 ## OPEN DECISIONS
 1. Doctor's Commission Estimator "Business View": full ranged internal-split breakdown (Part 3 spec) vs Doctor's-own-number-only. Blocks D5. Owner to decide.
