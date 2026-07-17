@@ -113,7 +113,7 @@ Tables:
 
 `profiles` gains: phone_number, phone_number_verified, whatsapp_opted_in, sms_opted_in.
 
-Event types (enum): LEAD_CREATED_FOR_YOU, LEAD_SUBMITTED_BY_PARTNER, LEAD_QUALIFICATION_UPDATED, DEAL_SUBMITTED_TO_FUNDER, DEAL_APPROVED, DEAL_DECLINED, DEAL_FUNDED, COMMISSION_PAID, FUNDER_RESPONSE_RECEIVED, CLIENT_MESSAGE_RECEIVED, FOLLOW_UP_DUE, BADGE_EARNED, MONTHLY_TARGET_MILESTONE, TIER_REVIEW_UPCOMING, FUNDER_RATE_CONFIRMED, DOCUMENT_UPLOADED, SYSTEM_MAINTENANCE.
+Event types (enum): LEAD_CREATED_FOR_YOU, LEAD_SUBMITTED_BY_PARTNER, LEAD_QUALIFICATION_UPDATED, LEAD_STARTED_QUALIFICATION, LEAD_QUALIFIED, LEAD_NOT_QUALIFIED, LEAD_UPDATED, DEAL_SUBMITTED_TO_FUNDER, DEAL_APPROVED, DEAL_DECLINED, DEAL_FUNDED, COMMISSION_PAID, FUNDER_RESPONSE_RECEIVED, CLIENT_MESSAGE_RECEIVED, FOLLOW_UP_DUE, BADGE_EARNED, MONTHLY_TARGET_MILESTONE, TIER_REVIEW_UPCOMING, FUNDER_RATE_CONFIRMED, DOCUMENT_UPLOADED, SYSTEM_MAINTENANCE. (The four `LEAD_STARTED_QUALIFICATION` / `LEAD_QUALIFIED` / `LEAD_NOT_QUALIFIED` / `LEAD_UPDATED` values were added in B2.3, superseding the coarse `LEAD_QUALIFICATION_UPDATED` placeholder, which is retained but unused.)
 
 Phase A scope: in-app bell (badge count, dropdown last 10, mark read/all, Realtime updates) + Notification Center page (filter/search/bulk) + Resend email for LEAD_CREATED_FOR_YOU, DEAL_APPROVED, DEAL_FUNDED, COMMISSION_PAID only. Branded HTML template (navy header, teal CTA button, unsubscribe/prefs link). From hello@fundnowcapital.africa via Cloudflare routing; Google Workspace MX untouched; SPF already includes resend.
 
@@ -160,6 +160,8 @@ Views: owner chronological timeline (filter user/event/entity/date, export CSV);
 - `entity_type` values are singular strings: `deal`, `deal_funder_submission`, `client`, `client_contact`, `commission_record`. `related_entity_ids` links children to parents (submissions/commission → deal; contacts/deals → client) so a deal's Activity tab picks up its submissions and a client's picks up its deals + contacts.
 - RLS: **owner-only SELECT**; no insert/update/delete policy exists, so the trail is written only by the SECURITY DEFINER trigger and is immutable through the API. `ip_address`/`user_agent`/`session_id` are left for the app layer (auth/READ events, Phase E/F). READ logging is **not** enabled at this stage.
 - Frontend: Activity **section** on the deal detail page (which uses stacked sections, not a tab bar) and an Activity **tab** on the client detail page; owner `/activity` timeline with date/user/event/entity filters, description search, and CSV export (client-side; latest 500 per page).
+
+**PII in before/after snapshots (current behaviour — known, tracked):** on an **UPDATE**, `activity_logs` captures the old and new *values* of the changed fields — which includes sensitive PII when such a field is edited (`contact_id_number`, `contact_cell`, `contact_email`, addresses, notes) across `leads`, `clients`, and `client_contacts`. (INSERT/DELETE store no value diff.) Access is **owner-only via RLS**, and the trail is immutable and retained ~7 years by design (POPIA record-keeping). Redacting these values from the snapshots (uniformly across the three entities) + a right-to-erasure workflow is a deliberate follow-up — **ROADMAP F10 (POPIA Audit Trail Compliance Pass)** — not done in B2.3.
 
 ---
 

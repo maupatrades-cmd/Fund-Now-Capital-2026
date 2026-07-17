@@ -59,7 +59,7 @@ as $$
   select 'cipc', 'block', 'lead', l.id, l.business_name, 1.0::real
     from public.leads l
    where p_cipc is not null and btrim(p_cipc) <> ''
-     and l.cipc_number = p_cipc
+     and btrim(l.cipc_number) = btrim(p_cipc)
      and (p_exclude_lead_id is null or l.id <> p_exclude_lead_id)
   union all
   -- Exact CIPC against an existing client → warn (a repeat client may legitimately
@@ -67,7 +67,7 @@ as $$
   select 'cipc', 'warn', 'client', c.id, c.business_name, 1.0::real
     from public.clients c
    where p_cipc is not null and btrim(p_cipc) <> ''
-     and c.cipc_number = p_cipc
+     and btrim(c.cipc_number) = btrim(p_cipc)
   union all
   -- Fuzzy business-name similarity ≥ 0.75 → warn (leads).
   select 'name', 'warn', 'lead', l.id, l.business_name,
@@ -123,9 +123,12 @@ begin
   if new.cipc_number is null or btrim(new.cipc_number) = '' then
     return new;
   end if;
+  -- Compare on btrim() to match the partial UNIQUE INDEX on btrim(cipc_number)
+  -- (20260717122000): the index is the race-proof guarantee, this trigger is the
+  -- friendly message. Both must normalise identically or they'd disagree.
   select l.business_name into v_existing
     from public.leads l
-   where l.cipc_number = new.cipc_number
+   where btrim(l.cipc_number) = btrim(new.cipc_number)
      and l.id <> new.id
    limit 1;
   if v_existing is not null then

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -283,6 +283,18 @@ function LeadForm({
     setConfirmText("");
   };
 
+  // Invalidate the duplicate gate whenever ANY lead field changes while a block
+  // or warn is showing. Editing a field can change the duplicate outcome, so the
+  // stashed `pending` snapshot (and the shown matches) would be stale — force a
+  // fresh check on the next Save instead of confirming against old values. The
+  // typed-confirm box is separate React state, so it doesn't trigger this.
+  const gateActive = !!blockMatch || !!warnMatches;
+  useEffect(() => {
+    if (!gateActive) return;
+    const sub = watch(() => clearGate());
+    return () => sub.unsubscribe();
+  }, [gateActive, watch]);
+
   // Client-side pre-check before the write. The server independently rejects a
   // CIPC-vs-lead duplicate, so a failed/bypassed check can never create one.
   const guardedSubmit = async (v: FormValues) => {
@@ -298,10 +310,11 @@ function LeadForm({
         exclude_lead_id: excludeLeadId,
       });
     } catch (e) {
-      // Advisory check failed — proceed to the save; the DB guard still protects
-      // against a genuine CIPC duplicate.
-      console.warn("duplicate check failed, proceeding to save", e);
-      onSubmit(v);
+      // Duplicate check couldn't run — do NOT save, or we'd silently skip the
+      // soft-warn confirmation. Ask the owner to retry. (The server CIPC trigger
+      // remains the ultimate hard-block regardless of this client-side check.)
+      console.warn("duplicate check failed", e);
+      toast.error("Couldn't check for duplicates — please try again.");
       return;
     }
     const block = matches.find((m) => m.severity === "block");
