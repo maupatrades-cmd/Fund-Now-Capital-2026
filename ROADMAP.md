@@ -27,8 +27,8 @@ Goal: the original 5-screen CRM works end-to-end with a real deal, plus the two 
 ## PHASE B — Data Foundations (Parts 2 + 6.M1)
 Goal: the data structures every later feature assumes.
 
-- ⬜ B1. Industry Classification (Part 2): `industries` + `sub_industries` + `funder_industry_preferences` tables, seed all 25 industries + sub-industries + baseline appetite matrix. Clients gain `industry_id` (migrate free-text sector).
-- ⬜ B2. Lead Entry + Qualification (Part 2): `leads` table, owner manual-entry form (full field set), qualification workflow (4 stages, 15 standard reasons), auto-create deal on "Qualified". Loaded-on-behalf fields (Part 4) included now. Fires LEAD_CREATED_FOR_YOU notification (owner-entered for Doctor).
+- ✅ B1. Industry Classification (Part 2): `industries` + `sub_industries` + `funder_industry_preferences` tables, seed all 25 industries + sub-industries + baseline appetite matrix. Clients gain `industry_id` (migrate free-text sector). (Applied + verified live.)
+- 🔨 B2. Lead Entry + Qualification (Part 2): `leads` table, owner manual-entry form (full field set), qualification workflow (4 stages, 15 standard reasons), auto-create deal on "Qualified". Loaded-on-behalf fields (Part 4) included now. Fires LEAD_CREATED_FOR_YOU notification (owner-entered for Doctor). — B2.1 (lead entry) + B2.2 (`qualify_lead` workflow) DONE and live; B2.3 (duplicate detection at entry, activity logging + notifications on lead events) NEXT.
 - ⬜ B3. Document Management upgrade (Part 6 M1, core slice): full taxonomy enum, version control, expiry dates + expiry alerts, metadata fields. (OCR, external share links, e-signatures deferred to Phase E/F.)
 - ⬜ B4. Client Story basic (Part 2): `client_stories` + `call_logs` tables, Story tab + Call Log tab on client detail. First real capture: Fepa Sechaba (Tumi).
 - ⬜ B5. Data validation pass (Part 6 M6, core slice): SA ID Luhn check, CIPC format, cell format, duplicate detection on client/lead creation.
