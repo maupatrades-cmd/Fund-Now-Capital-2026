@@ -44,6 +44,7 @@ export const ACTIVITY_ENTITY_TYPES = [
   { value: "client", label: "Client" },
   { value: "client_contact", label: "Contact" },
   { value: "commission_record", label: "Commission" },
+  { value: "lead", label: "Lead" },
 ] as const;
 
 const EVENT_LABEL = new Map<string, string>(ACTIVITY_EVENT_TYPES.map((e) => [e.value, e.label]));
@@ -63,6 +64,7 @@ export const EVENT_BADGE: Record<string, string> = {
   DELETE: "bg-red-100 text-red-700 ring-red-600/20",
   STAGE_CHANGE: "bg-amber-100 text-amber-800 ring-amber-600/20",
   SUBMISSION: "bg-brand-navy/10 text-brand-navy ring-brand-navy/20",
+  QUALIFICATION: "bg-brand-teal/10 text-brand-teal ring-brand-teal/20",
 };
 
 export function eventBadge(value: string): string {

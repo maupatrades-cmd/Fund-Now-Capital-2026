@@ -24,6 +24,7 @@ import {
   type Lead,
 } from "@/hooks/useLeads";
 import { one } from "@/hooks/useClients";
+import { ActivityFeed } from "@/components/activity/ActivityFeed";
 
 const labelList = (options: { value: string; label: string }[], values: string[] | null) =>
   values && values.length ? values.map((v) => labelFor(options, v)).join(", ") : null;
@@ -138,6 +139,10 @@ export default function LeadDetailPage() {
           <Info label="Initial notes" value={lead.initial_notes} />
         </Section>
       </div>
+
+      <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+        <ActivityFeed entityId={lead.id} />
+      </section>
     </div>
   );
 }

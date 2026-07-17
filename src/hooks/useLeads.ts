@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { invalidateActivity } from "@/hooks/useActivity";
 
 type Named = { name: string } | { name: string }[] | null;
 
@@ -112,6 +113,25 @@ export type LeadFilters = {
   to?: string; // ISO date (inclusive)
 };
 
+// One candidate match from find_lead_duplicates (B2.3). severity 'block' is the
+// CIPC-vs-lead hard stop (the server rejects it too); 'warn' is advisory.
+export type LeadDuplicate = {
+  match_kind: "cipc" | "name" | "email" | "cell";
+  severity: "block" | "warn";
+  entity: "lead" | "client";
+  entity_id: string;
+  business_name: string;
+  similarity: number;
+};
+
+export type DuplicateCheckArgs = {
+  business_name: string;
+  cipc_number?: string | null;
+  contact_email?: string | null;
+  contact_cell?: string | null; // already normalised (0XXXXXXXXX)
+  exclude_lead_id?: string | null;
+};
+
 export function useLeads(filters: LeadFilters = {}) {
   return useQuery({
     queryKey: ["leads", filters],
@@ -200,6 +220,26 @@ export function useProfileNames() {
   });
 }
 
+// Advisory duplicate lookup (B2.3). Returns candidate matches; the caller (the
+// Add-Lead form) hard-blocks on any severity='block' and requires typed
+// confirmation on 'warn' rows. The DB also independently rejects a CIPC-vs-lead
+// collision, so a bypassed warning can never create a CIPC duplicate.
+export function useCheckLeadDuplicates() {
+  return useMutation({
+    mutationFn: async (args: DuplicateCheckArgs): Promise<LeadDuplicate[]> => {
+      const { data, error } = await supabase.rpc("find_lead_duplicates", {
+        p_business_name: args.business_name,
+        p_cipc: args.cipc_number ?? null,
+        p_email: args.contact_email ?? null,
+        p_cell: args.contact_cell ?? null,
+        p_exclude_lead_id: args.exclude_lead_id ?? null,
+      });
+      if (error) throw error;
+      return (data ?? []) as LeadDuplicate[];
+    },
+  });
+}
+
 export function useCreateLead() {
   const qc = useQueryClient();
   return useMutation({
@@ -215,7 +255,10 @@ export function useCreateLead() {
       if (error) throw error;
       return data as unknown as Lead;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      invalidateActivity(qc); // the leads trigger writes an activity row (B2.3)
+    },
   });
 }
 
@@ -235,6 +278,7 @@ export function useUpdateLead() {
     onSuccess: (lead) => {
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["lead", lead.id] });
+      invalidateActivity(qc);
     },
   });
 }
@@ -259,6 +303,7 @@ export function useStartQualifying() {
     onSuccess: (_d, id) => {
       qc.invalidateQueries({ queryKey: ["lead", id] });
       qc.invalidateQueries({ queryKey: ["leads"] });
+      invalidateActivity(qc);
     },
   });
 }
@@ -278,6 +323,7 @@ export function useQualifyLead() {
       qc.invalidateQueries({ queryKey: ["lead", id] });
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["deals"] });
+      invalidateActivity(qc);
     },
   });
 }
@@ -303,6 +349,7 @@ export function useMarkNotQualified() {
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ["lead", vars.id] });
       qc.invalidateQueries({ queryKey: ["leads"] });
+      invalidateActivity(qc);
     },
   });
 }

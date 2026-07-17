@@ -93,7 +93,13 @@ export function resolveVariant(eventType: string): EmailVariant {
       return "deal_funded";
     case "COMMISSION_PAID":
       return "commission_paid";
+    // Lead milestones REUSE an existing visual layout (accent icon + shell);
+    // their copy is lead-specific, set in variantContent() by eventType. A
+    // qualified / not-qualified lead borrows the deal_approved layout (positive
+    // milestone); a lead loaded for a partner borrows welcome (introductory).
     case "LEAD_QUALIFIED":
+    case "LEAD_NOT_QUALIFIED":
+      return "deal_approved";
     case "LEAD_CREATED_FOR_YOU":
       return "welcome";
     case "WEEKLY_SUMMARY":
@@ -180,6 +186,64 @@ function variantContent(m: EmailModel, variant: EmailVariant): VariantContent {
   const amt = m.amount?.trim();
   const client = m.clientName?.trim();
   const fallback = (m.bodyText ?? "").trim();
+
+  // Lead events (B2.3) carry no funder/deal hydration — the DB trigger composes
+  // the specifics (business name, deal reference, reason category) into body_text.
+  // Keyed on eventType (not variant) so a lead can reuse the deal_approved /
+  // welcome visual layout while showing lead-appropriate copy. Never emit a real
+  // reason's internal notes here — the trigger already withholds notes from the
+  // partner recipient's body_text.
+  switch (m.eventType) {
+    case "LEAD_QUALIFIED":
+      return {
+        subject: "Lead qualified",
+        h1: "Lead qualified",
+        ctaLabel: "View in CRM",
+        category: "lead",
+        paras: [
+          fallback || "A lead has been qualified.",
+          "Open it in the CRM to review the new deal and move it forward.",
+        ],
+      };
+    case "LEAD_NOT_QUALIFIED":
+      return {
+        subject: "Lead not qualified",
+        h1: "Lead not qualified",
+        ctaLabel: "View in CRM",
+        category: "lead",
+        paras: [
+          fallback || "A lead was not qualified.",
+          "Open the CRM for the full context.",
+        ],
+      };
+    case "LEAD_CREATED_FOR_YOU":
+      return {
+        subject: "A new lead has been loaded for you",
+        h1: "A new lead for you",
+        ctaLabel: "View in CRM",
+        category: "lead",
+        paras: [
+          fallback || "A new lead has been loaded on your behalf.",
+          "Sign in to the CRM to see the details and track its progress.",
+        ],
+      };
+    case "LEAD_STARTED_QUALIFICATION":
+      return {
+        subject: "Lead qualification started",
+        h1: "Qualification started",
+        ctaLabel: "View in CRM",
+        category: "lead",
+        paras: [fallback || "A lead has moved into qualification."],
+      };
+    case "LEAD_UPDATED":
+      return {
+        subject: "Lead updated",
+        h1: "Lead updated",
+        ctaLabel: "View in CRM",
+        category: "lead",
+        paras: [fallback || "A lead was updated."],
+      };
+  }
 
   switch (variant) {
     case "welcome":
