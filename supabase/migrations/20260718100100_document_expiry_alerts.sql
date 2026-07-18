@@ -93,8 +93,7 @@ create table if not exists public.document_expiry_alerts (
 
 alter table public.document_expiry_alerts enable row level security;
 
--- Owner-only read (the trail is written by the SECURITY DEFINER sweep, never
--- through the API — no insert/update/delete policy exists).
+-- RLS: owner-only SELECT, no INSERT/UPDATE/DELETE policies. This mirrors activity_logs (SPEC.md S5) — a SECURITY DEFINER-written audit/dedup ledger that is intentionally immutable through the API. Partner read is deliberately excluded per CLAUDE.md rule 7 (extended in SPEC.md S6): this table references documents including bank statements and other PII-excluded types, so exposing alert metadata to partners would leak information about documents they cannot see.
 drop policy if exists "document_expiry_alerts_owner_read" on public.document_expiry_alerts;
 create policy "document_expiry_alerts_owner_read" on public.document_expiry_alerts
   for select to authenticated using (public.is_owner());
@@ -198,13 +197,30 @@ declare
   v_label text;
   v_link  text;
   v_when  text;
+  v_claimed boolean;
   v_count integer := 0;
 begin
   if v_owner is null then
-    return 0;  -- no owner to notify
+    -- No owner to notify, but still keep the lifecycle column truthful:
+    -- past-expiry docs must flip active → expired regardless of notification.
+    perform public.mark_expired_documents();
+    return 0;
   end if;
 
   for r in select * from public.document_expiry_due(current_date) loop
+    -- Claim the (document, threshold) alert BEFORE composing/emitting so two
+    -- concurrent sweeps can't both pass document_expiry_due() and double-send.
+    -- ON CONFLICT DO NOTHING returns no row on a lost race → v_claimed is NULL;
+    -- only the sweep that actually inserts the ledger row emits (claim-then-act).
+    insert into public.document_expiry_alerts (document_id, alert_type)
+    values (r.document_id, r.alert_type)
+    on conflict (document_id, alert_type) do nothing
+    returning true into v_claimed;
+
+    if not coalesce(v_claimed, false) then
+      continue;  -- another sweep already claimed this alert; skip emission
+    end if;
+
     v_label := public.document_type_label(r.document_type);
     v_link  := case when r.client_id is not null
                     then '/clients/' || r.client_id::text
@@ -216,7 +232,7 @@ begin
     v_title := case r.alert_type
                  when 'DOCUMENT_EXPIRED'      then 'Document expired'
                  when 'DOCUMENT_EXPIRING_7D'  then 'Document expiring soon'
-                 else                              'Document expiring in 30 days'
+                 else                              'Document expiring within 30 days'
                end;
 
     if r.is_period_scoped then
@@ -240,10 +256,6 @@ begin
         'expiry_date',   r.expiry_date
       )
     );
-
-    insert into public.document_expiry_alerts (document_id, alert_type)
-    values (r.document_id, r.alert_type)
-    on conflict (document_id, alert_type) do nothing;
 
     v_count := v_count + 1;
   end loop;
@@ -328,13 +340,13 @@ begin
   -- (i) buckets
   if (select alert_type from public.document_expiry_due(current_date) where document_id = v_d33) is not null then
     raise exception 'expiry assert FAIL: 33-day doc should not be due'; end if;
-  if (select alert_type from public.document_expiry_due(current_date) where document_id = v_d30) <> 'DOCUMENT_EXPIRING_30D' then
+  if (select alert_type from public.document_expiry_due(current_date) where document_id = v_d30) is distinct from 'DOCUMENT_EXPIRING_30D' then
     raise exception 'expiry assert FAIL: 30-day bucket'; end if;
-  if (select alert_type from public.document_expiry_due(current_date) where document_id = v_d7) <> 'DOCUMENT_EXPIRING_7D' then
+  if (select alert_type from public.document_expiry_due(current_date) where document_id = v_d7) is distinct from 'DOCUMENT_EXPIRING_7D' then
     raise exception 'expiry assert FAIL: 7-day bucket'; end if;
-  if (select alert_type from public.document_expiry_due(current_date) where document_id = v_d0) <> 'DOCUMENT_EXPIRING_7D' then
+  if (select alert_type from public.document_expiry_due(current_date) where document_id = v_d0) is distinct from 'DOCUMENT_EXPIRING_7D' then
     raise exception 'expiry assert FAIL: expires-today should be urgent (7D), not expired'; end if;
-  if (select alert_type from public.document_expiry_due(current_date) where document_id = v_dexp) <> 'DOCUMENT_EXPIRED' then
+  if (select alert_type from public.document_expiry_due(current_date) where document_id = v_dexp) is distinct from 'DOCUMENT_EXPIRED' then
     raise exception 'expiry assert FAIL: past-expiry bucket'; end if;
 
   -- (ii) dedup: once recorded, the same (doc, threshold) is no longer due
@@ -354,8 +366,11 @@ begin
   if (select status from public.documents where id = v_darch) <> 'archived' then
     raise exception 'expiry assert FAIL: archived doc wrongly flipped to expired'; end if;
 
-  -- cleanup (ON DELETE CASCADE clears the dedup row too)
-  delete from public.documents where storage_path like 'expchk/%';
+  -- cleanup (ON DELETE CASCADE clears the dedup row too). Scoped to the six
+  -- synthetic IDs created above — never a storage_path prefix, so a real
+  -- production doc can't be caught by an incidental path collision.
+  delete from public.documents
+   where id in (v_d33, v_d30, v_d7, v_d0, v_dexp, v_darch);
   raise notice 'document expiry assertions passed';
 end $$;
 

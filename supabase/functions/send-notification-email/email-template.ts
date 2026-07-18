@@ -255,7 +255,7 @@ function variantContent(m: EmailModel, variant: EmailVariant): VariantContent {
     // full, pack-aware specifics into body_text (fallback); we add a short CTA line.
     case "DOCUMENT_EXPIRING_30D":
       return {
-        subject: "Document expiring in 30 days",
+        subject: "Document expiring within 30 days",
         h1: "Document expiring soon",
         ctaLabel: "View in CRM",
         category: "document",

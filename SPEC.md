@@ -516,7 +516,7 @@ Fund Now Capital (Pty) Ltd · CIPC 2026/066284/07 · 010 102 0534 · hello@fundn
 - **`DEAL_FUNDED`** → **`deal_funded`** (a fifth variant reusing the `deal_approved` layout + check-in-circle icon), with locked copy: subject/H1 "Deal funded"; body "`{funder_display}` has funded `{deal_reference}` for `{amount}`. The advance to `{client_name}` is complete." then "Open the deal to record the funded date and start the commission process."; CTA "View deal in CRM"; category `deal`.
 - **Money notifications** (`COMMISSION_PAID`, invoice paid, payment received) → **`commission_paid`** layout.
 - **Digests / summaries** (weekly summary, Doctor's monthly statements) → **`weekly_summary`** layout.
-- **Onboarding / first-touch** (welcome, `LEAD_QUALIFIED`, `LEAD_CREATED_FOR_YOU`, client Trust Pack cover) → **`welcome`** layout.
+- **Onboarding / first-touch** (welcome, `LEAD_CREATED_FOR_YOU`, client Trust Pack cover) → **`welcome`** layout. (`LEAD_QUALIFIED` is a positive milestone → `deal_approved`; see the authoritative tone table below.)
 
 (`deal_approved` + `commission_paid` share the green-success-band renderer; `welcome` + `weekly_summary` are live-dormant until B2 / C6.)
 
