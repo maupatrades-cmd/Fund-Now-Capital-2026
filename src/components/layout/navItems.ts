@@ -7,6 +7,7 @@ import {
   Activity,
   Factory,
   ClipboardList,
+  FolderOpen,
   type LucideIcon,
 } from "lucide-react";
 
@@ -22,6 +23,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/leads", label: "Leads", icon: ClipboardList },
   { to: "/pipeline", label: "Pipeline", icon: GitBranch },
   { to: "/clients", label: "Clients", icon: Users },
+  { to: "/documents", label: "Documents", icon: FolderOpen },
   { to: "/funders", label: "Funders", icon: Landmark },
   { to: "/calculator", label: "Calculator", icon: Calculator },
   { to: "/activity", label: "Activity", icon: Activity },

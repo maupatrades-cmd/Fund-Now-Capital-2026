@@ -186,11 +186,7 @@ export default function DealDetailPage() {
           />
         </section>
         <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
-          <DealDocuments
-            dealId={deal.id}
-            clientId={deal.client_id}
-            referralPartnerId={deal.referral_partner_id}
-          />
+          <DealDocuments clientId={deal.client_id} />
         </section>
       </div>
 

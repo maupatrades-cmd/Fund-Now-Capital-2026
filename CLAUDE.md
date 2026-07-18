@@ -47,6 +47,8 @@ NEXT: B3 Document Management upgrade (SPEC S6 core slice) · A13 paperwork (exte
 ## Working style
 Small verified stages. One PR per logical change; open PR, WAIT for CodeRabbit, owner merges. After any schema merge: apply migration to live DB, verify, then owner runs smoke test. Tell her what you did and what to test — never chain ten silent changes. Ask before destructive migrations. Never discuss real funder rates in partner-facing code or copy.
 
+Docstring coverage is intentionally deprioritized in favor of inline comments explaining WHY and TypeScript types documenting SHAPE. CodeRabbit's default 80% docstring threshold is treated as informational only.
+
 For any migration that adds FK columns to a table with existing data, use `NOT VALID` for the FK constraints and build their indexes with `CREATE INDEX CONCURRENTLY` in a follow-up migration (outside any transaction — `CONCURRENTLY` cannot run inside one), then `VALIDATE CONSTRAINT`. Never use inline `REFERENCES` or plain `CREATE INDEX` on populated tables — these acquire write-blocking locks. Applies to every FK migration in Phases B through F.
 
 PostgREST `!inner` joins require the related row to exist. Any join on a nullable FK column MUST use `!left`, not `!inner`, or legacy rows will vanish from queries. Applies especially to `industry_id`, `sub_industry_id`, and any future nullable FK to leads/deals/clients relationships.

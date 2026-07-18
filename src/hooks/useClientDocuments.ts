@@ -1,80 +1,134 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import type {
+  DocumentCategory,
+  DocumentStatus,
+  DocumentType,
+  UploadSource,
+} from "@/lib/documents";
 
 const BUCKET = "documents";
 
-export type ClientDocument = {
+// A row of public.documents (B3.1 schema). Shared by every document surface.
+export type DocumentRow = {
   id: string;
   client_id: string | null;
+  lead_id: string | null;
   deal_id: string | null;
   referral_partner_id: string | null;
-  file_name: string;
+  filename: string;
   storage_path: string;
-  doc_type: string;
+  document_type: DocumentType;
+  category: DocumentCategory;
+  upload_source: UploadSource;
   file_size_bytes: number | null;
   mime_type: string | null;
   uploaded_by: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  expiry_date: string | null;
+  version_number: number;
+  is_current_version: boolean;
+  is_period_scoped: boolean;
+  superseded_by: string | null;
+  status: DocumentStatus;
+  received_from: string | null;
+  notes: string | null;
+  tags: string[] | null;
   created_at: string;
+  updated_at: string;
 };
 
-export function useClientDocuments(clientId: string | undefined) {
-  return useQuery({
-    queryKey: ["client-documents", clientId],
-    enabled: !!clientId,
-    queryFn: async (): Promise<ClientDocument[]> => {
-      const { data, error } = await supabase
-        .from("documents")
-        .select("*")
-        .eq("client_id", clientId!)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as ClientDocument[];
-    },
-  });
-}
+// Columns every surface selects. Explicit (not "*") so a future column can't
+// silently change payload shape, and so the list stays readable.
+export const DOCUMENT_COLUMNS =
+  "id, client_id, lead_id, deal_id, referral_partner_id, filename, storage_path, " +
+  "document_type, category, upload_source, file_size_bytes, mime_type, uploaded_by, " +
+  "period_start, period_end, expiry_date, version_number, is_current_version, " +
+  "is_period_scoped, superseded_by, status, received_from, notes, tags, created_at, updated_at";
+
+export type UploadDocumentInput = {
+  clientId: string;
+  referralPartnerId: string | null;
+  file: File;
+  documentType: DocumentType;
+  // Period-scoped types (bank statements etc.) carry a coverage window.
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  // Optional owner override; when omitted the DB applies the default-expiry rule.
+  expiryDate?: string | null;
+  tags?: string[];
+  notes?: string | null;
+};
 
 function safeName(name: string): string {
   return name.replace(/[^\w.-]+/g, "_");
 }
 
+export function useClientDocuments(clientId: string | undefined) {
+  return useQuery({
+    queryKey: ["client-documents", clientId],
+    enabled: !!clientId,
+    queryFn: async (): Promise<DocumentRow[]> => {
+      const { data, error } = await supabase
+        .from("documents")
+        .select(DOCUMENT_COLUMNS)
+        .eq("client_id", clientId!)
+        .order("document_type", { ascending: true })
+        .order("version_number", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as DocumentRow[];
+    },
+  });
+}
+
 export function useUploadDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      clientId,
-      referralPartnerId,
-      file,
-      docType,
-    }: {
-      clientId: string;
-      referralPartnerId: string | null;
-      file: File;
-      docType: string;
-    }) => {
-      const path = `${clientId}/${crypto.randomUUID()}-${safeName(file.name)}`;
+    mutationFn: async (input: UploadDocumentInput) => {
+      const { clientId, referralPartnerId, file, documentType } = input;
+      // Storage path convention (Gap 2): {entity_type}/{entity_id}/{uuid}-{name}.
+      const path = `clients/${clientId}/${crypto.randomUUID()}-${safeName(file.name)}`;
       const { error: upErr } = await supabase.storage
         .from(BUCKET)
         .upload(path, file, { contentType: file.type || undefined, upsert: false });
       if (upErr) throw upErr;
 
-      const uid = (await supabase.auth.getUser()).data.user?.id ?? null;
-      const { error: insErr } = await supabase.from("documents").insert({
-        client_id: clientId,
-        referral_partner_id: referralPartnerId,
-        file_name: file.name,
-        storage_path: path,
-        doc_type: docType,
-        file_size_bytes: file.size,
-        mime_type: file.type || null,
-        uploaded_by: uid,
-      });
-      if (insErr) {
-        // Best-effort rollback; surface the original insert error regardless.
+      // uploaded_by defaults to auth.uid() server-side (audit-truth, immutable);
+      // upload_source defaults to 'owner'. We RETURNING id and check the row
+      // count so a silent RLS failure surfaces loudly (CLAUDE.md standing rule).
+      const { data, error: insErr } = await supabase
+        .from("documents")
+        .insert({
+          client_id: clientId,
+          referral_partner_id: referralPartnerId,
+          filename: file.name,
+          storage_path: path,
+          document_type: documentType,
+          upload_source: "owner",
+          file_size_bytes: file.size,
+          mime_type: file.type || null,
+          period_start: input.periodStart ?? null,
+          period_end: input.periodEnd ?? null,
+          expiry_date: input.expiryDate ?? null,
+          tags: input.tags && input.tags.length ? input.tags : null,
+          notes: input.notes ?? null,
+        })
+        .select("id");
+      if (insErr || !data || data.length !== 1) {
+        // Best-effort rollback of the orphaned file. Log a NON-PII trace id
+        // (document type + client UUID + timestamp) so a "my upload didn't save"
+        // report is traceable — never the storage path, which embeds the client
+        // id and the original filename.
         const { error: rmErr } = await supabase.storage.from(BUCKET).remove([path]);
         if (rmErr) {
-          console.warn("Orphaned upload left in storage:", path, rmErr.message);
+          console.warn(
+            `Document storage rollback failed (type=${documentType} client=${clientId} at=${new Date().toISOString()}):`,
+            rmErr.message,
+          );
         }
-        throw insErr;
+        throw insErr ?? new Error("Upload was blocked (no row created).");
       }
     },
     onSuccess: (_d, vars) =>
@@ -93,23 +147,55 @@ export function useDeleteDocument() {
       storagePath: string;
       clientId: string;
     }) => {
-      // Remove the file first; if that fails, keep the metadata row so the
-      // document isn't orphaned in storage — the user can retry.
-      const { error: rmErr } = await supabase.storage.from(BUCKET).remove([storagePath]);
-      if (rmErr) throw rmErr;
-      const { error } = await supabase.from("documents").delete().eq("id", id);
+      // Delete the metadata row FIRST (RETURNING id + affected-row-count check
+      // per standing rule 4) so an RLS-blocked or stale delete can't destroy the
+      // file while leaving orphan metadata behind. Only after the row is gone do
+      // we remove the storage object; a cleanup failure is a warning, not a crash
+      // (worst case is an orphan file, never an orphan row pointing at nothing).
+      const { data, error } = await supabase
+        .from("documents")
+        .delete()
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length !== 1) throw new Error("Delete was blocked (no row removed).");
+
+      const { error: rmErr } = await supabase.storage.from(BUCKET).remove([storagePath]);
+      if (rmErr) {
+        console.warn(
+          `Document storage cleanup failed (id=${id} at=${new Date().toISOString()}):`,
+          rmErr.message,
+        );
+      }
     },
     onSuccess: (_d, vars) =>
       qc.invalidateQueries({ queryKey: ["client-documents", vars.clientId] }),
   });
 }
 
-// Private bucket: fetch a short-lived signed URL to view/download a file.
+// Private bucket: short-lived signed URL to view/download.
 export async function getDocumentUrl(storagePath: string): Promise<string> {
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrl(storagePath, 60);
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, 60);
   if (error) throw error;
   return data.signedUrl;
+}
+
+// Open a private document in a new tab. The single implementation shared by every
+// download surface (client tab, deal view, global page) so their behaviour can't
+// diverge. The tab is opened SYNCHRONOUSLY — before awaiting the signed URL — to
+// preserve the click's user-activation, otherwise Safari/Firefox popup blockers
+// kill the tab across the async boundary. Falls back to same-tab navigation when
+// a strict blocker returns null.
+export function openDocument(storagePath: string): void {
+  const tab = window.open("", "_blank");
+  if (tab) tab.opener = null;
+  getDocumentUrl(storagePath)
+    .then((url) => {
+      if (tab) tab.location.href = url;
+      else window.location.href = url;
+    })
+    .catch((e: unknown) => {
+      tab?.close();
+      toast.error((e as Error).message || "Couldn't open document");
+    });
 }

@@ -6,24 +6,7 @@ export function referredByMeta(partnerName: string | null) {
   return { label: partnerName, className: "bg-brand-teal/10 text-brand-teal ring-brand-teal/20" };
 }
 
-// Document types stored on public.documents.doc_type. Bank statements are
-// owner-only (partner RLS excludes them).
-export const DOCUMENT_TYPES = [
-  { value: "bank_statement", label: "Bank statement", ownerOnly: true },
-  { value: "id_document", label: "ID document", ownerOnly: false },
-  { value: "financials", label: "Financials", ownerOnly: false },
-  { value: "contract", label: "Contract", ownerOnly: false },
-  { value: "invoice", label: "Invoice", ownerOnly: false },
-  { value: "other", label: "Other", ownerOnly: false },
-] as const;
-
-export function docTypeLabel(value: string): string {
-  return DOCUMENT_TYPES.find((d) => d.value === value)?.label ?? value;
-}
-
-export function isBankStatement(value: string): boolean {
-  return value === "bank_statement";
-}
+// Document taxonomy moved to src/lib/documents.ts (B3.1 — full 52-type enum).
 
 // ---- South African validation -------------------------------------------
 // Mobile numbers: 0XX XXX XXXX or +27 XX XXX XXXX, starting 6/7/8. Spaces and
