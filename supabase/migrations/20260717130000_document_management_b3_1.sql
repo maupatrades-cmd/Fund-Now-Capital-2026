@@ -285,8 +285,13 @@ begin
       foreign key (lead_id) references public.leads(id) on delete restrict not valid;
   end if;
   if not exists (select 1 from pg_constraint where conname = 'documents_superseded_by_fkey') then
+    -- DEFERRABLE INITIALLY DEFERRED: the versioning trigger sets a prior row's
+    -- superseded_by = new.id from a BEFORE INSERT trigger, i.e. before the new row
+    -- is written. A non-deferrable self-FK would reject that mid-transaction; with
+    -- the check deferred to COMMIT, the new row exists by then and the FK holds.
     alter table public.documents add constraint documents_superseded_by_fkey
-      foreign key (superseded_by) references public.documents(id) on delete set null not valid;
+      foreign key (superseded_by) references public.documents(id)
+      on delete set null deferrable initially deferred not valid;
   end if;
 end $$;
 
