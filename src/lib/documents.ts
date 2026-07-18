@@ -221,7 +221,14 @@ export function expiryStatus(
   if (!expiryDate) return "none";
   const exp = new Date(expiryDate + "T00:00:00").getTime();
   if (!Number.isFinite(exp)) return "none";
-  const days = Math.floor((exp - now.getTime()) / 86_400_000);
+  // Compare whole CALENDAR days, not raw instants: normalise `now` to the start
+  // of today so the diff is midnight-to-midnight. Using Date.now() directly would
+  // make (exp - now) fractionally negative any time after midnight on the expiry
+  // date itself, flooring to -1 and marking the document "expired" a day early —
+  // a document is only expired the day AFTER its expiry date. round() keeps the
+  // boundary exact across DST (where a day isn't precisely 86,400,000 ms).
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const days = Math.round((exp - today) / 86_400_000);
   if (days < 0) return "expired";
   if (days <= 7) return "urgent";
   if (days <= 30) return "soon";

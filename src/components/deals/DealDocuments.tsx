@@ -1,7 +1,6 @@
 import { AlertTriangle } from "lucide-react";
-import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import { useClientDocuments, getDocumentUrl, type DocumentRow } from "@/hooks/useClientDocuments";
+import { useClientDocuments, openDocument } from "@/hooks/useClientDocuments";
 import { DocumentList } from "@/components/documents/DocumentList";
 import { docTypeLabel, expiryStatus, formatDocDate } from "@/lib/documents";
 
@@ -10,15 +9,6 @@ import { docTypeLabel, expiryStatus, formatDocDate } from "@/lib/documents";
 // is Phase E3 — B3.1 only reads.
 export function DealDocuments({ clientId }: { clientId: string | null }) {
   const { data: docs, isLoading } = useClientDocuments(clientId ?? undefined);
-
-  const onDownload = async (d: DocumentRow) => {
-    try {
-      const url = await getDocumentUrl(d.storage_path);
-      window.open(url, "_blank", "noopener");
-    } catch (e) {
-      toast.error((e as Error).message || "Couldn't open document");
-    }
-  };
 
   const current = (docs ?? []).filter((d) => d.is_current_version);
   const expiring = current.filter((d) => {
@@ -61,7 +51,7 @@ export function DealDocuments({ clientId }: { clientId: string | null }) {
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : docs && docs.length > 0 ? (
-        <DocumentList docs={docs} onDownload={onDownload} />
+        <DocumentList docs={docs} onDownload={(d) => openDocument(d.storage_path)} />
       ) : (
         <p className="text-sm text-muted-foreground">
           No documents on the linked client yet.

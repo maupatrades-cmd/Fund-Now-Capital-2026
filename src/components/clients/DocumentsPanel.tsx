@@ -5,8 +5,7 @@ import {
   useClientDocuments,
   useUploadDocument,
   useDeleteDocument,
-  getDocumentUrl,
-  type DocumentRow,
+  openDocument,
 } from "@/hooks/useClientDocuments";
 import { DocumentList } from "@/components/documents/DocumentList";
 import { DocumentsEmptyState } from "@/components/documents/DocumentsEmptyState";
@@ -89,15 +88,6 @@ export function DocumentsPanel({
       toast.error((e as Error).message || "Upload failed");
     } finally {
       if (fileRef.current) fileRef.current.value = "";
-    }
-  };
-
-  const onDownload = async (d: DocumentRow) => {
-    try {
-      const url = await getDocumentUrl(d.storage_path);
-      window.open(url, "_blank", "noopener");
-    } catch (e) {
-      toast.error((e as Error).message || "Couldn't open document");
     }
   };
 
@@ -243,8 +233,13 @@ export function DocumentsPanel({
       ) : filtered.length > 0 ? (
         <DocumentList
           docs={filtered}
-          onDownload={onDownload}
-          onDelete={(d) => del.mutate({ id: d.id, storagePath: d.storage_path, clientId })}
+          onDownload={(d) => openDocument(d.storage_path)}
+          onDelete={(d) =>
+            del.mutate(
+              { id: d.id, storagePath: d.storage_path, clientId },
+              { onError: (e) => toast.error((e as Error).message || "Delete failed") },
+            )
+          }
         />
       ) : docs && docs.length > 0 ? (
         <p className="py-6 text-center text-sm text-muted-foreground">No documents match that tag.</p>

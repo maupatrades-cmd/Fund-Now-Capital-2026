@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import type {
   DocumentCategory,
@@ -116,9 +117,17 @@ export function useUploadDocument() {
         })
         .select("id");
       if (insErr || !data || data.length !== 1) {
-        // Best-effort rollback of the orphaned file; surface the real error.
+        // Best-effort rollback of the orphaned file. Log a NON-PII trace id
+        // (document type + client UUID + timestamp) so a "my upload didn't save"
+        // report is traceable — never the storage path, which embeds the client
+        // id and the original filename.
         const { error: rmErr } = await supabase.storage.from(BUCKET).remove([path]);
-        if (rmErr) console.warn("Orphaned upload left in storage:", path, rmErr.message);
+        if (rmErr) {
+          console.warn(
+            `Document storage rollback failed (type=${documentType} client=${clientId} at=${new Date().toISOString()}):`,
+            rmErr.message,
+          );
+        }
         throw insErr ?? new Error("Upload was blocked (no row created).");
       }
     },
@@ -138,8 +147,11 @@ export function useDeleteDocument() {
       storagePath: string;
       clientId: string;
     }) => {
-      const { error: rmErr } = await supabase.storage.from(BUCKET).remove([storagePath]);
-      if (rmErr) throw rmErr;
+      // Delete the metadata row FIRST (RETURNING id + affected-row-count check
+      // per standing rule 4) so an RLS-blocked or stale delete can't destroy the
+      // file while leaving orphan metadata behind. Only after the row is gone do
+      // we remove the storage object; a cleanup failure is a warning, not a crash
+      // (worst case is an orphan file, never an orphan row pointing at nothing).
       const { data, error } = await supabase
         .from("documents")
         .delete()
@@ -147,6 +159,14 @@ export function useDeleteDocument() {
         .select("id");
       if (error) throw error;
       if (!data || data.length !== 1) throw new Error("Delete was blocked (no row removed).");
+
+      const { error: rmErr } = await supabase.storage.from(BUCKET).remove([storagePath]);
+      if (rmErr) {
+        console.warn(
+          `Document storage cleanup failed (id=${id} at=${new Date().toISOString()}):`,
+          rmErr.message,
+        );
+      }
     },
     onSuccess: (_d, vars) =>
       qc.invalidateQueries({ queryKey: ["client-documents", vars.clientId] }),
@@ -158,4 +178,24 @@ export async function getDocumentUrl(storagePath: string): Promise<string> {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, 60);
   if (error) throw error;
   return data.signedUrl;
+}
+
+// Open a private document in a new tab. The single implementation shared by every
+// download surface (client tab, deal view, global page) so their behaviour can't
+// diverge. The tab is opened SYNCHRONOUSLY — before awaiting the signed URL — to
+// preserve the click's user-activation, otherwise Safari/Firefox popup blockers
+// kill the tab across the async boundary. Falls back to same-tab navigation when
+// a strict blocker returns null.
+export function openDocument(storagePath: string): void {
+  const tab = window.open("", "_blank");
+  if (tab) tab.opener = null;
+  getDocumentUrl(storagePath)
+    .then((url) => {
+      if (tab) tab.location.href = url;
+      else window.location.href = url;
+    })
+    .catch((e: unknown) => {
+      tab?.close();
+      toast.error((e as Error).message || "Couldn't open document");
+    });
 }

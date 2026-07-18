@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 import { DocumentRowItem } from "@/components/documents/DocumentList";
 import { DocumentsEmptyState } from "@/components/documents/DocumentsEmptyState";
-import { getDocumentUrl, type DocumentRow } from "@/hooks/useClientDocuments";
+import { openDocument, type DocumentRow } from "@/hooks/useClientDocuments";
 import { useAllDocuments, owningEntityName, type AllDocumentRow } from "@/hooks/useDocuments";
 import {
   DOCUMENT_CATEGORIES,
@@ -69,15 +68,6 @@ export default function DocumentsPage() {
       return true;
     });
   }, [docs, category, clientId, docType, expiry, tag]);
-
-  const onDownload = async (d: DocumentRow) => {
-    try {
-      const url = await getDocumentUrl(d.storage_path);
-      window.open(url, "_blank", "noopener");
-    } catch (e) {
-      toast.error((e as Error).message || "Couldn't open document");
-    }
-  };
 
   const clearFilters = () => {
     setCategory("all");
@@ -204,7 +194,7 @@ export default function DocumentsPage() {
             <DocumentRowItem
               key={d.id}
               doc={d}
-              onDownload={onDownload}
+              onDownload={(row) => openDocument(row.storage_path)}
               clientName={owningEntityName(d)}
             />
           ))}
