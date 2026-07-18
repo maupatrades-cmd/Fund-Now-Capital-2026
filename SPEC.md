@@ -167,6 +167,8 @@ Views: owner chronological timeline (filter user/event/entity/date, export CSV);
 
 ## S6. DOCUMENT MANAGEMENT UPGRADE (Part 6 M1 — Roadmap B3 core, E/F extras)
 
+**Build status (B3.1 — shipped ✅, applied + verified live):** schema (PR #42 + deferrable-FK hotfix #43) and owner-facing UI (PR #44) are live. The as-built detail below is the source of truth. 9-point smoke test passed against real production data (Mama Mabase JV: CIPC + 2 concurrent bank-statement months with versioning — the first real documents in the CRM). Remaining B3 slices: **expiry-alert automation** (DOCUMENT_EXPIRING_* via pg_cron — not yet built) and **B3.2** (per-document verification workflow — not yet built; previewed at the end of this section).
+
 B3 core slice — turn the thin `documents` table into a governed store: full
 taxonomy enum, audit-truth provenance, type-aware version control, period-scoped
 "packs", expiry defaults + alerts, and a partner-aware RLS matrix. Split into
