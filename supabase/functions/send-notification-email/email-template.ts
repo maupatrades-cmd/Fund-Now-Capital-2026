@@ -104,6 +104,14 @@ export function resolveVariant(eventType: string): EmailVariant {
       return "welcome";
     case "WEEKLY_SUMMARY":
       return "weekly_summary";
+    // Document expiry alerts reuse the weekly_summary (neutral digest) layout —
+    // an informational / action-needed tone, NOT the celebratory deal_approved
+    // band. Their copy is set by eventType in variantContent() from the
+    // DB-composed (pack-aware) body_text.
+    case "DOCUMENT_EXPIRING_30D":
+    case "DOCUMENT_EXPIRING_7D":
+    case "DOCUMENT_EXPIRED":
+      return "weekly_summary";
     default:
       return "generic";
   }
@@ -242,6 +250,41 @@ function variantContent(m: EmailModel, variant: EmailVariant): VariantContent {
         ctaLabel: "View in CRM",
         category: "lead",
         paras: [fallback || "A lead was updated."],
+      };
+    // Document expiry alerts (weekly_summary layout). The DB sweep composes the
+    // full, pack-aware specifics into body_text (fallback); we add a short CTA line.
+    case "DOCUMENT_EXPIRING_30D":
+      return {
+        subject: "Document expiring within 30 days",
+        h1: "Document expiring soon",
+        ctaLabel: "View in CRM",
+        category: "document",
+        paras: [
+          fallback || "A document is expiring within 30 days.",
+          "Open the CRM to review it and upload a current version before it lapses.",
+        ],
+      };
+    case "DOCUMENT_EXPIRING_7D":
+      return {
+        subject: "Document expiring soon",
+        h1: "Document expiring soon",
+        ctaLabel: "View in CRM",
+        category: "document",
+        paras: [
+          fallback || "A document is expiring within 7 days.",
+          "Open the CRM to upload a current version before it lapses.",
+        ],
+      };
+    case "DOCUMENT_EXPIRED":
+      return {
+        subject: "Document expired",
+        h1: "Document expired",
+        ctaLabel: "View in CRM",
+        category: "document",
+        paras: [
+          fallback || "A document has expired.",
+          "Open the CRM to upload a current version.",
+        ],
       };
   }
 
