@@ -1,22 +1,26 @@
-import { useRef, useState } from "react";
-import { Upload, Download, Trash2, FileText, Lock } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Upload } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import {
   useClientDocuments,
   useUploadDocument,
   useDeleteDocument,
   getDocumentUrl,
-  type ClientDocument,
+  type DocumentRow,
 } from "@/hooks/useClientDocuments";
-import { DOCUMENT_TYPES, docTypeLabel, isBankStatement } from "@/lib/clients";
+import { DocumentList } from "@/components/documents/DocumentList";
+import { DocumentsEmptyState } from "@/components/documents/DocumentsEmptyState";
+import {
+  DOCUMENT_CATEGORIES,
+  defaultExpiry,
+  isPeriodScoped,
+  isPartnerExcluded,
+  typesInCategory,
+  type DocumentType,
+} from "@/lib/documents";
 
-function formatSize(bytes: number | null): string {
-  if (!bytes) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+const ctl =
+  "rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
 
 export function DocumentsPanel({
   clientId,
@@ -29,13 +33,58 @@ export function DocumentsPanel({
   const upload = useUploadDocument();
   const del = useDeleteDocument();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [docType, setDocType] = useState("bank_statement");
+
+  const [documentType, setDocumentType] = useState<DocumentType>("bank_statement");
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [expiryTouched, setExpiryTouched] = useState(false);
+  const [tags, setTags] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
+
+  const periodScoped = isPeriodScoped(documentType);
+
+  // Keep the expiry input pre-filled with the type's default rule until the
+  // owner edits it. The DB applies the same rule server-side if left blank.
+  function refreshDefaultExpiry(type: DocumentType, pEnd: string) {
+    if (expiryTouched) return;
+    const def = defaultExpiry(type, new Date(), pEnd || null);
+    setExpiryDate(def ?? "");
+  }
+
+  function onTypeChange(next: DocumentType) {
+    setDocumentType(next);
+    if (!isPeriodScoped(next)) {
+      setPeriodStart("");
+      setPeriodEnd("");
+    }
+    setExpiryTouched(false);
+    const def = defaultExpiry(next, new Date(), isPeriodScoped(next) ? periodEnd || null : null);
+    setExpiryDate(def ?? "");
+  }
+
+  const periodMissing = periodScoped && (!periodStart || !periodEnd);
+  const periodInverted = Boolean(periodStart && periodEnd && periodStart > periodEnd);
+  const canUpload = !upload.isPending && !periodMissing && !periodInverted;
 
   const onFile = async (file: File | undefined) => {
     if (!file) return;
     try {
-      await upload.mutateAsync({ clientId, referralPartnerId, file, docType });
+      await upload.mutateAsync({
+        clientId,
+        referralPartnerId,
+        file,
+        documentType,
+        periodStart: periodScoped ? periodStart : null,
+        periodEnd: periodScoped ? periodEnd : null,
+        expiryDate: expiryDate || null,
+        tags: tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean),
+      });
       toast.success("Document uploaded");
+      setTags("");
     } catch (e) {
       toast.error((e as Error).message || "Upload failed");
     } finally {
@@ -43,7 +92,7 @@ export function DocumentsPanel({
     }
   };
 
-  const onDownload = async (d: ClientDocument) => {
+  const onDownload = async (d: DocumentRow) => {
     try {
       const url = await getDocumentUrl(d.storage_path);
       window.open(url, "_blank", "noopener");
@@ -52,96 +101,155 @@ export function DocumentsPanel({
     }
   };
 
+  // Tag filter (client-side) across the fetched list.
+  const filtered = useMemo(() => {
+    if (!docs) return [];
+    const q = tagFilter.trim().toLowerCase();
+    if (!q) return docs;
+    return docs.filter((d) => (d.tags ?? []).some((t) => t.toLowerCase().includes(q)));
+  }, [docs, tagFilter]);
+
   return (
     <div className="space-y-4">
-      {/* Upload row */}
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-border bg-slate-50 p-4">
-        <select
-          value={docType}
-          onChange={(e) => setDocType(e.target.value)}
-          className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand-teal"
-        >
-          {DOCUMENT_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-        <input
-          ref={fileRef}
-          type="file"
-          className="hidden"
-          onChange={(e) => onFile(e.target.files?.[0])}
-        />
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={upload.isPending}
-          className="inline-flex items-center gap-2 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60"
-        >
-          <Upload className="h-4 w-4" />
-          {upload.isPending ? "Uploading…" : "Upload document"}
-        </button>
-        <span className="text-xs text-muted-foreground">
-          Stored privately. Bank statements are owner-only.
-        </span>
+      {/* Upload form */}
+      <div className="space-y-3 rounded-lg border border-dashed border-border bg-slate-50 p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Document type
+            <select
+              className={ctl}
+              value={documentType}
+              onChange={(e) => onTypeChange(e.target.value as DocumentType)}
+            >
+              {DOCUMENT_CATEGORIES.map((cat) => (
+                <optgroup key={cat.value} label={cat.label}>
+                  {typesInCategory(cat.value).map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+
+          {periodScoped && (
+            <>
+              <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+                Period start
+                <input
+                  type="date"
+                  className={ctl}
+                  value={periodStart}
+                  onChange={(e) => {
+                    setPeriodStart(e.target.value);
+                    refreshDefaultExpiry(documentType, periodEnd);
+                  }}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+                Period end
+                <input
+                  type="date"
+                  className={ctl}
+                  value={periodEnd}
+                  onChange={(e) => {
+                    setPeriodEnd(e.target.value);
+                    refreshDefaultExpiry(documentType, e.target.value);
+                  }}
+                />
+              </label>
+            </>
+          )}
+
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Expiry (optional)
+            <input
+              type="date"
+              className={ctl}
+              value={expiryDate}
+              onChange={(e) => {
+                setExpiryTouched(true);
+                setExpiryDate(e.target.value);
+              }}
+            />
+          </label>
+
+          <label className="flex flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Tags (comma-separated)
+            <input
+              type="text"
+              className={ctl}
+              placeholder="e.g. 2025, absa"
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => onFile(e.target.files?.[0])}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={!canUpload}
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60"
+          >
+            <Upload className="h-4 w-4" />
+            {upload.isPending ? "Uploading…" : "Upload document"}
+          </button>
+          <span className="text-xs text-muted-foreground">
+            {periodMissing
+              ? "Set the statement period first."
+              : periodInverted
+                ? "Period start must be on or before period end."
+                : isPartnerExcluded(documentType)
+                  ? "Stored privately — this type is owner-only (partners never see it)."
+                  : "Stored privately in the documents bucket."}
+          </span>
+        </div>
       </div>
+
+      {/* Tag filter */}
+      {docs && docs.length > 0 && (
+        <div className="flex items-center gap-2">
+          <input
+            type="search"
+            className={`${ctl} w-full max-w-xs`}
+            placeholder="Filter by tag…"
+            value={tagFilter}
+            onChange={(e) => setTagFilter(e.target.value)}
+          />
+          {tagFilter && (
+            <button
+              type="button"
+              onClick={() => setTagFilter("")}
+              className="text-xs font-medium text-brand-teal hover:underline"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {/* List */}
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading documents…</p>
+      ) : filtered.length > 0 ? (
+        <DocumentList
+          docs={filtered}
+          onDownload={onDownload}
+          onDelete={(d) => del.mutate({ id: d.id, storagePath: d.storage_path, clientId })}
+        />
       ) : docs && docs.length > 0 ? (
-        <ul className="divide-y divide-border rounded-lg border border-border">
-          {docs.map((d) => (
-            <li key={d.id} className="flex items-center gap-3 p-3">
-              <FileText className="h-5 w-5 shrink-0 text-brand-teal" />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="truncate text-sm font-medium text-brand-navy">
-                    {d.file_name}
-                  </span>
-                  <Badge className="bg-slate-100 text-slate-600 ring-slate-500/20">
-                    {docTypeLabel(d.doc_type)}
-                  </Badge>
-                  {isBankStatement(d.doc_type) && (
-                    <Badge className="bg-amber-100 text-amber-800 ring-amber-600/20">
-                      <Lock className="mr-1 h-3 w-3" /> Owner-only
-                    </Badge>
-                  )}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {formatSize(d.file_size_bytes)}
-                  {d.file_size_bytes ? " · " : ""}
-                  {new Date(d.created_at).toLocaleDateString("en-ZA", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => onDownload(d)}
-                className="text-muted-foreground hover:text-brand-teal"
-                aria-label={`Download ${d.file_name}`}
-              >
-                <Download className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => del.mutate({ id: d.id, storagePath: d.storage_path, clientId })}
-                className="text-muted-foreground hover:text-red-600"
-                aria-label={`Delete ${d.file_name}`}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </li>
-          ))}
-        </ul>
+        <p className="py-6 text-center text-sm text-muted-foreground">No documents match that tag.</p>
       ) : (
-        <p className="py-6 text-center text-sm text-muted-foreground">
-          No documents uploaded yet.
-        </p>
+        <DocumentsEmptyState />
       )}
     </div>
   );
