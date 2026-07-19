@@ -5,11 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { useClient, one } from "@/hooks/useClients";
 import { ContactsManager } from "@/components/clients/ContactsManager";
 import { DocumentsPanel } from "@/components/clients/DocumentsPanel";
+import { StoryPanel } from "@/components/clients/StoryPanel";
+import { CallLogPanel } from "@/components/clients/CallLogPanel";
 import { referredByMeta } from "@/lib/clients";
 import { formatZAR } from "@/lib/format";
 import { ActivityFeed } from "@/components/activity/ActivityFeed";
 
-type Tab = "overview" | "documents" | "notes" | "activity";
+type Tab = "overview" | "story" | "documents" | "calllog" | "notes" | "activity";
 
 export default function ClientDetailPage() {
   const { id } = useParams();
@@ -61,8 +63,14 @@ export default function ClientDetailPage() {
         <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>
           Overview
         </TabButton>
+        <TabButton active={tab === "story"} onClick={() => setTab("story")}>
+          Story
+        </TabButton>
         <TabButton active={tab === "documents"} onClick={() => setTab("documents")}>
           Documents
+        </TabButton>
+        <TabButton active={tab === "calllog"} onClick={() => setTab("calllog")}>
+          Call Log
         </TabButton>
         <TabButton active={tab === "notes"} onClick={() => setTab("notes")}>
           Notes
@@ -97,9 +105,21 @@ export default function ClientDetailPage() {
         </div>
       )}
 
+      {tab === "story" && (
+        <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+          <StoryPanel clientId={client.id} />
+        </section>
+      )}
+
       {tab === "documents" && (
         <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
           <DocumentsPanel entity={{ kind: "client", id: client.id }} referralPartnerId={client.referral_partner_id} />
+        </section>
+      )}
+
+      {tab === "calllog" && (
+        <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+          <CallLogPanel clientId={client.id} />
         </section>
       )}
 

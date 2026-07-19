@@ -104,6 +104,15 @@ Partner view (Phase D): sees his own not-qualified leads + reason (educational);
 
 Client detail gains tabs: Overview / Story / Deals / Documents / Communications / Call Log. First real capture: Fepa Sechaba Milling and Mining (contact Tumi) — mining (chrome+gold) + farming, R20M trust, R1bn Reserve Bank deal (nature TBD), assets: trucks/property/livestock/equipment/mining rights. Suggested funders per matrix: PrefCap, Paragon, Business Partners, Sourcefin. Qualifying questions to log: CIPC; mining rights S27 MPRDA vs S16 prospecting; Reserve Bank deal nature+stage; trust structure/trustees; specific funding need.
 
+**Build status (B4 — built):**
+- **`client_stories`** — 1:1 with `clients` (UNIQUE `client_id`), all the narrative fields above as editable markdown-text columns + `created_by`/timestamps. The 1:1 row is **created on first save** (upsert on `client_id`), so there are no empty story rows.
+- **`ongoing_impressions` → child table `client_story_notes`** (id, story_id FK, text, author_id, created_at). **Append-only enforced at the DB layer via RLS** — the table has **SELECT + INSERT policies only** (no UPDATE/DELETE path through the API), so an impression can never be edited or removed. (Chosen over a jsonb array for per-note author/timestamp + clean append.)
+- **`call_logs`** — all fields above; `date`→`call_date`, `time`→`call_time` (reserved words); `medium` is the `call_medium` enum. A `call_logs_followup_needs_date` CHECK requires a `follow_up_date` whenever `follow_up_needed`.
+- **`FOLLOW_UP_DUE`** — fires from a **daily pg_cron sweep** `check_followups_due()` (04:15 UTC / 06:15 SAST, offset from the 04:00 document-expiry sweep) to the owner (in-app + email, `weekly_summary` layout per S16.4). Detection is the read-only `followups_due()`; dedup is a once-per-follow-up ledger `call_log_followup_alerts` with **claim-then-act** (claim the ledger row before emitting). Body names the client, the next action, and the source call/medium+date.
+- **RLS: owner-only on all four tables** — these hold personal/family narrative (POPIA-sensitive); partners never see client stories or call logs, now or in Phase D.
+- **Activity logging (A10):** `log_activity()` extended with `client_story` + `call_log` branches (linked to the client so events show on the client Activity tab); `client_story_notes` is deliberately **not** double-logged — the impressions stream is its own append-only audit trail. *(As with leads/clients, `client_stories` UPDATEs capture narrative before/after in `activity_logs` — the same owner-only, F10-tracked PII-redaction follow-up applies.)*
+- **UI:** client-detail **Story tab** (narrative form + append-only impressions feed) + **Call Log tab** (log-a-call form + history with follow-up pills). Migrations are all new empty tables (inline FKs/indexes — no NOT VALID/CONCURRENTLY needed); DO-block assertions gate the schema migration.
+
 ---
 
 ## S4. NOTIFICATIONS (Part 4 — Roadmap A11/A12, D6)

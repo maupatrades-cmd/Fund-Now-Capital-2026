@@ -109,6 +109,10 @@ export function resolveVariant(eventType: string): EmailVariant {
     // partner-safe copy is composed in the DB and surfaced via body_text.
     case "LEAD_DOCUMENT_REJECTED":
       return "weekly_summary";
+    // A follow-up reminder is a neutral heads-up → weekly_summary layout; the
+    // DB sweep composes the specifics (client, next action, source) into body_text.
+    case "FOLLOW_UP_DUE":
+      return "weekly_summary";
     // Document expiry alerts reuse the weekly_summary (neutral digest) layout —
     // an informational / action-needed tone, NOT the celebratory deal_approved
     // band. Their copy is set by eventType in variantContent() from the
@@ -267,6 +271,19 @@ function variantContent(m: EmailModel, variant: EmailVariant): VariantContent {
         paras: [
           fallback || "A document was rejected and needs to be re-uploaded.",
           "Open the CRM to see which document to replace.",
+        ],
+      };
+    // Follow-up reminder (weekly_summary layout). The DB sweep composes the
+    // client + next-action specifics into body_text (fallback).
+    case "FOLLOW_UP_DUE":
+      return {
+        subject: "Follow-up due",
+        h1: "A follow-up is due",
+        ctaLabel: "View client in CRM",
+        category: "client",
+        paras: [
+          fallback || "A logged follow-up has come due.",
+          "Open the client in the CRM to action it.",
         ],
       };
     // Document expiry alerts (weekly_summary layout). The DB sweep composes the
