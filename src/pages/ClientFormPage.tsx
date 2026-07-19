@@ -81,7 +81,7 @@ export default function ClientFormPage() {
       onSubmit={async (values) => {
         const input: ClientInput = {
           business_name: values.business_name!.trim(),
-          cipc_number: values.cipc_number ? values.cipc_number : null,
+          cipc_number: values.cipc_number?.trim() ? values.cipc_number.trim() : null,
           // Legacy free-text sector is not edited here — preserve whatever's on the
           // record (owner reconciles it manually; deprecated once B2 lands).
           sector: c?.sector ?? null,
