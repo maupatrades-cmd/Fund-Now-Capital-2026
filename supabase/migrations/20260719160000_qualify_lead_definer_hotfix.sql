@@ -101,11 +101,14 @@ begin
 end;
 $function$;
 
--- Explicit grant hygiene (defensive): ensure authenticated is the ONLY execute-
--- privileged role. REVOKE is a no-op if the current grants are already clean, but
--- clears any inadvertent PUBLIC/anon grant from a prior migration or the function
--- default (functions grant EXECUTE to PUBLIC by default unless revoked).
-revoke all on function public.qualify_lead(uuid, boolean) from public;
+-- Explicit grant hygiene: keep authenticated as the only API-role that can
+-- execute. Supabase auto-grants EXECUTE to anon, authenticated AND service_role
+-- explicitly on every new public function (plus the PUBLIC default), so a bare
+-- `revoke from public` leaves the explicit anon grant in place. Revoke from
+-- public AND anon (mirrors the log_qualification_override lockdown, which revokes
+-- from public, anon, authenticated). service_role is left untouched — the trusted
+-- backend role, same as that precedent — and is not asserted below.
+revoke all on function public.qualify_lead(uuid, boolean) from public, anon;
 grant execute on function public.qualify_lead(uuid, boolean) to authenticated;
 
 -- ---------------------------------------------------------------------------
