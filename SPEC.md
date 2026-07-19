@@ -225,6 +225,8 @@ Flow: deal → Funded stage ⇒ auto-draft invoice (pending_approval) ⇒ owner 
 
 Commission calculation depends on the **per-funder rate structure** (see ROADMAP **Phase C0**). The `deal_funder_submissions.amount_approved` / `amount_funded` columns are the substrate; **C0 provides the rate lookup that produces the FNC gross, which then feeds the existing 40/60 tiered engine** (`calculate_commission()`). Nothing here changes the internal split math — it only supplies the gross that math runs on.
 
+**Note on schema state at S7A ratification:** the `deal_funder_submissions.amount_approved` and `amount_funded` columns referenced here are described as substrate but do **NOT yet exist** on the `deal_funder_submissions` table. They will be added in Phase C0's migration alongside the per-funder rate structures. This S7A section defines the **semantic contract** (three commission states, effective-dated rate lookup, snapshot rule) so Phase C0's implementation has a locked target. Column-shape decisions (nullable? default? indexed? triggers?) belong to C0's build proposal, not this docs pass.
+
 **Three commission states per submission** — each tied to a different amount column and displayed with a different certainty label:
 
 **State 1 — Estimated (submission created):**
