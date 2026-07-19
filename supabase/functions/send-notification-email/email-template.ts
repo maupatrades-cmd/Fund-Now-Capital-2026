@@ -104,6 +104,11 @@ export function resolveVariant(eventType: string): EmailVariant {
       return "welcome";
     case "WEEKLY_SUMMARY":
       return "weekly_summary";
+    // A rejected-document alert is action-needed / informational (not a
+    // celebration), so it borrows the neutral weekly_summary layout; the
+    // partner-safe copy is composed in the DB and surfaced via body_text.
+    case "LEAD_DOCUMENT_REJECTED":
+      return "weekly_summary";
     // Document expiry alerts reuse the weekly_summary (neutral digest) layout —
     // an informational / action-needed tone, NOT the celebratory deal_approved
     // band. Their copy is set by eventType in variantContent() from the
@@ -250,6 +255,19 @@ function variantContent(m: EmailModel, variant: EmailVariant): VariantContent {
         ctaLabel: "View in CRM",
         category: "lead",
         paras: [fallback || "A lead was updated."],
+      };
+    // Partner-safe: the DB composes business name + document category + rejection
+    // reason category into body_text (never the free-text notes or contact PII).
+    case "LEAD_DOCUMENT_REJECTED":
+      return {
+        subject: "A document was rejected",
+        h1: "A document needs re-uploading",
+        ctaLabel: "View in CRM",
+        category: "lead",
+        paras: [
+          fallback || "A document was rejected and needs to be re-uploaded.",
+          "Open the CRM to see which document to replace.",
+        ],
       };
     // Document expiry alerts (weekly_summary layout). The DB sweep composes the
     // full, pack-aware specifics into body_text (fallback); we add a short CTA line.

@@ -1,10 +1,12 @@
-import { Lock } from "lucide-react";
+import { Lock, ShieldCheck, ShieldX, ShieldQuestion } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   EXPIRY_PILL,
   expiryStatus,
   isPartnerExcluded,
+  rejectionReasonLabel,
   type UploadSource,
+  type VerificationStatus,
 } from "@/lib/documents";
 
 // Expiry status pill — green (valid) / amber (≤30d) / red (≤7d or expired) /
@@ -26,6 +28,37 @@ const SOURCE_META: Record<UploadSource, { label: string; className: string }> = 
 export function UploadedByBadge({ source }: { source: UploadSource }) {
   const meta = SOURCE_META[source] ?? SOURCE_META.owner;
   return <Badge className={meta.className}>{meta.label}</Badge>;
+}
+
+// Verification state (B3.2): unverified (neutral) / accepted (green) / rejected
+// (red + rendered reason). Reason is the partner-safe category, never the notes.
+export function VerificationBadge({
+  status,
+  reason,
+}: {
+  status: VerificationStatus;
+  reason?: string | null;
+}) {
+  if (status === "accepted") {
+    return (
+      <Badge className="bg-green-100 text-green-800 ring-green-600/20">
+        <ShieldCheck className="mr-1 h-3 w-3" /> Accepted
+      </Badge>
+    );
+  }
+  if (status === "rejected") {
+    return (
+      <Badge className="bg-red-100 text-red-800 ring-red-600/20">
+        <ShieldX className="mr-1 h-3 w-3" /> Rejected
+        {reason ? `: ${rejectionReasonLabel(reason)}` : ""}
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="bg-slate-100 text-slate-600 ring-slate-400/20">
+      <ShieldQuestion className="mr-1 h-3 w-3" /> Unverified
+    </Badge>
+  );
 }
 
 // Structured-PII types partners can never read (RLS exclusion list).

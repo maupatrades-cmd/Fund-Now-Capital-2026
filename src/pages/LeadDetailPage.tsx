@@ -21,10 +21,12 @@ import {
   useStartQualifying,
   useQualifyLead,
   useMarkNotQualified,
+  useLeadRequiredDocsMissing,
   type Lead,
 } from "@/hooks/useLeads";
 import { one } from "@/hooks/useClients";
 import { ActivityFeed } from "@/components/activity/ActivityFeed";
+import { DocumentsPanel } from "@/components/clients/DocumentsPanel";
 
 const labelList = (options: { value: string; label: string }[], values: string[] | null) =>
   values && values.length ? values.map((v) => labelFor(options, v)).join(", ") : null;
@@ -141,6 +143,15 @@ export default function LeadDetailPage() {
       </div>
 
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+        <h3 className="mb-3 text-sm font-semibold text-brand-navy">Documents</h3>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Upload and verify the lead's documents here. Required accepted documents gate qualification;
+          on qualify, these move to the client automatically.
+        </p>
+        <DocumentsPanel entity={{ kind: "lead", id: lead.id }} referralPartnerId={lead.referral_partner_id} />
+      </section>
+
+      <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
         <ActivityFeed entityId={lead.id} />
       </section>
     </div>
@@ -164,19 +175,25 @@ function QualificationPanel({ lead }: { lead: Lead }) {
   const stage = lead.qualification_stage;
   const linkedDeal = lead.linked_deals?.[0] ?? null;
 
+  // Document verification gate — only evaluated while the lead is being qualified.
+  const { data: missing = [] } = useLeadRequiredDocsMissing(lead.id, stage === "under_qualification");
+
   const onStart = () =>
     startQualifying.mutate(lead.id, {
       onError: (e) => toast.error(e instanceof Error ? e.message : "Could not start qualifying"),
     });
 
-  const onQualify = () =>
-    qualify.mutate(lead.id, {
-      onSuccess: (dealId) => {
-        toast.success("Lead qualified — deal created");
-        navigate(`/deals/${dealId}`);
+  const onQualify = (override: boolean) =>
+    qualify.mutate(
+      { id: lead.id, override },
+      {
+        onSuccess: (dealId) => {
+          toast.success("Lead qualified — deal created");
+          navigate(`/deals/${dealId}`);
+        },
+        onError: (e) => toast.error(e instanceof Error ? e.message : "Could not qualify lead"),
       },
-      onError: (e) => toast.error(e instanceof Error ? e.message : "Could not qualify lead"),
-    });
+    );
 
   return (
     <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
@@ -212,6 +229,13 @@ function QualificationPanel({ lead }: { lead: Lead }) {
         </div>
       </div>
 
+      {stage === "under_qualification" && missing.length > 0 && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Document gate — still needed before qualifying: {missing.join("; ")}. You can override in the
+          Qualify dialog.
+        </p>
+      )}
+
       {stage === "qualified" && (
         <p className="mt-3 text-sm text-muted-foreground">
           {linkedDeal ? (
@@ -243,25 +267,84 @@ function QualificationPanel({ lead }: { lead: Lead }) {
       )}
 
       {confirmQualify && (
-        <ModalShell onClose={() => setConfirmQualify(false)} label="Qualify lead">
-          <h3 className="text-lg font-semibold text-brand-navy">Qualify this lead and create a deal?</h3>
-          <p className="text-sm text-muted-foreground">
-            A new deal will be created at the "Qualifying" stage linked to this lead.
-          </p>
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" className={btnNeutral} onClick={() => setConfirmQualify(false)}>
-              Cancel
-            </button>
-            <button type="button" className={btnPrimary} onClick={onQualify} disabled={qualify.isPending}>
-              {qualify.isPending ? "Qualifying…" : "Qualify & create deal"}
-            </button>
-          </div>
-        </ModalShell>
+        <QualifyModal
+          missing={missing}
+          pending={qualify.isPending}
+          onClose={() => setConfirmQualify(false)}
+          onConfirm={(override) => onQualify(override)}
+        />
       )}
       {notQualifiedOpen && (
         <NotQualifiedModal leadId={lead.id} onClose={() => setNotQualifiedOpen(false)} />
       )}
     </section>
+  );
+}
+
+function QualifyModal({
+  missing,
+  pending,
+  onClose,
+  onConfirm,
+}: {
+  missing: string[];
+  pending: boolean;
+  onClose: () => void;
+  onConfirm: (override: boolean) => void;
+}) {
+  const gated = missing.length > 0;
+  const [override, setOverride] = useState("");
+  const canProceed = !gated || override.trim().toUpperCase() === "OVERRIDE";
+
+  const inputCls =
+    "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-brand-navy outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
+
+  return (
+    <ModalShell onClose={onClose} label="Qualify lead">
+      <h3 className="text-lg font-semibold text-brand-navy">Qualify this lead and create a deal?</h3>
+      <p className="text-sm text-muted-foreground">
+        A new deal will be created at the "Qualifying" stage linked to this lead, and the lead's
+        documents will move to the client.
+      </p>
+
+      {gated && (
+        <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <p className="text-sm font-medium text-amber-800">
+            Required documents aren't accepted yet:
+          </p>
+          <ul className="list-disc pl-5 text-sm text-amber-800">
+            {missing.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ul>
+          <label className="block text-xs font-medium text-amber-800" htmlFor="q-override">
+            Type <span className="font-bold">OVERRIDE</span> to qualify anyway (logged to the activity trail).
+          </label>
+          <input
+            id="q-override"
+            className={inputCls}
+            value={override}
+            onChange={(e) => setOverride(e.target.value)}
+            placeholder="OVERRIDE"
+            autoComplete="off"
+          />
+        </div>
+      )}
+
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <button type="button" className={btnNeutral} onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={btnPrimary}
+          onClick={() => onConfirm(gated)}
+          disabled={pending || !canProceed}
+        >
+          {pending ? "Qualifying…" : gated ? "Override & qualify" : "Qualify & create deal"}
+        </button>
+      </div>
+    </ModalShell>
   );
 }
 

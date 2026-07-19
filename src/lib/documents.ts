@@ -39,6 +39,36 @@ export type DocumentType =
 export type UploadSource = "owner" | "partner" | "client" | "funder";
 export type DocumentStatus = "active" | "archived" | "expired" | "rejected";
 
+// ---- Verification (B3.2) — mirrors document_verification_status /
+// document_rejection_reason in the DB. Verification is a separate axis from the
+// lifecycle `status` above: a document is unverified/accepted/rejected.
+export type VerificationStatus = "unverified" | "accepted" | "rejected";
+export type RejectionReason =
+  | "illegible"
+  | "expired"
+  | "wrong_document"
+  | "incomplete"
+  | "mismatch"
+  | "outdated_version"
+  | "other";
+
+// Partner-safe rejection reasons (A9.5 decline-category pattern). The partner
+// only ever sees the rendered phrase — never the free-text verification notes.
+export const REJECTION_REASONS: { value: RejectionReason; label: string }[] = [
+  { value: "illegible", label: "Illegible / unreadable" },
+  { value: "expired", label: "Expired" },
+  { value: "wrong_document", label: "Wrong document" },
+  { value: "incomplete", label: "Incomplete" },
+  { value: "mismatch", label: "Details mismatch" },
+  { value: "outdated_version", label: "Outdated version" },
+  { value: "other", label: "Other" },
+];
+
+export function rejectionReasonLabel(value: string | null): string {
+  if (!value) return "";
+  return REJECTION_REASONS.find((r) => r.value === value)?.label ?? value;
+}
+
 // The 8 named categories (+ other) in display order. `other` is the catch-all;
 // the brief surfaces the 8 as filter chips.
 export const DOCUMENT_CATEGORIES: { value: DocumentCategory; label: string }[] = [

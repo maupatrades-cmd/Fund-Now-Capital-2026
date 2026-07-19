@@ -2,10 +2,12 @@ import { useMemo, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
-  useClientDocuments,
+  useEntityDocuments,
   useUploadDocument,
   useDeleteDocument,
+  useVerifyDocument,
   openDocument,
+  type DocEntity,
 } from "@/hooks/useClientDocuments";
 import { DocumentList } from "@/components/documents/DocumentList";
 import { DocumentsEmptyState } from "@/components/documents/DocumentsEmptyState";
@@ -22,15 +24,16 @@ const ctl =
   "rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
 
 export function DocumentsPanel({
-  clientId,
+  entity,
   referralPartnerId,
 }: {
-  clientId: string;
+  entity: DocEntity;
   referralPartnerId: string | null;
 }) {
-  const { data: docs, isLoading } = useClientDocuments(clientId);
+  const { data: docs, isLoading } = useEntityDocuments(entity);
   const upload = useUploadDocument();
   const del = useDeleteDocument();
+  const verify = useVerifyDocument();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [documentType, setDocumentType] = useState<DocumentType>("bank_statement");
@@ -70,7 +73,7 @@ export function DocumentsPanel({
     if (!file) return;
     try {
       await upload.mutateAsync({
-        clientId,
+        entity,
         referralPartnerId,
         file,
         documentType,
@@ -236,8 +239,25 @@ export function DocumentsPanel({
           onDownload={(d) => openDocument(d.storage_path)}
           onDelete={(d) =>
             del.mutate(
-              { id: d.id, storagePath: d.storage_path, clientId },
+              { id: d.id, storagePath: d.storage_path, entity },
               { onError: (e) => toast.error((e as Error).message || "Delete failed") },
+            )
+          }
+          verifyingId={verify.isPending ? verify.variables?.id : null}
+          onVerify={(input) =>
+            verify.mutate(
+              { ...input, entity },
+              {
+                onSuccess: () =>
+                  toast.success(
+                    input.status === "accepted"
+                      ? "Document accepted"
+                      : input.status === "rejected"
+                        ? "Document rejected"
+                        : "Verification reset",
+                  ),
+                onError: (e) => toast.error((e as Error).message || "Could not update verification"),
+              },
             )
           }
         />
