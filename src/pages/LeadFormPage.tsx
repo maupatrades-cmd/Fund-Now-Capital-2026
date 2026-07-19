@@ -23,11 +23,14 @@ import {
   FUNDING_PURPOSES,
   SECURITY_OPTIONS,
   REFERRED_BY,
-  CIPC_REGEX,
-  SA_ID_REGEX,
+} from "@/lib/leads";
+import {
+  isValidCipc,
+  isValidSAIdNumber,
   isValidSaCell,
   normaliseSaCell,
-} from "@/lib/leads";
+  formatSaIdSummary,
+} from "@/lib/sa-validation";
 
 const schema = z.object({
   business_name: z.string().trim().min(1, "Business name is required"),
@@ -36,7 +39,7 @@ const schema = z.object({
     .string()
     .optional()
     .default("")
-    .refine((v) => !v || CIPC_REGEX.test(v), "Format: YYYY/NNNNNN/NN"),
+    .refine((v) => !v || isValidCipc(v), "Format: YYYY/NNNNNN/NN"),
   industry_id: z.string().optional().default(""),
   sub_industry_id: z.string().optional().default(""),
   sector_notes: z.string().optional().default(""),
@@ -61,7 +64,7 @@ const schema = z.object({
     .string()
     .optional()
     .default("")
-    .refine((v) => !v || SA_ID_REGEX.test(v), "SA ID must be 13 digits"),
+    .refine((v) => !v || isValidSAIdNumber(v), "Not a valid SA ID number — check the digits"),
   physical_address: z.string().optional().default(""),
   registered_address: z.string().optional().default(""),
   region: z.string().optional().default(""),
@@ -274,6 +277,7 @@ function LeadForm({
   const referredBy = watch("referred_by");
   const hasDebt = watch("has_existing_debt");
   const loadedOnBehalf = watch("loaded_on_behalf");
+  const idSummary = formatSaIdSummary(watch("contact_id_number") ?? "");
   const subOptions = industries.find((i) => i.id === industryId)?.sub_industries ?? [];
 
   const clearGate = () => {
@@ -421,6 +425,7 @@ function LeadForm({
           </Field>
           <Field label="ID number" error={errors.contact_id_number?.message}>
             <input className={inputCls} placeholder="13 digits" {...register("contact_id_number")} />
+            {idSummary && <p className="mt-1 text-xs text-brand-teal">{idSummary}</p>}
           </Field>
         </Fieldset>
 

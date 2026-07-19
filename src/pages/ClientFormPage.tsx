@@ -12,6 +12,7 @@ import {
   type ClientInput,
 } from "@/hooks/useClients";
 import { useIndustries, type IndustryWithSubs } from "@/hooks/useIndustries";
+import { isValidCipc } from "@/lib/sa-validation";
 
 const nullableAmount = z.preprocess(
   (v) => (v === "" || v == null ? null : Number(v)),
@@ -20,7 +21,11 @@ const nullableAmount = z.preprocess(
 
 const schema = z.object({
   business_name: z.string().trim().min(1, "Business name is required"),
-  cipc_number: z.string().optional().default(""),
+  cipc_number: z
+    .string()
+    .optional()
+    .default("")
+    .refine((v) => !v || isValidCipc(v), "Format: YYYY/NNNNNN/NN"),
   industry_id: z.string().optional().default(""),
   sub_industry_id: z.string().optional().default(""),
   sector_notes: z.string().optional().default(""),
@@ -76,7 +81,7 @@ export default function ClientFormPage() {
       onSubmit={async (values) => {
         const input: ClientInput = {
           business_name: values.business_name!.trim(),
-          cipc_number: values.cipc_number ? values.cipc_number : null,
+          cipc_number: values.cipc_number?.trim() ? values.cipc_number.trim() : null,
           // Legacy free-text sector is not edited here — preserve whatever's on the
           // record (owner reconciles it manually; deprecated once B2 lands).
           sector: c?.sector ?? null,
@@ -162,7 +167,13 @@ function ClientForm({
             <label className={labelCls} htmlFor="cipc_number">
               CIPC number
             </label>
-            <input id="cipc_number" className={inputCls} {...register("cipc_number")} />
+            <input
+              id="cipc_number"
+              placeholder="YYYY/NNNNNN/NN"
+              className={inputCls}
+              {...register("cipc_number")}
+            />
+            {errors.cipc_number && <p className={errCls}>{errors.cipc_number.message}</p>}
           </div>
           <div>
             <label className={labelCls} htmlFor="industry_id">
