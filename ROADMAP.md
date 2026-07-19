@@ -39,7 +39,7 @@ _Email design: every email here (invoices, statements, payment/overdue notices) 
 
 - ⬜ **C0. Money Operations Foundations (opens Phase C — prerequisite for C1 and C2).** Per-funder commission structure tracking. Each funder in the CRM has its own commission rate that FNC earns from them per signed broker agreement. The commission engine today computes only the FNC-internal 40/60 split + tiered Doctor's share — it doesn't know what FNC earns from each specific funder. This module adds:
   - `funder_commission_structures` table: (funder_id, deal_type, rate_type, rate_value, effective_from, effective_to, notes, contract_clause_ref).
-  - `rate_type` enum: `percent_of_gross_funded` · `percent_of_mdr` · `flat_rand_per_deal`.
+  - `rate_type` enum: `percent_of_gross_funded` · `percent_of_mdr` · `flat_rand_per_deal`. (`percent_of_mdr` applies where FNC's cut is a share of the funder's Merchant Discount Rate — typically merchant-cash-advance / card-settlement funders. The MDR is a **per-deal captured input**; where its value is sourced from and how it's snapshotted for the commission calc is a **C0 build-proposal decision**, not fixed in this docs pass.)
   - Owner-only `/settings/funders` sub-tab for maintaining rate structures per funder.
   - Historical rate lookup (which rate applied when a deal funded).
   - Wires into `deal_funder_submissions.amount_approved` / `amount_funded` (the S7A substrate) so commission on approval = rate applied to the approved amount, commission on funding = rate applied to the funded amount.
