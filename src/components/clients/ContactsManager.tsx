@@ -12,7 +12,7 @@ import {
   type ClientContact,
   type ContactInput,
 } from "@/hooks/useClients";
-import { isValidSACell, isValidSAIdNumber } from "@/lib/clients";
+import { isValidSaCell, isValidSAIdNumber, formatSaIdSummary } from "@/lib/sa-validation";
 
 const contactSchema = z
   .object({
@@ -24,12 +24,16 @@ const contactSchema = z
     is_primary_director: z.boolean(),
   })
   .superRefine((val, ctx) => {
-    if (val.phone && !isValidSACell(val.phone))
+    if (val.phone && !isValidSaCell(val.phone))
       ctx.addIssue({ code: "custom", path: ["phone"], message: "Enter a valid SA cell number" });
     if (val.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val.email))
       ctx.addIssue({ code: "custom", path: ["email"], message: "Enter a valid email" });
     if (val.id_number && !isValidSAIdNumber(val.id_number))
-      ctx.addIssue({ code: "custom", path: ["id_number"], message: "SA ID must be 13 digits" });
+      ctx.addIssue({
+        code: "custom",
+        path: ["id_number"],
+        message: "Not a valid SA ID number — check the digits",
+      });
   });
 
 type ContactValues = z.input<typeof contactSchema>;
@@ -161,6 +165,7 @@ function ContactForm({
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<ContactValues>({
     resolver: zodResolver(contactSchema),
@@ -173,6 +178,8 @@ function ContactForm({
       is_primary_director: contact?.is_primary_director ?? false,
     },
   });
+
+  const idSummary = formatSaIdSummary(watch("id_number") ?? "");
 
   const onSubmit = async (v: ContactValues) => {
     const input: ContactInput = {
@@ -216,7 +223,11 @@ function ContactForm({
       </div>
       <div>
         <input className={fieldCls} placeholder="ID number (13 digits)" {...register("id_number")} />
-        {errors.id_number && <p className={errCls}>{errors.id_number.message}</p>}
+        {errors.id_number ? (
+          <p className={errCls}>{errors.id_number.message}</p>
+        ) : (
+          idSummary && <p className="mt-1 text-xs text-brand-teal">{idSummary}</p>
+        )}
       </div>
       <label className="flex items-center gap-2 text-sm text-brand-navy">
         <input type="checkbox" className="h-4 w-4 accent-brand-teal" {...register("is_primary_director")} />

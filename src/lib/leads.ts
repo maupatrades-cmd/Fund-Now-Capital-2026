@@ -120,24 +120,5 @@ export function labelFor(options: Option[], value: string | null | undefined): s
   return options.find((o) => o.value === value)?.label ?? value;
 }
 
-// ---- Validation helpers (frontend only; DB stores raw text) ----
-
-// CIPC registration number: YYYY/NNNNNN/NN.
-export const CIPC_REGEX = /^\d{4}\/\d{6}\/\d{2}$/;
-
-// SA cell: 0 or +27 prefix, then 6/7/8, then 8 digits. Accepts spaces.
-const SA_CELL_REGEX = /^(?:\+?27|0)[678]\d{8}$/;
-
-export function isValidSaCell(raw: string): boolean {
-  return SA_CELL_REGEX.test(raw.replace(/[\s-]/g, ""));
-}
-
-// Normalise a valid SA cell to local 0XXXXXXXXX form for storage.
-export function normaliseSaCell(raw: string): string {
-  const digits = raw.replace(/[\s-]/g, "").replace(/^\+/, "");
-  if (digits.startsWith("27")) return "0" + digits.slice(2);
-  return digits;
-}
-
-// SA ID: 13 digits (structural only — Luhn check is B5).
-export const SA_ID_REGEX = /^\d{13}$/;
+// SA data validation (CIPC, cell, SA ID, VAT, postal) lives in the single
+// source of truth src/lib/sa-validation.ts (B5). Import from there directly.
