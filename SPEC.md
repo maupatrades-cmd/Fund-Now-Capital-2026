@@ -113,6 +113,18 @@ Client detail gains tabs: Overview / Story / Deals / Documents / Communications 
 - **Activity logging (A10):** `log_activity()` extended with `client_story` + `call_log` branches (linked to the client so events show on the client Activity tab); `client_story_notes` is deliberately **not** double-logged — the impressions stream is its own append-only audit trail. *(As with leads/clients, `client_stories` UPDATEs capture narrative before/after in `activity_logs` — the same owner-only, F10-tracked PII-redaction follow-up applies.)*
 - **UI:** client-detail **Story tab** (narrative form + append-only impressions feed) + **Call Log tab** (log-a-call form + history with follow-up pills). Migrations are all new empty tables (inline FKs/indexes — no NOT VALID/CONCURRENTLY needed); DO-block assertions gate the schema migration.
 
+**B4.1 follow-up refinement (docs — captured at B4 close-out, NOT yet built):** Client Story is currently captured on the **client** detail page (post-qualification). Real workflow reveals the story is broker-facing insight most useful **before** qualification — it shapes how the owner structures a deal narrative for funder submissions. Refinement:
+- Make `client_stories` writable on the **lead** detail page in addition to client detail.
+- Add a 'Story' section on lead detail, positioned **below** the Documents section.
+- At qualification, story rows migrate from lead → client alongside the documents migration trigger (same pattern as B3.2's lead→client document re-pointer).
+- Owner can export the story as structured markdown/text for use in Claude or other tools to draft funder-ready pitch narratives.
+- **Ownership model (build-time contract to settle before implementation):** the current `client_stories` 1:1 is keyed on `UNIQUE client_id` (NOT NULL). Lead-writable stories require an explicit owning key — model it on the `documents` pattern: nullable `client_id` **XOR** `lead_id` with a `num_nonnulls(lead_id, client_id) = 1` CHECK and a per-entity uniqueness constraint (one story per lead, one per client). Migration at qualify must re-point `client_id`/`lead_id` on **both** `client_stories` and `client_story_notes`, and repoint the story's `activity_logs` references, in one transaction. Define conflict behaviour when the lead maps to an **existing** client that already has a story (merge-append the impressions vs block-with-notice — decide at build). Owner-only RLS carries over unchanged (partners never see stories — S3).
+- Estimated 1 PR, ~2 hours build (the ownership-model migration may push this slightly).
+
+Priority: after Phase B closes (B5 SA validation ships first) — small enough to slot in as **B4.1** before Phase C opens, OR defer to Phase E1 if C0 momentum is prioritised. **Elevated to priority follow-up after B5** because it is the substrate for the E3/E6 auto-generation flow (see **S6a** Deal Package Auto-Generation and **S17b** Claude Story Refiner) — the story captured pre-qualification feeds the refined credit case. Suggested build order: **B5 → B4.1 → C0 → C1 …**
+
+**Owner intent — B4 close-out (2026-07-19), for future sessions:** the owner identified that (a) client story is broker-facing insight best captured **pre-qualification** (this B4.1 refinement); (b) the funder-submission **consent pack** shipping alongside application signing is essential for NCR/FAIS/POPIA compliance (S17 scope expansion) — funder submissions cannot ship to clients in production without both consent documents in signed form; (c) signing links need **7-day expiry with owner-initiated reset** for the busy-SA-client reality (S17); (d) **Terms & Conditions** must exist for both client-side (bundled with the S17 consent pack) and partner-side (Phase D onboarding, S11); (e) **follow-on deals** for repeat clients get a proper workflow in Phase D (S11). All architectural — no implementation begins now.
+
 ---
 
 ## S4. NOTIFICATIONS (Part 4 — Roadmap A11/A12, D6)
@@ -232,6 +244,33 @@ Deferred to E3/F: OCR text extraction, external share links w/ expiry+tracking, 
 
 ---
 
+## S6a. DEAL PACKAGE AUTO-GENERATION (Part 6 M3 — Roadmap E3, expanded scope)
+
+**Status: docs only, NOT started (Phase E3).** Fund Now Capital application-form auto-generation. Traditional broker workflow: forward client documents to funders unchanged. **FNC workflow: auto-generate a professional FNC-branded application PDF that packages CRM-captured client data into a credit-ready pitch document.**
+
+Structure of the auto-generated FNC application:
+- **Cover page** — FNC branding, deal reference, submission date, target funder name.
+- **Client details** — auto-filled from CRM: business name, CIPC, contact, industry, address.
+- **Refined credit case / story** — from the E6 Claude Story Refiner (see **S17b**).
+- **Financial summary** — turnover trend, average balance, expense pattern. **Source contract (build-time):** figures come from **owner-confirmed values** (or S18 document-intelligence extractions the owner has reviewed) — never unverified raw auto-extraction presented as fact to a funder. Each generated package **snapshots the exact source-document versions** (document ids + `version_number`) used, so a regenerated PDF is reproducible and auditable against what was submitted.
+- **Funding request** — amount, purpose, timeline — auto-filled from the deal.
+- **Supporting document index** — list of attached PDFs (CIPC, ID, POA, bank statements, financial statements).
+- **Referral acknowledgment** — if partner-sourced (Doctor's referral noted with commission-agreement reference).
+- **Compliance clauses** — broker-referrer clause per NCR/FAIS, POPIA data-handling notice.
+- **Signature footer** — owner's signature block.
+
+Package generation is triggered from the deal detail page — "Generate FNC application for [funder name]". PDF generated server-side (via jsPDF or similar), stored as a **versioned document** in the `documents` table, attached to the `deal_funder_submission`. **Enum note (build-time):** this needs a new `upload_source = 'system_generated'` value — the current S6 enum is only (owner/partner/client/funder). The E3 migration must add it and define its behaviour explicitly: **owner-only RLS** (never partner-visible, even on a partner-referred deal), stored under the deal's storage path, and excluded from the partner document surface. Do not rely on an undocumented enum value.
+
+**Per-funder customisation:** each funder submission gets its own generated PDF (naming the specific funder, adjusting emphasis based on funder appetite scored in B1). Multi-funder submissions get **separate PDFs per funder** — no generic pack.
+
+**Owner intent:** this becomes the KEY differentiator of Fund Now Capital vs other brokers. Most brokers forward client documents unchanged; FNC forwards a professional pitch package that presents the client the way a credit committee wants to see them — increasing approval rate and speed.
+
+**Est. build:** 2–3 PRs (~2–3 weeks) in Phase E3, combined with E6.
+
+**Regulatory:** the generated PDF is an **owner-authored** document (owner reviews and signs before sending) — **not** client-signed. Content is factual (client data auto-filled) + Claude-drafted narrative (owner-reviewed and edited before send).
+
+---
+
 ## S7. INVOICING (Part 5 M2 — Roadmap C1)
 
 `invoices`: id, invoice_number (INV-XXXX, sequential from INV-0032, never gaps — void don't delete), deal_id FK nullable, funder_id FK, funder_contact_id, invoice_date, due_date (net 30 default), subtotal, total_amount, status enum(draft/pending_approval/sent/paid/partial_paid/overdue/voided), pdf_url, notes, created_by/at, sent_at, paid_at, payment_received_amount, payment_shortfall_amount, payment_shortfall_reason.
@@ -338,6 +377,18 @@ Part 3 F1 Client Estimator: inputs (deal size slider R50k–10M, industry+sub dr
 Part 3 F2 Commission Estimator: inputs (facility slider, deal type toggle, funder dropdown fictional, repeat status) → big animated number (range), deal comparison bars (500k/1m/current/5m), monthly projection slider vs R50k target (green/amber/grey), "path to R50k" card, career trajectory. **BUSINESS VIEW SECTION: ⚠ OPEN DECISION — do not build until owner decides transparency level (full ranged breakdown vs his-number-only).**
 
 Part 3 F5/F6 (Phase F): `learning_content`, `doctor_badges`, `doctor_activity_feed` tables; badges (first deal funded, 4-week streak, 10 quality leads, R100k earnings, repeat client); notification celebrations. Estimator outputs use ranges, never exact internal rates. Real-time recalc, no submit buttons. Mobile-first layouts.
+
+**D1 first-login T&C acceptance (docs — Phase D):** the D1 partner-routing + portal-shell first-login flow includes **T&C acceptance**. The partner sees the FNC **Partner T&Cs** (versioned) + an explicit "Accept" button. Acceptance is recorded with timestamp + T&C version. Subsequent logins bypass this step **unless** the T&Cs have been updated to a newer version. (Partner T&C content — commission split, referral protocol, deal ownership, confidentiality — see the T&Cs subsection in **S17**.)
+
+**Follow-on Deal Workflow (locked deferral — Phase D, docs only):** repeat clients (a client returning for more funding after a prior funded deal) get a dedicated workflow in Phase D, not before. Scope:
+- New column `deals.parent_deal_id` (nullable FK to the prior funded deal on the same client). **Constraints (build-time):** the parent must be a **funded** deal for the **same** `client_id`, and the chain must be **acyclic** — enforce via a DB constraint/trigger or transactional validation, not just a nullable FK.
+- `deal_sequence_number` per client — **assigned atomically and concurrency-safe** (unique per client; two simultaneous follow-ons must not collide on the same number).
+- Client detail page **'Deal history' tab** with lifetime funded total + repeat-client badge.
+- Doctor's portal: **'Refer existing client for more funding'** button — separate from 'Submit new lead' — requires typing the existing CIPC or picking from the partner's prior referrals.
+- **Duplicate-detection refinement** to distinguish 'same CIPC = repeat client legit' from 'same CIPC = accidental resubmit' — legit repeats bypass the CIPC hard-block (B2.3/B5) only with **owner + partner acknowledgment that is persisted** (who acknowledged, when, against which prior deal) — the bypass is an audited decision, not a silent skip.
+- *(Optional, per Phase C0 decision)* Commission-tier bump on repeat referral — Doctor's rate may step up on the Nth-time client. To be decided during the C0/C2 build.
+
+Owner-initiated follow-on **today**: the workaround is Pipeline → New Deal → search existing client → create a fresh deal at Qualifying stage. Works, but is manual and doesn't link parent-child. Acceptable at current volume; the formal workflow lands with Phase D.
 
 ---
 
@@ -661,7 +712,81 @@ Rationale (B3 expiry-alert decision): an expiry warning is *action-needed*, not 
 
 **Owner intent.** This addresses the single biggest friction point in the brokerage workflow — client paperwork. High priority for Phase E, but sequenced correctly: **after** Phase C money operations (so we have real deal volume) and **after** Phase D Doctor's portal (so partners can trigger flows too). Estimated 2–3 weeks of focused build.
 
+**Consent Pack — added to S17 scope (Phase E4).** Before submitting a client's deal to any funder, the CRM generates a **two-document consent pack** via the S17 e-signature pipeline:
+1. **Broker Referral Consent** — fixed, legally-reviewed template. Client explicitly acknowledges that Fund Now Capital acts as a **business referrer/intermediary** (not a lender, not a credit provider, not a financial advisor per NCR/FAIS). Client consents to FNC introducing their business to multiple funders on the FNC panel.
+2. **Multi-Funder Credit Consent** — dynamic template. Lists the **specific funders** the deal is being submitted to (e.g. Merchant Capital, Bridgement, PrefCap). Client authorises each named funder to run credit checks and process their data per POPIA.
+
+Both e-signed by the client via the same S17 time-limited link pipeline. Signed PDFs versioned in the `documents` table, attached to the deal, notification to owner when signed. **Deal submission to funders is BLOCKED until both consent documents are signed and attached.**
+
+**Consent integrity (build-time — do not gate on generic signed PDFs).** At generation/signing, persist the **consent-pack version/hash** and an **immutable snapshot of the exact funder set** the Multi-Funder Credit Consent named. The submission path must compare the **requested funder set** against the signed pack's snapshot: if funders are **added or removed** (or swapped), the pack is **invalidated and re-signing is required** for the new set. A deal must never be submitted to a funder the client didn't explicitly consent to — the block clears only for the specific funders on a matching signed pack, not "any signed pack is attached."
+
+Regulatory scope: **NCR** (National Credit Regulator) intermediary distinction, **FAIS** (broking vs financial advice), **POPIA** (explicit consent for cross-organisation data sharing). **Legal review of the Broker Referral Consent template REQUIRED before first live use** — flag to legal advisor when the Phase E4 build opens. **S17 total revised estimate: 3–4 weeks focused build in Phase E4.**
+
+**Link expiry and reset behaviour (Phase E4).**
+- **Default signing-link expiry: 7 days** from generation (not 24–48h). Reflects the real SA broker workflow — clients are busy business owners.
+- **Owner-initiated link regeneration:** on any deal with an expired or expiring signing link, the owner can click "Regenerate signing link" from the deal detail page. Regeneration is an **atomic server-side session rotation**: in one transaction, revoke the prior `form_signing_session` and create **exactly one** active replacement — so concurrent regeneration clicks can never leave **two** valid links live. The old token is **immediately invalidated** (revoked/expired sessions stay dead and **cannot be replayed** even after a new one is issued). A new time-limited link is sent via the same channel (email + WhatsApp once D6 lands).
+- **Audit trail:** every regeneration captures `link_regenerated_by`, `link_regenerated_at`, `previous_token_hash` (a hash for POPIA — never the raw token), plus the **previous and new signing-session ids and their linkage** (which session superseded which). Regeneration events flow through `activity_logs`.
+- **No client-side self-service link renewal** — the flow stays owner-driven, reducing public-endpoint attack surface and preserving owner visibility on signing status.
+- **Notification:** a `LINK_REGENERATED` event fires to the owner's activity feed. The client sees only the new-link email, with no mention of prior expiry.
+
+**Terms & Conditions integration (Phase E4).** Client-facing T&Cs are **part of S17's consent pack, NOT a separate module.** When a client signs the Broker Referral Consent, they simultaneously accept the FNC Client T&Cs (an "I have read and accept the Terms and Conditions" checkbox + link/PDF attachment in the signing surface).
+- Client T&Cs must cover: FNC broker/intermediary role (NCR distinction), FNC commission disclosure (FAIS requirement), POPIA data handling, client right of consent withdrawal, dispute resolution, SA governing law.
+- **Legal review of the T&Cs template REQUIRED before first live use** — the same legal-review pass as the Broker Referral Consent template.
+- **Partner-facing T&Cs** (Doctor, future partners): added to the Phase D partner-portal onboarding flow (see S11). Partner accepts T&Cs before first portal access. Content covers commission split, referral protocol, deal ownership, confidentiality.
+- Both client and partner T&Cs are **versioned**. Signed acceptances include the T&C version reference so we know which version each user agreed to and when. **Retention** follows a defined **records-retention schedule** — each acceptance record carries its **retention basis** (e.g. the underlying financial-services/tax record-keeping obligation, commonly ~5 years under FICA/tax norms — confirm with the legal advisor; POPIA itself sets no flat period) and an **applicable duration**, with **deletion or restriction at expiry**. Versioned acceptance tracking is preserved regardless.
+
 **Explicit non-goals.**
 - NOT rebuilding funder forms — always work with the funder's original PDF.
 - NOT signing owner-side on behalf of the client.
 - NOT automating funder-to-funder submissions without owner review.
+
+---
+
+## S17b. CLAUDE STORY REFINER (Roadmap E6 — Phase E, expanded scope)
+
+**Status: docs only, NOT started (Phase E6).** The **owner** captures the **raw client story** on the lead (business context, background, why they need funding, competitive edge, credit case). *(Story authoring is **owner-only** to stay consistent with S3 — partners never see or write client stories, now or in Phase D. If partner-drafted stories are ever wanted, that is a deliberate Phase-D RLS decision with its own partner-visible-field and redaction rules, not assumed here.)* Owner clicks **"Refine with Claude"** on the lead detail page. The CRM sends the raw story + client context (industry, funding amount, purpose, financial highlights) to Claude via the Anthropic API. Claude returns a **structured funder-ready pitch narrative**. Owner reviews side-by-side (raw vs refined), edits if needed, approves. The refined narrative becomes the **credit-case section of the auto-generated FNC application form** (see **S6a** / Phase E3).
+
+**Architecture.** New table `story_refinements` (`raw_story_id` FK, `claude_prompt_version`, `refined_output`, `owner_edits`, `owner_approved_at`, `approved_by`). The prompt template is **versioned** so the refinement process can itself be refined without losing history. The Anthropic API key is stored in **Supabase Vault**. Rate limiting + cost tracking per owner.
+
+**Data-processing controls (build-time — separate from secret storage).** Sending client narrative to a third-party model is POPIA processing, so the build must document: **lawful basis + client notice** (the consent pack, S17, should cover AI-assisted processing); **data minimisation / redaction** (send only what the pitch needs — no ID numbers, bank account numbers, or contact PII unless required); an **approved Anthropic API configuration under commercial/processor terms** (business/commercial tier with a data-processing agreement and **zero-retention / no-training** where available — never a consumer account); **provider retention + deletion** handling; and **auditable access** — the prompt version, inputs sent, and Claude output are logged owner-only for audit. (This is in addition to the Vault-managed key above.)
+
+**Prompt engineering.** The initial prompt template covers: *"as a South African broker preparing a credit pitch, refine this raw client context into a professional 2–3 paragraph credit narrative. Highlight: business viability, ability to repay, use-of-funds credibility, and any risk mitigants. Do not fabricate numbers — use only what is provided."* Versioned in the prompts table.
+
+**Owner intent:** *"The refined story is the difference between a submission that gets approved fast and one that sits waiting for a credit committee to guess. Every deal deserves a pitch, and Claude helps me write consistent pitches at scale."*
+
+**Est. build:** 1–2 PRs in Phase E6, ~1 week focused build. **Prerequisite: the B4.1 refinement (story on lead — see S3) must ship first.**
+
+**Owner intent — the FNC differentiator (B4 close-out, 2026-07-19):** the FNC differentiator is **auto-generated professional pitch packages, not just document forwarding.** B4.1 story capture is the substrate. E3 (S6a) packages the CRM data into a credit-ready PDF. E6 (this section) refines the narrative via Claude. Together they turn Fund Now Capital into a broker that pitches every deal professionally at scale.
+
+---
+
+## S18. DOCUMENT INTELLIGENCE (Roadmap E6 — Phase E, new scope addition)
+
+**Status: docs only, NOT started (Phase E6).** AI-assisted cross-document verification and risk flagging. Owner (or in Phase D, Doctor's referred lead) uploads a set of client documents to a lead or deal — bank statements, CIPC, ID, POA, financial statements, tax clearance, business proposal, etc. Owner clicks **"Analyse deal"** on the deal detail page. The CRM sends document extractions + client-declared data to Claude via the Anthropic API. Claude returns a **structured intelligence report**:
+- **Mismatches:** business name on CIPC vs bank-statement account holder, ID on POA vs ID copy, business address on CIPC vs client-submitted address, etc.
+- **Financial red flags:** overdrafts, returned debits, R/D entries, high stop-orders, insufficient-funds fees, unexplained large transactions, salary/income source inconsistent with declared business activity.
+- **Document quality issues:** unreadable pages, expired documents, missing pages in period-scoped packs (e.g. a bank-statement pack missing March 2026).
+- **Compliance flags:** SARS non-compliance signs, tax-clearance expiry, BEE-certificate mismatch, POPIA-relevant PII visible where it shouldn't be.
+- **Story-to-documents consistency:** client story says "we do mining supply" but bank statements show consulting-services income — flagged for owner review.
+- **Fraud signals:** obvious digital alterations, inconsistent fonts across an ostensibly same document, mismatched dates on scanned documents, watermark irregularities.
+
+Owner reviews the report on a **'Document Intelligence' tab** on the deal detail page. **Severity flags (red/amber/green)** per finding. Drill-down opens the specific document with the flagged section highlighted. Owner can **dismiss** findings with a note (audit-logged), or take action (request re-upload, ask client for clarification, decide not to submit to funders).
+
+**Architecture.**
+- New table `document_extractions` — raw text extractions from PDFs (page-by-page), extraction confidence per page, `extracted_at`, `tool_used` (Vision API vs OCR).
+- New table `document_intelligence_reports` — **versioned** reports per deal. Report structure: `{ mismatches: [], red_flags: [], quality_issues: [], story_consistency: [], fraud_signals: [] }` with severity and `evidence_document_id` + `page_number` references.
+- **Access + retention (both new tables):** **owner-only RLS** — extractions and reports contain concentrated client PII and must never reach a partner, even on a partner-referred deal. Retention follows the same **records-retention schedule** as the rest of S17/S18 (basis + duration + deletion/restriction at expiry — not a blanket flat period); any **temporary or provider-side files** created during extraction/analysis are deleted after the report is persisted, and the tables participate in the **right-to-erasure / restriction** workflow (F10).
+- **Evidence-reference validity:** `evidence_document_id` + `page_number` point at a specific document **version**. When a source document is **superseded, replaced, or deleted**, the referencing findings are marked **stale/invalidated** (not silently left pointing at moved bytes) — a regenerated report re-derives evidence against the current versions.
+- Anthropic API integration for the analysis pass, under the **same data-processing controls as S17b** (approved commercial/API config + processor terms, zero-retention/no-training where available, data minimisation, Vault-managed key). Prompt template **versioned** in a `prompts` table; per-owner **rate + cost limits**; prompt/output **auditable logging** (owner-only).
+- **Cost management:** analysis triggered **per-owner-click (never automatic)**, rate-limited per owner, monthly budget-alert threshold.
+- **Report regeneration:** owner can rerun analysis when new documents land — old reports archived, the new one becomes current.
+
+**Regulatory.** The intelligence report is an AI-assisted **DECISION SUPPORT** tool. The owner makes the final judgement — **the CRM does not auto-decline based on AI findings.** The report is **owner-only** (the partner does NOT see AI reports on their referred deals in Phase D). Findings are stored under the **defined records-retention schedule** (retention basis + duration + deletion/restriction at expiry — POPIA sets no flat period; confirm the applicable obligation with the legal advisor). The prompt template + Claude output are logged for audit.
+
+**Owner intent:** *"This is the difference between guessing at a deal and knowing what I'm submitting. Every funder submission today is manual due diligence — I read every statement, cross-check every ID, spot every mismatch. AI does this in 90 seconds instead of 4 hours, catches things I miss, and produces an audit-ready report showing I did my homework."*
+
+**Est. build:** 3–4 PRs (~2–3 weeks focused build) in Phase E6. Combines with **S17b** (Claude Story Refiner) and **S6a** (auto-generated FNC application) — all three form the **AI-assisted deal packaging suite**.
+
+**Prerequisite:** the B4.1 substrate (story on lead — see S3) + the solid B3.1/B3.2 document infrastructure (already live). No new prerequisites to add now.
+
+**Owner intent — the AI-assisted deal packaging suite (B4 close-out, 2026-07-19):** Document Intelligence, combined with the Claude Story Refiner (S17b) and the auto-generated FNC application (S6a), forms the **AI-assisted deal packaging suite** — the KEY commercial differentiator of Fund Now Capital vs other South African SME brokers. Every deal gets AI-assisted verification + an AI-refined pitch + an auto-generated professional package. A **manual version can bridge the gap before E6**, but **only under proper data handling** — client PII may not be uploaded to a consumer/personal AI account: use an approved processor (business/commercial tier under a data-processing agreement), obtain client consent, minimise/redact the documents, and delete after use. The automated CRM integration in Phase E6 is what makes this routine and audit-clean; treat the interim manual path as the exception, with the same care.

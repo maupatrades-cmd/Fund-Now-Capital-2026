@@ -44,6 +44,10 @@ NEXT: B5 (SA Data Validation — ID Luhn, CIPC format, cell, duplicate detection
 1. Doctor's Commission Estimator "Business View" transparency (blocks D5).
 2. Password expiry policy at F2 (recommend against forced 90-day rotation; prefer 2FA).
 
+## Preparation notes for future phases
+External, owner-driven pre-work that must be lined up BEFORE a build phase opens (same category as A13's Twilio/Meta WhatsApp certification — paperwork, not code).
+- ⚠️ **Phase E4 legal review pre-work required.** Two documents need external legal-advisor review BEFORE the E4 build opens (roughly 4–6 weeks from July 2026): (1) **Broker Referral Consent template** — NCR/FAIS intermediary-distinction language; (2) **Client + Partner T&Cs** — NCR/FAIS/POPIA compliance language. Owner should engage the legal advisor by ~week 3 of Phase C to allow 2–3 weeks of legal turnaround before E4 starts. Otherwise E4 code ships ready but stalls on template content. (Scope: SPEC S17 Consent Pack + T&Cs.)
+
 ## Working style
 Small verified stages. One PR per logical change; open PR, WAIT for CodeRabbit, owner merges. After any schema merge: apply migration to live DB, verify, then owner runs smoke test. Tell her what you did and what to test — never chain ten silent changes. Ask before destructive migrations. Never discuss real funder rates in partner-facing code or copy.
 
