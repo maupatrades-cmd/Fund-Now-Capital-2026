@@ -99,7 +99,7 @@ export default function ClientDetailPage() {
 
       {tab === "documents" && (
         <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
-          <DocumentsPanel clientId={client.id} referralPartnerId={client.referral_partner_id} />
+          <DocumentsPanel owner={{ type: "client", id: client.id }} referralPartnerId={client.referral_partner_id} />
         </section>
       )}
 

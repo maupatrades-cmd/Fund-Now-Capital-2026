@@ -5,10 +5,24 @@ import type {
   DocumentCategory,
   DocumentStatus,
   DocumentType,
+  RejectionReason,
   UploadSource,
+  VerificationStatus,
 } from "@/lib/documents";
 
 const BUCKET = "documents";
+
+// A document's owning entity — a lead (pre-qualification) or a client. Drives the
+// list filter, the upload storage path ({type}s/{id}/…), and the owning FK column.
+export type DocOwner = { type: "client" | "lead"; id: string };
+
+function ownerColumn(type: DocOwner["type"]): "client_id" | "lead_id" {
+  return type === "lead" ? "lead_id" : "client_id";
+}
+
+function docsQueryKey(owner: DocOwner | undefined) {
+  return ["entity-documents", owner?.type, owner?.id] as const;
+}
 
 // A row of public.documents (B3.1 schema). Shared by every document surface.
 export type DocumentRow = {
@@ -33,6 +47,11 @@ export type DocumentRow = {
   is_period_scoped: boolean;
   superseded_by: string | null;
   status: DocumentStatus;
+  verification_status: VerificationStatus;
+  rejection_reason: RejectionReason | null;
+  verification_notes: string | null;
+  verified_by: string | null;
+  verified_at: string | null;
   received_from: string | null;
   notes: string | null;
   tags: string[] | null;
@@ -46,10 +65,11 @@ export const DOCUMENT_COLUMNS =
   "id, client_id, lead_id, deal_id, referral_partner_id, filename, storage_path, " +
   "document_type, category, upload_source, file_size_bytes, mime_type, uploaded_by, " +
   "period_start, period_end, expiry_date, version_number, is_current_version, " +
-  "is_period_scoped, superseded_by, status, received_from, notes, tags, created_at, updated_at";
+  "is_period_scoped, superseded_by, status, verification_status, rejection_reason, " +
+  "verification_notes, verified_by, verified_at, received_from, notes, tags, created_at, updated_at";
 
 export type UploadDocumentInput = {
-  clientId: string;
+  owner: DocOwner;
   referralPartnerId: string | null;
   file: File;
   documentType: DocumentType;
@@ -66,15 +86,17 @@ function safeName(name: string): string {
   return name.replace(/[^\w.-]+/g, "_");
 }
 
-export function useClientDocuments(clientId: string | undefined) {
+// Documents for a single owning entity (lead OR client). The generalized query;
+// the storage path, list filter, and owning FK all key off the descriptor.
+export function useEntityDocuments(owner: DocOwner | undefined) {
   return useQuery({
-    queryKey: ["client-documents", clientId],
-    enabled: !!clientId,
+    queryKey: docsQueryKey(owner),
+    enabled: !!owner?.id,
     queryFn: async (): Promise<DocumentRow[]> => {
       const { data, error } = await supabase
         .from("documents")
         .select(DOCUMENT_COLUMNS)
-        .eq("client_id", clientId!)
+        .eq(ownerColumn(owner!.type), owner!.id)
         .order("document_type", { ascending: true })
         .order("version_number", { ascending: false });
       if (error) throw error;
@@ -83,13 +105,19 @@ export function useClientDocuments(clientId: string | undefined) {
   });
 }
 
+// Back-compat convenience for the client surfaces (deal view etc.) that only
+// ever pass a client id.
+export function useClientDocuments(clientId: string | undefined) {
+  return useEntityDocuments(clientId ? { type: "client", id: clientId } : undefined);
+}
+
 export function useUploadDocument() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: UploadDocumentInput) => {
-      const { clientId, referralPartnerId, file, documentType } = input;
+      const { owner, referralPartnerId, file, documentType } = input;
       // Storage path convention (Gap 2): {entity_type}/{entity_id}/{uuid}-{name}.
-      const path = `clients/${clientId}/${crypto.randomUUID()}-${safeName(file.name)}`;
+      const path = `${owner.type}s/${owner.id}/${crypto.randomUUID()}-${safeName(file.name)}`;
       const { error: upErr } = await supabase.storage
         .from(BUCKET)
         .upload(path, file, { contentType: file.type || undefined, upsert: false });
@@ -101,7 +129,7 @@ export function useUploadDocument() {
       const { data, error: insErr } = await supabase
         .from("documents")
         .insert({
-          client_id: clientId,
+          [ownerColumn(owner.type)]: owner.id,
           referral_partner_id: referralPartnerId,
           filename: file.name,
           storage_path: path,
@@ -118,21 +146,20 @@ export function useUploadDocument() {
         .select("id");
       if (insErr || !data || data.length !== 1) {
         // Best-effort rollback of the orphaned file. Log a NON-PII trace id
-        // (document type + client UUID + timestamp) so a "my upload didn't save"
-        // report is traceable — never the storage path, which embeds the client
+        // (document type + owning UUID + timestamp) so a "my upload didn't save"
+        // report is traceable — never the storage path, which embeds the entity
         // id and the original filename.
         const { error: rmErr } = await supabase.storage.from(BUCKET).remove([path]);
         if (rmErr) {
           console.warn(
-            `Document storage rollback failed (type=${documentType} client=${clientId} at=${new Date().toISOString()}):`,
+            `Document storage rollback failed (type=${documentType} ${owner.type}=${owner.id} at=${new Date().toISOString()}):`,
             rmErr.message,
           );
         }
         throw insErr ?? new Error("Upload was blocked (no row created).");
       }
     },
-    onSuccess: (_d, vars) =>
-      qc.invalidateQueries({ queryKey: ["client-documents", vars.clientId] }),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: docsQueryKey(vars.owner) }),
   });
 }
 
@@ -145,7 +172,7 @@ export function useDeleteDocument() {
     }: {
       id: string;
       storagePath: string;
-      clientId: string;
+      owner: DocOwner;
     }) => {
       // Delete the metadata row FIRST (RETURNING id + affected-row-count check
       // per standing rule 4) so an RLS-blocked or stale delete can't destroy the
@@ -168,8 +195,36 @@ export function useDeleteDocument() {
         );
       }
     },
-    onSuccess: (_d, vars) =>
-      qc.invalidateQueries({ queryKey: ["client-documents", vars.clientId] }),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: docsQueryKey(vars.owner) }),
+  });
+}
+
+// Owner-only accept / reject / reset via the set_document_verification RPC
+// (SECURITY DEFINER; stamps verified_by/at + writes the activity row). A reject
+// requires a reason; the RPC also enforces it server-side.
+export type VerifyDocumentInput = {
+  id: string;
+  owner: DocOwner;
+  status: VerificationStatus;
+  reason?: RejectionReason | null;
+  notes?: string | null;
+};
+
+export function useVerifyDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: VerifyDocumentInput) => {
+      const { data, error } = await supabase.rpc("set_document_verification", {
+        p_document_id: input.id,
+        p_status: input.status,
+        p_reason: input.status === "rejected" ? (input.reason ?? null) : null,
+        p_notes: input.notes ?? null,
+      });
+      if (error) throw error;
+      if (!data) throw new Error("Verification did not return a document id.");
+      return data as string;
+    },
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: docsQueryKey(vars.owner) }),
   });
 }
 

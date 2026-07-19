@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Download, Trash2, FileText, Layers, ChevronDown, ChevronRight } from "lucide-react";
+import { Download, Trash2, FileText, Layers, ChevronDown, ChevronRight, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { ExpiryPill, UploadedByBadge, OwnerOnlyBadge } from "./DocumentBadges";
+import { ExpiryPill, UploadedByBadge, OwnerOnlyBadge, VerificationBadge } from "./DocumentBadges";
 import type { DocumentRow } from "@/hooks/useClientDocuments";
 import {
   docTypeLabel,
@@ -9,11 +9,25 @@ import {
   formatFileSize,
   isPeriodScoped,
   packCoverage,
+  REJECTION_REASONS,
+  type RejectionReason,
+  type VerificationStatus,
 } from "@/lib/documents";
+
+export type VerifyInput = {
+  id: string;
+  status: VerificationStatus;
+  reason?: RejectionReason | null;
+  notes?: string | null;
+};
 
 export type DocActions = {
   onDownload: (d: DocumentRow) => void;
   onDelete?: (d: DocumentRow) => void;
+  // Owner verification. When provided, each current document shows accept/reject
+  // controls; superseded (historical) versions never do.
+  onVerify?: (input: VerifyInput) => void;
+  verifyingId?: string | null;
 };
 
 function periodRange(d: DocumentRow): string | null {
@@ -26,66 +40,173 @@ export function DocumentRowItem({
   doc,
   onDownload,
   onDelete,
+  onVerify,
+  verifyingId,
   clientName,
   dimmed,
 }: DocActions & { doc: DocumentRow; clientName?: string; dimmed?: boolean }) {
   const range = periodRange(doc);
+  // Verification only on current versions (a superseded version is frozen).
+  const showVerify = Boolean(onVerify) && !dimmed && doc.is_current_version;
   return (
-    <li className={`flex items-center gap-3 p-3 ${dimmed ? "opacity-60" : ""}`}>
-      <FileText className="h-5 w-5 shrink-0 text-brand-teal" />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate text-sm font-medium text-brand-navy">{doc.filename}</span>
-          {clientName && (
-            <span className="text-xs text-muted-foreground">· {clientName}</span>
-          )}
-          <Badge className="bg-slate-100 text-slate-600 ring-slate-500/20">
-            {docTypeLabel(doc.document_type)}
-          </Badge>
-          {doc.version_number > 1 && (
-            <Badge className="bg-slate-100 text-slate-500 ring-slate-400/20">
-              v{doc.version_number}
+    <li className={`flex flex-col gap-2 p-3 ${dimmed ? "opacity-60" : ""}`}>
+      <div className="flex items-center gap-3">
+        <FileText className="h-5 w-5 shrink-0 text-brand-teal" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate text-sm font-medium text-brand-navy">{doc.filename}</span>
+            {clientName && (
+              <span className="text-xs text-muted-foreground">· {clientName}</span>
+            )}
+            <Badge className="bg-slate-100 text-slate-600 ring-slate-500/20">
+              {docTypeLabel(doc.document_type)}
             </Badge>
-          )}
-          <ExpiryPill expiryDate={doc.expiry_date} />
-          <OwnerOnlyBadge documentType={doc.document_type} />
-          <UploadedByBadge source={doc.upload_source} />
-        </div>
-        <div className="mt-0.5 text-xs text-muted-foreground">
-          {range && <span>{range} · </span>}
-          {formatFileSize(doc.file_size_bytes)}
-          {doc.file_size_bytes ? " · " : ""}
-          {formatDocDate(doc.created_at)}
-        </div>
-        {doc.tags && doc.tags.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {doc.tags.map((t) => (
-              <Badge key={t} className="bg-brand-teal/10 text-brand-teal ring-brand-teal/20">
-                #{t}
+            {doc.version_number > 1 && (
+              <Badge className="bg-slate-100 text-slate-500 ring-slate-400/20">
+                v{doc.version_number}
               </Badge>
-            ))}
+            )}
+            <VerificationBadge status={doc.verification_status} reason={doc.rejection_reason} />
+            <ExpiryPill expiryDate={doc.expiry_date} />
+            <OwnerOnlyBadge documentType={doc.document_type} />
+            <UploadedByBadge source={doc.upload_source} />
           </div>
-        )}
-      </div>
-      <button
-        type="button"
-        onClick={() => onDownload(doc)}
-        className="text-muted-foreground hover:text-brand-teal"
-        aria-label={`Download ${doc.filename}`}
-      >
-        <Download className="h-4 w-4" />
-      </button>
-      {onDelete && (
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            {range && <span>{range} · </span>}
+            {formatFileSize(doc.file_size_bytes)}
+            {doc.file_size_bytes ? " · " : ""}
+            {formatDocDate(doc.created_at)}
+          </div>
+          {doc.tags && doc.tags.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {doc.tags.map((t) => (
+                <Badge key={t} className="bg-brand-teal/10 text-brand-teal ring-brand-teal/20">
+                  #{t}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
         <button
           type="button"
-          onClick={() => onDelete(doc)}
-          className="text-muted-foreground hover:text-red-600"
-          aria-label={`Delete ${doc.filename}`}
+          onClick={() => onDownload(doc)}
+          className="text-muted-foreground hover:text-brand-teal"
+          aria-label={`Download ${doc.filename}`}
         >
-          <Trash2 className="h-4 w-4" />
+          <Download className="h-4 w-4" />
         </button>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(doc)}
+            className="text-muted-foreground hover:text-red-600"
+            aria-label={`Delete ${doc.filename}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+      {showVerify && (
+        <VerificationControls
+          doc={doc}
+          busy={verifyingId === doc.id}
+          onVerify={onVerify!}
+        />
       )}
     </li>
+  );
+}
+
+// Owner accept/reject controls for a single current document. Reject expands an
+// inline reason picker (required) + optional notes.
+function VerificationControls({
+  doc,
+  busy,
+  onVerify,
+}: {
+  doc: DocumentRow;
+  busy: boolean;
+  onVerify: (input: VerifyInput) => void;
+}) {
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState<RejectionReason>("illegible");
+  const [notes, setNotes] = useState("");
+
+  const ctl =
+    "rounded-md border border-border bg-white px-2 py-1 text-xs outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
+  const btn = "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold disabled:opacity-60";
+
+  if (rejecting) {
+    return (
+      <div className="ml-8 flex flex-wrap items-end gap-2 rounded-md bg-red-50 p-2">
+        <label className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
+          Reason
+          <select className={ctl} value={reason} onChange={(e) => setReason(e.target.value as RejectionReason)}>
+            {REJECTION_REASONS.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-1 flex-col gap-1 text-[11px] font-medium text-muted-foreground">
+          Notes (owner-only, optional)
+          <input
+            type="text"
+            className={ctl}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Not shared with the partner"
+          />
+        </label>
+        <button
+          type="button"
+          disabled={busy}
+          className={`${btn} bg-red-600 text-white hover:bg-red-700`}
+          onClick={() => onVerify({ id: doc.id, status: "rejected", reason, notes: notes.trim() || null })}
+        >
+          Confirm reject
+        </button>
+        <button type="button" className={`${btn} border border-border text-brand-navy`} onClick={() => setRejecting(false)}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ml-8 flex items-center gap-2">
+      {doc.verification_status !== "accepted" && (
+        <button
+          type="button"
+          disabled={busy}
+          className={`${btn} bg-green-600 text-white hover:bg-green-700`}
+          onClick={() => onVerify({ id: doc.id, status: "accepted" })}
+        >
+          <Check className="h-3 w-3" /> Accept
+        </button>
+      )}
+      {doc.verification_status !== "rejected" && (
+        <button
+          type="button"
+          disabled={busy}
+          className={`${btn} border border-red-200 text-red-700 hover:bg-red-50`}
+          onClick={() => setRejecting(true)}
+        >
+          <X className="h-3 w-3" /> Reject
+        </button>
+      )}
+      {doc.verification_status !== "unverified" && (
+        <button
+          type="button"
+          disabled={busy}
+          className={`${btn} border border-border text-muted-foreground hover:bg-slate-50`}
+          onClick={() => onVerify({ id: doc.id, status: "unverified" })}
+        >
+          Reset
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -96,6 +217,8 @@ function PackCard({
   docs,
   onDownload,
   onDelete,
+  onVerify,
+  verifyingId,
 }: DocActions & { documentType: string; docs: DocumentRow[] }) {
   const [showIndividual, setShowIndividual] = useState(false);
   const { start, end, months } = packCoverage(docs);
@@ -145,6 +268,8 @@ function PackCard({
               doc={d}
               onDownload={onDownload}
               onDelete={onDelete}
+              onVerify={onVerify}
+              verifyingId={verifyingId}
             />
           ))}
         </ul>
@@ -156,7 +281,13 @@ function PackCard({
 // Full document list for a single entity (client tab / deal view). Groups
 // current versions by type — period-scoped types render as packs, everything
 // else as rows — and hides superseded versions behind a toggle.
-export function DocumentList({ docs, onDownload, onDelete }: DocActions & { docs: DocumentRow[] }) {
+export function DocumentList({
+  docs,
+  onDownload,
+  onDelete,
+  onVerify,
+  verifyingId,
+}: DocActions & { docs: DocumentRow[] }) {
   const [showHistory, setShowHistory] = useState(false);
 
   const current = docs.filter((d) => d.is_current_version);
@@ -184,11 +315,20 @@ export function DocumentList({ docs, onDownload, onDelete }: DocActions & { docs
             docs={group}
             onDownload={onDownload}
             onDelete={onDelete}
+            onVerify={onVerify}
+            verifyingId={verifyingId}
           />
         ) : (
           <ul key={type} className="divide-y divide-border rounded-lg border border-border">
             {group.map((d) => (
-              <DocumentRowItem key={d.id} doc={d} onDownload={onDownload} onDelete={onDelete} />
+              <DocumentRowItem
+                key={d.id}
+                doc={d}
+                onDownload={onDownload}
+                onDelete={onDelete}
+                onVerify={onVerify}
+                verifyingId={verifyingId}
+              />
             ))}
           </ul>
         ),

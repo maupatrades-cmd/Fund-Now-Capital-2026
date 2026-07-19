@@ -308,21 +308,43 @@ export function useStartQualifying() {
   });
 }
 
+// The document verification gate (B3.2): the human labels of required categories
+// still missing accepted documents on this lead. Empty array ⇒ ready to qualify.
+// Drives the disabled Qualify button + tooltip; the RPC is the same rule the
+// qualify_lead server-side gate enforces.
+export function useLeadRequiredDocsMissing(leadId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["lead-required-docs-missing", leadId],
+    enabled: !!leadId && enabled,
+    queryFn: async (): Promise<string[]> => {
+      const { data, error } = await supabase.rpc("lead_required_docs_missing", { p_lead_id: leadId });
+      if (error) throw error;
+      return (data ?? []) as string[];
+    },
+  });
+}
+
 // Qualify → atomic client + deal creation via the qualify_lead RPC. Returns the
-// deal id (existing one if the lead was already qualified — idempotent).
+// deal id (existing one if the lead was already qualified — idempotent). When the
+// document gate isn't met the RPC rejects unless `override` is passed (which also
+// writes an activity_logs audit row server-side).
 export function useQualifyLead() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string): Promise<string> => {
-      const { data, error } = await supabase.rpc("qualify_lead", { p_lead_id: id });
+    mutationFn: async ({ id, override }: { id: string; override?: boolean }): Promise<string> => {
+      const { data, error } = await supabase.rpc("qualify_lead", {
+        p_lead_id: id,
+        p_override: override ?? false,
+      });
       if (error) throw error;
       if (!data) throw new Error("Qualification did not return a deal");
       return data as string;
     },
-    onSuccess: (_dealId, id) => {
+    onSuccess: (_dealId, { id }) => {
       qc.invalidateQueries({ queryKey: ["lead", id] });
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["deals"] });
+      qc.invalidateQueries({ queryKey: ["lead-required-docs-missing", id] });
       invalidateActivity(qc);
     },
   });
