@@ -7,7 +7,7 @@ import {
   useDeleteDocument,
   useVerifyDocument,
   openDocument,
-  type DocOwner,
+  type DocEntity,
 } from "@/hooks/useClientDocuments";
 import { DocumentList } from "@/components/documents/DocumentList";
 import { DocumentsEmptyState } from "@/components/documents/DocumentsEmptyState";
@@ -24,13 +24,13 @@ const ctl =
   "rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
 
 export function DocumentsPanel({
-  owner,
+  entity,
   referralPartnerId,
 }: {
-  owner: DocOwner;
+  entity: DocEntity;
   referralPartnerId: string | null;
 }) {
-  const { data: docs, isLoading } = useEntityDocuments(owner);
+  const { data: docs, isLoading } = useEntityDocuments(entity);
   const upload = useUploadDocument();
   const del = useDeleteDocument();
   const verify = useVerifyDocument();
@@ -73,7 +73,7 @@ export function DocumentsPanel({
     if (!file) return;
     try {
       await upload.mutateAsync({
-        owner,
+        entity,
         referralPartnerId,
         file,
         documentType,
@@ -239,14 +239,14 @@ export function DocumentsPanel({
           onDownload={(d) => openDocument(d.storage_path)}
           onDelete={(d) =>
             del.mutate(
-              { id: d.id, storagePath: d.storage_path, owner },
+              { id: d.id, storagePath: d.storage_path, entity },
               { onError: (e) => toast.error((e as Error).message || "Delete failed") },
             )
           }
           verifyingId={verify.isPending ? verify.variables?.id : null}
           onVerify={(input) =>
             verify.mutate(
-              { ...input, owner },
+              { ...input, entity },
               {
                 onSuccess: () =>
                   toast.success(

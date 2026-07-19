@@ -13,15 +13,28 @@ import type {
 const BUCKET = "documents";
 
 // A document's owning entity — a lead (pre-qualification) or a client. Drives the
-// list filter, the upload storage path ({type}s/{id}/…), and the owning FK column.
-export type DocOwner = { type: "client" | "lead"; id: string };
+// list filter, the upload storage path ({kind}s/{id}/…), and the owning FK column.
+export type DocEntity = { kind: "client" | "lead"; id: string };
 
-function ownerColumn(type: DocOwner["type"]): "client_id" | "lead_id" {
-  return type === "lead" ? "lead_id" : "client_id";
+function entityColumn(kind: DocEntity["kind"]): "client_id" | "lead_id" {
+  return kind === "lead" ? "lead_id" : "client_id";
 }
 
-function docsQueryKey(owner: DocOwner | undefined) {
-  return ["entity-documents", owner?.type, owner?.id] as const;
+function docsQueryKey(entity: DocEntity | undefined) {
+  return ["entity-documents", entity?.kind, entity?.id] as const;
+}
+
+// The gate query (B3.2) is keyed by lead id; verifying/deleting a lead-owned
+// document changes which required categories are satisfied, so those mutations
+// must refresh it alongside the document list.
+function invalidateEntity(
+  qc: { invalidateQueries: (o: { queryKey: readonly unknown[] }) => void },
+  entity: DocEntity,
+) {
+  qc.invalidateQueries({ queryKey: docsQueryKey(entity) });
+  if (entity.kind === "lead") {
+    qc.invalidateQueries({ queryKey: ["lead-required-docs-missing", entity.id] });
+  }
 }
 
 // A row of public.documents (B3.1 schema). Shared by every document surface.
@@ -69,7 +82,7 @@ export const DOCUMENT_COLUMNS =
   "verification_notes, verified_by, verified_at, received_from, notes, tags, created_at, updated_at";
 
 export type UploadDocumentInput = {
-  owner: DocOwner;
+  entity: DocEntity;
   referralPartnerId: string | null;
   file: File;
   documentType: DocumentType;
@@ -88,15 +101,15 @@ function safeName(name: string): string {
 
 // Documents for a single owning entity (lead OR client). The generalized query;
 // the storage path, list filter, and owning FK all key off the descriptor.
-export function useEntityDocuments(owner: DocOwner | undefined) {
+export function useEntityDocuments(entity: DocEntity | undefined) {
   return useQuery({
-    queryKey: docsQueryKey(owner),
-    enabled: !!owner?.id,
+    queryKey: docsQueryKey(entity),
+    enabled: !!entity?.id,
     queryFn: async (): Promise<DocumentRow[]> => {
       const { data, error } = await supabase
         .from("documents")
         .select(DOCUMENT_COLUMNS)
-        .eq(ownerColumn(owner!.type), owner!.id)
+        .eq(entityColumn(entity!.kind), entity!.id)
         .order("document_type", { ascending: true })
         .order("version_number", { ascending: false });
       if (error) throw error;
@@ -108,28 +121,34 @@ export function useEntityDocuments(owner: DocOwner | undefined) {
 // Back-compat convenience for the client surfaces (deal view etc.) that only
 // ever pass a client id.
 export function useClientDocuments(clientId: string | undefined) {
-  return useEntityDocuments(clientId ? { type: "client", id: clientId } : undefined);
+  return useEntityDocuments(clientId ? { kind: "client", id: clientId } : undefined);
 }
 
 export function useUploadDocument() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: UploadDocumentInput) => {
-      const { owner, referralPartnerId, file, documentType } = input;
-      // Storage path convention (Gap 2): {entity_type}/{entity_id}/{uuid}-{name}.
-      const path = `${owner.type}s/${owner.id}/${crypto.randomUUID()}-${safeName(file.name)}`;
+      const { entity, referralPartnerId, file, documentType } = input;
+      // Entity-prefixed path convention (B3.2): {kind}s/{id}/{document_id}/{name}.
+      // The document id is generated client-side and used as BOTH the row id and
+      // the path segment, so the storage layout is stable + self-describing.
+      const documentId = crypto.randomUUID();
+      const path = `${entity.kind}s/${entity.id}/${documentId}/${safeName(file.name)}`;
       const { error: upErr } = await supabase.storage
         .from(BUCKET)
         .upload(path, file, { contentType: file.type || undefined, upsert: false });
       if (upErr) throw upErr;
 
       // uploaded_by defaults to auth.uid() server-side (audit-truth, immutable);
-      // upload_source defaults to 'owner'. We RETURNING id and check the row
-      // count so a silent RLS failure surfaces loudly (CLAUDE.md standing rule).
+      // upload_source defaults to 'owner'. deal_id is left null — a lead/client
+      // document is never attached to a deal at upload (DB CHECK enforces lead XOR
+      // deal). We RETURNING id and check the row count so a silent RLS failure
+      // surfaces loudly (CLAUDE.md standing rule).
       const { data, error: insErr } = await supabase
         .from("documents")
         .insert({
-          [ownerColumn(owner.type)]: owner.id,
+          id: documentId,
+          [entityColumn(entity.kind)]: entity.id,
           referral_partner_id: referralPartnerId,
           filename: file.name,
           storage_path: path,
@@ -152,14 +171,14 @@ export function useUploadDocument() {
         const { error: rmErr } = await supabase.storage.from(BUCKET).remove([path]);
         if (rmErr) {
           console.warn(
-            `Document storage rollback failed (type=${documentType} ${owner.type}=${owner.id} at=${new Date().toISOString()}):`,
+            `Document storage rollback failed (type=${documentType} ${entity.kind}=${entity.id} at=${new Date().toISOString()}):`,
             rmErr.message,
           );
         }
         throw insErr ?? new Error("Upload was blocked (no row created).");
       }
     },
-    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: docsQueryKey(vars.owner) }),
+    onSuccess: (_d, vars) => invalidateEntity(qc, vars.entity),
   });
 }
 
@@ -172,7 +191,7 @@ export function useDeleteDocument() {
     }: {
       id: string;
       storagePath: string;
-      owner: DocOwner;
+      entity: DocEntity;
     }) => {
       // Delete the metadata row FIRST (RETURNING id + affected-row-count check
       // per standing rule 4) so an RLS-blocked or stale delete can't destroy the
@@ -195,7 +214,7 @@ export function useDeleteDocument() {
         );
       }
     },
-    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: docsQueryKey(vars.owner) }),
+    onSuccess: (_d, vars) => invalidateEntity(qc, vars.entity),
   });
 }
 
@@ -204,7 +223,7 @@ export function useDeleteDocument() {
 // requires a reason; the RPC also enforces it server-side.
 export type VerifyDocumentInput = {
   id: string;
-  owner: DocOwner;
+  entity: DocEntity;
   status: VerificationStatus;
   reason?: RejectionReason | null;
   notes?: string | null;
@@ -224,7 +243,7 @@ export function useVerifyDocument() {
       if (!data) throw new Error("Verification did not return a document id.");
       return data as string;
     },
-    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: docsQueryKey(vars.owner) }),
+    onSuccess: (_d, vars) => invalidateEntity(qc, vars.entity),
   });
 }
 

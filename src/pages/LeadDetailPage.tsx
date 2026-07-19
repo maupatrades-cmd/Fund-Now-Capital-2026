@@ -148,7 +148,7 @@ export default function LeadDetailPage() {
           Upload and verify the lead's documents here. Required accepted documents gate qualification;
           on qualify, these move to the client automatically.
         </p>
-        <DocumentsPanel owner={{ type: "lead", id: lead.id }} referralPartnerId={lead.referral_partner_id} />
+        <DocumentsPanel entity={{ kind: "lead", id: lead.id }} referralPartnerId={lead.referral_partner_id} />
       </section>
 
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">

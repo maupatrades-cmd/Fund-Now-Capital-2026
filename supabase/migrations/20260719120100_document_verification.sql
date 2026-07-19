@@ -45,6 +45,16 @@ do $$ begin
       add constraint documents_rejection_reason_scope
       check ((verification_status = 'rejected') = (rejection_reason is not null));
   end if;
+  if not exists (select 1 from pg_constraint where conname = 'documents_lead_deal_orthogonal') then
+    -- A lead-owned document is never also attached to a deal: deal attachment is
+    -- only meaningful once a document is client-side (post-qualification). Sits
+    -- alongside the B3.1 num_nonnulls(lead_id, client_id) = 1 XOR CHECK — together
+    -- they enforce: exactly one of (lead_id, client_id), AND if lead_id is set,
+    -- deal_id must be null. Existing rows all have lead_id null, so this is valid.
+    alter table public.documents
+      add constraint documents_lead_deal_orthogonal
+      check ((lead_id is null) or (deal_id is null));
+  end if;
 end $$;
 
 -- ===========================================================================
