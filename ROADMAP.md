@@ -37,6 +37,14 @@ Goal: the data structures every later feature assumes.
 Goal: every rand invoiced, tracked, and paid — with the audit trail already live under it.
 _Email design: every email here (invoices, statements, payment/overdue notices) extends one of the four canonical templates in **SPEC S16** — never designed from scratch._
 
+- ⬜ **C0. Money Operations Foundations (opens Phase C — prerequisite for C1 and C2).** Per-funder commission structure tracking. Each funder in the CRM has its own commission rate that FNC earns from them per signed broker agreement. The commission engine today computes only the FNC-internal 40/60 split + tiered Doctor's share — it doesn't know what FNC earns from each specific funder. This module adds:
+  - `funder_commission_structures` table: (funder_id, deal_type, rate_type, rate_value, effective_from, effective_to, notes, contract_clause_ref).
+  - `rate_type` enum: `percent_of_gross_funded` · `percent_of_mdr` · `flat_rand_per_deal`.
+  - Owner-only `/settings/funders` sub-tab for maintaining rate structures per funder.
+  - Historical rate lookup (which rate applied when a deal funded).
+  - Wires into `deal_funder_submissions.amount_approved` / `amount_funded` (the S7A substrate) so commission on approval = rate applied to the approved amount, commission on funding = rate applied to the funded amount.
+
+  **C0 must ship before C1 (invoicing) or C2 (commission auto-write)** — both depend on knowing what FNC earns per deal per funder. Owner intent: _"Each funder has its own rate structure per signed broker agreement. The CRM must know these rates to invoice correctly, compute honest commissions, and show accurate per-approval potential earnings on Doctor's Phase D portal."_ Full lifecycle spec in **SPEC S7A**.
 - ⬜ C1. Invoicing FNC → funders: `invoices`/`line_items`/`payments` tables, auto-draft on Funded, approval flow, branded PDF (sequence continues from INV-0031), Resend delivery, overdue flags at 30/45/60 days
 - ⬜ C2. Commission records wiring: deal funded → `commission_records` ledger row (the follow-up Claude Code flagged in PR #9)
 - ⬜ C3. Doctor's earnings engine: `doctor_earnings` lifecycle (earned → ready_to_invoice → invoiced → paid)

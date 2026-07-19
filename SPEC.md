@@ -221,6 +221,43 @@ Flow: deal → Funded stage ⇒ auto-draft invoice (pending_approval) ⇒ owner 
 
 ---
 
+## S7A. COMMISSION LIFECYCLE AMOUNTS (Part 5 — Roadmap C0/C2)
+
+Commission calculation depends on the **per-funder rate structure** (see ROADMAP **Phase C0**). The `deal_funder_submissions.amount_approved` / `amount_funded` columns are the substrate; **C0 provides the rate lookup that produces the FNC gross, which then feeds the existing 40/60 tiered engine** (`calculate_commission()`). Nothing here changes the internal split math — it only supplies the gross that math runs on.
+
+**Three commission states per submission** — each tied to a different amount column and displayed with a different certainty label:
+
+**State 1 — Estimated (submission created):**
+- Trigger: `deal_funder_submissions` INSERT.
+- Uses: `amount_requested` (from the deal — what the client asked for).
+- Calculation: `funder_rate × amount_requested → FNC gross → 40/60 split → tiered partner share`.
+- Owner sees: "Estimated FNC gross: R X. Estimated owner share: R Y. Estimated partner share: R Z."
+- Partner (Phase D) sees: "Estimated potential commission: R Z" (partner share only per the D5 decision).
+- Certainty: rough — depends on whether the funder approves the requested amount.
+
+**State 2 — Potential (funder approved):**
+- Trigger: `amount_approved` set on the submission (status → `approved`).
+- Uses: `amount_approved` (what the funder actually offered).
+- Calculation: same as State 1 with the approved amount.
+- Owner sees: "Potential FNC gross if client accepts: R X."
+- Partner sees: "Potential commission if client accepts: R Z."
+- Certainty: firm offer — the client still needs to accept.
+- Multiple funder approvals are visible in parallel (per S11 — Doctor sees all offers; the owner picks the one presented to the client).
+
+**State 3 — Actual (deal funded):**
+- Trigger: `amount_funded` set on the submission (status → `funded`, deal stage → Funded).
+- Uses: `amount_funded` (what actually landed in the client's account after any funder fees).
+- Calculation: same engine, actual amount.
+- Owner sees: "Actual FNC gross earned: R X."
+- Partner sees: "Actual commission earned: R Z" (feeds Doctor's Earnings module, Phase C3).
+- Certainty: real money — feeds invoice generation (C1) and the Doctor's earnings lifecycle (C3).
+
+**Rate lookup rule:** Phase C0's per-funder rate structure is queried per submission using the `funder_commission_structures.effective_from` / `effective_to` bracket that matches the **submission's status-transition date**. So if Merchant Capital's rate structure changes on March 1 and a submission approved on Feb 15 funds on March 15, the **Feb rate** applies (the rate as-of approval, not as-of funding). This handles historical accuracy when rates renegotiate over time.
+
+**Rate structure snapshot:** at each state transition (submitted, approved, funded) the applied rate is stored as a **snapshot on the `commission_record`** (Phase C2), so a historical audit shows exactly what rate applied at each stage even if the funder's live rate has since changed.
+
+---
+
 ## S8. DOCTOR'S PAYROLL (Part 5 M3 — Roadmap C3–C5, portal screens D2)
 
 `doctor_earnings`: id, deal_id, deal_funder_submission_id, doctor_id FK referral_partners, commission_amount, tier_applied, status enum(earned/ready_to_invoice/invoiced/paid), earned_at (deal funded), ready_to_invoice_at (FNC received funder payment), invoiced_at, paid_at. Computed server-side from `calculate_commission` — never client-supplied.
@@ -264,6 +301,8 @@ Screens (Part 1 spec): Dashboard (KPI cards: leads this month, deals in progress
 
 **Deal Success Timeline — visual reference (Part 3 F3):** use the horizontal step-progression pattern with arrow/chevron shapes, brand colours (navy → teal → light teal for completed / current / upcoming), icon circles per step, and step label + timestamp below. Reference mockup saved by owner.
 Visual pattern reference: horizontal step-progression with numbered/coloured tiles and directional arrows, similar to standard project-milestone infographics. Use brand colours: navy #1a3a52 for completed, teal #2da8b8 for current step, brand green #5dba5d for upcoming/pending steps, cyan #3ec6d9 for accents. Icon per step. Label + status timestamp below each tile. See owner's saved reference (Envato milestone infographic) for visual language.
+
+**Commission state labels on the timeline (S7A):** Doctor's portal displays commission in state-appropriate labels — **"Estimated"** at submission, **"Potential (if you accept)"** at approval, **"Earned"** at funding. It **never** displays the internal FNC gross or the 40/60 split math — **partner share only** per the D5 decision. When multiple funders approve simultaneously, Doctor sees all offers with per-funder Potential values so he can appreciate the offer landscape (the owner still has the final call on which offer is presented to the client).
 
 **Submission decline (data model live from Roadmap A9.5; partner surface built here in Phase D):** each funder submission carries a partner-safe `decline_reason_category` (affordability / documentation_gaps / sector_appetite / credit_profile / security_insufficient / funder_criteria_not_met / other) and an owner-only `decline_notes_internal`. On the partner deal timeline a declined submission reads **"Declined by [fictional name] — [generic reason category]"**, sourced from `partner_submission_view` (fictional funder name + status + reason category only — never the real funder name, the internal notes, or any commission figures). When the last active submission on a deal is declined, the deal auto-moves to the terminal Declined stage.
 
