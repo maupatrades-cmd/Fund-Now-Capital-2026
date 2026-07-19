@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   useClientStory,
@@ -19,9 +19,16 @@ export function StoryPanel({ clientId }: { clientId: string }) {
   const save = useSaveClientStory();
   const [draft, setDraft] = useState<Draft>({});
 
-  // Seed the form from the loaded story (once loaded / when it changes).
+  // Seed the form once per story identity (id + updated_at), NOT on every
+  // background refetch — otherwise a refetch-on-window-focus/reconnect while the
+  // owner is mid-edit would silently overwrite unsaved narrative. The key also
+  // changes after a save (updated_at bumps), so the freshly-saved values re-seed.
+  const seededRef = useRef<string | null>(null);
   useEffect(() => {
     if (!story) return;
+    const key = `${story.id}:${story.updated_at}`;
+    if (seededRef.current === key) return;
+    seededRef.current = key;
     const seeded: Draft = {};
     for (const f of STORY_FIELDS) seeded[f.key] = (story[f.key] as string | null) ?? "";
     setDraft(seeded);
