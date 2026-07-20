@@ -155,7 +155,8 @@ export default function LeadDetailPage() {
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
         <h3 className="mb-1 text-sm font-semibold text-brand-navy">Directors &amp; Shareholders</h3>
         <p className="mb-4 text-xs text-muted-foreground">
-          Capture directors, shareholders, sureties, and beneficial owners for this lead.
+          Capture directors, shareholders, sureties, and beneficial owners for this lead — they move
+          to the client automatically at qualification.
         </p>
         <StakeholdersPanel entity={{ kind: "lead", id: lead.id }} />
       </section>
