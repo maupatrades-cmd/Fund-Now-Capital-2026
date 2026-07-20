@@ -7,11 +7,12 @@ import { ContactsManager } from "@/components/clients/ContactsManager";
 import { DocumentsPanel } from "@/components/clients/DocumentsPanel";
 import { StoryPanel } from "@/components/clients/StoryPanel";
 import { CallLogPanel } from "@/components/clients/CallLogPanel";
+import { StakeholdersPanel } from "@/components/stakeholders/StakeholdersPanel";
 import { referredByMeta } from "@/lib/clients";
 import { formatZAR } from "@/lib/format";
 import { ActivityFeed } from "@/components/activity/ActivityFeed";
 
-type Tab = "overview" | "story" | "documents" | "calllog" | "notes" | "activity";
+type Tab = "overview" | "story" | "stakeholders" | "documents" | "calllog" | "notes" | "activity";
 
 export default function ClientDetailPage() {
   const { id } = useParams();
@@ -66,6 +67,9 @@ export default function ClientDetailPage() {
         <TabButton active={tab === "story"} onClick={() => setTab("story")}>
           Story
         </TabButton>
+        <TabButton active={tab === "stakeholders"} onClick={() => setTab("stakeholders")}>
+          Stakeholders
+        </TabButton>
         <TabButton active={tab === "documents"} onClick={() => setTab("documents")}>
           Documents
         </TabButton>
@@ -108,6 +112,17 @@ export default function ClientDetailPage() {
       {tab === "story" && (
         <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
           <StoryPanel clientId={client.id} />
+        </section>
+      )}
+
+      {tab === "stakeholders" && (
+        <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+          <h3 className="mb-1 text-sm font-semibold text-brand-navy">Directors &amp; Shareholders</h3>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Directors, shareholders, sureties, and beneficial owners (FICA) — SA ID or passport, with
+            shareholding and beneficial-owner tracking.
+          </p>
+          <StakeholdersPanel entity={{ kind: "client", id: client.id }} />
         </section>
       )}
 
