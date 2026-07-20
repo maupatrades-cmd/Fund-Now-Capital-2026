@@ -58,10 +58,14 @@ create table if not exists public.client_stakeholders (
 
   constraint client_stakeholders_owner_xor
     check (num_nonnulls(lead_id, client_id) = 1),
-  -- passport => country present; sa_id => country absent.
+  -- passport => country present AND a valid ISO 3166 alpha-2 code (two uppercase
+  -- letters); sa_id => country absent. The `is not null` guard is kept explicitly
+  -- so a passport with a NULL country stays rejected — a bare `~` on NULL yields
+  -- NULL, which a CHECK treats as passing (the null-hole the format regex alone
+  -- would open).
   constraint client_stakeholders_passport_country
     check (
-      (id_type = 'passport' and passport_country is not null) or
+      (id_type = 'passport' and passport_country is not null and passport_country ~ '^[A-Z]{2}$') or
       (id_type = 'sa_id'    and passport_country is null)
     ),
   -- at least one role (empty array must be rejected — array_length('{}') is NULL,
@@ -339,6 +343,13 @@ begin
     insert into public.client_stakeholders (client_id, full_name, id_type, passport_country, roles, created_by)
     values (v_client, 'Test', 'sa_id', 'GB', array['director']::public.stakeholder_role[], v_owner);
     raise exception 'stakeholder assert FAIL: sa_id with country accepted';
+  exception when check_violation then null; end;
+
+  -- (b2) passport with a non-alpha-2 country (lowercase / wrong length) → rejected.
+  begin
+    insert into public.client_stakeholders (client_id, full_name, id_type, passport_country, roles, created_by)
+    values (v_client, 'Test', 'passport', 'zz', array['director']::public.stakeholder_role[], v_owner);
+    raise exception 'stakeholder assert FAIL: passport with non-ISO country accepted';
   exception when check_violation then null; end;
 
   -- (c) empty roles → rejected.
