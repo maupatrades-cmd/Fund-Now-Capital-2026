@@ -44,17 +44,20 @@ end $$;
 --    are safe (the NOT VALID + CONCURRENTLY dance is only for FK COLUMNS added
 --    to populated tables).
 --
---    rate_value is a numeric(10,4) *rate* — a justified deviation from the
---    numeric(14,2) money rule (it holds a decimal fraction like 0.0800 = 8% for
---    percent types, or a flat rand for flat_rand_per_deal). numeric is exact
---    decimal, so 0.0800 has no float drift on multiplication (decision B).
+--    Rate storage is SPLIT by kind (decision 1A): rate_fraction (numeric(10,4))
+--    holds a 0..1 decimal fraction for the percent types (0.0800 = 8%);
+--    flat_amount (numeric(14,2) — money per rule 6) holds the rand for
+--    flat_rand_per_deal. Exactly one is set per rate_type (fcs_rate_bounds_ck).
+--    numeric is exact decimal — 0.0800 has no float drift on multiplication
+--    (decision B: always store as fraction, display as %).
 -- ===========================================================================
 create table if not exists public.funder_commission_structures (
   id                  uuid primary key default gen_random_uuid(),
   funder_id           uuid not null references public.funders(id) on delete restrict,
   deal_type           public.deal_type not null,
   rate_type           public.funder_rate_type not null,
-  rate_value          numeric(10,4) not null,
+  rate_fraction       numeric(10,4),      -- 0..1 fraction for percent_of_* types (null for flat)
+  flat_amount         numeric(14,2),      -- rand for flat_rand_per_deal (null for percent); money rule 6
   effective_from      date not null,
   effective_to        date,               -- null = still active (open-ended)
   contract_clause_ref text,
@@ -66,12 +69,16 @@ create table if not exists public.funder_commission_structures (
   -- effective_to, when set, is inclusive and must be after effective_from.
   constraint fcs_effective_range_ck
     check (effective_to is null or effective_to > effective_from),
-  -- rate bounds keyed on rate_type: percentages are a 0..1 fraction; flat rand
-  -- is non-negative (decision B).
+  -- Rate shape + bounds keyed on rate_type (decision 1A): percent types carry a
+  -- 0..1 rate_fraction and NO flat_amount; flat_rand_per_deal carries a
+  -- non-negative flat_amount (money) and NO rate_fraction. Exactly one is set.
   constraint fcs_rate_bounds_ck check (
-    (rate_type in ('percent_of_gross_funded', 'percent_of_mdr')
-       and rate_value >= 0 and rate_value <= 1)
-    or (rate_type = 'flat_rand_per_deal' and rate_value >= 0)
+    case rate_type
+      when 'flat_rand_per_deal'
+        then flat_amount is not null and flat_amount >= 0 and rate_fraction is null
+      else
+        rate_fraction is not null and rate_fraction >= 0 and rate_fraction <= 1 and flat_amount is null
+    end
   ),
   -- Non-overlap: at most one active structure per (funder, deal_type) on any
   -- date. daterange(from, to, '[]') is inclusive-both; a NULL upper bound makes
@@ -346,35 +353,49 @@ begin
     return;
   end if;
 
-  -- (a) percent rate > 1 rejected.
+  -- (a) percent rate_fraction > 1 rejected.
   begin
-    insert into public.funder_commission_structures (funder_id, deal_type, rate_type, rate_value, effective_from)
+    insert into public.funder_commission_structures (funder_id, deal_type, rate_type, rate_fraction, effective_from)
     values (v_funder, 'non_po', 'percent_of_gross_funded', 1.5, date '2026-01-01');
-    raise exception 'C0.1 assert FAIL: percent rate > 1 accepted';
+    raise exception 'C0.1 assert FAIL: percent rate_fraction > 1 accepted';
   exception when check_violation then null; end;
 
-  -- (b) negative flat rand rejected.
+  -- (a2) percent type must NOT carry a flat_amount (wrong column) — rejected.
   begin
-    insert into public.funder_commission_structures (funder_id, deal_type, rate_type, rate_value, effective_from)
+    insert into public.funder_commission_structures (funder_id, deal_type, rate_type, rate_fraction, flat_amount, effective_from)
+    values (v_funder, 'non_po', 'percent_of_gross_funded', 0.08, 500, date '2026-01-01');
+    raise exception 'C0.1 assert FAIL: percent type accepted a flat_amount';
+  exception when check_violation then null; end;
+
+  -- (b) negative flat_amount rejected.
+  begin
+    insert into public.funder_commission_structures (funder_id, deal_type, rate_type, flat_amount, effective_from)
     values (v_funder, 'non_po', 'flat_rand_per_deal', -1, date '2026-01-01');
-    raise exception 'C0.1 assert FAIL: negative flat rate accepted';
+    raise exception 'C0.1 assert FAIL: negative flat_amount accepted';
+  exception when check_violation then null; end;
+
+  -- (b2) flat type must NOT carry a rate_fraction (wrong column) — rejected.
+  begin
+    insert into public.funder_commission_structures (funder_id, deal_type, rate_type, flat_amount, rate_fraction, effective_from)
+    values (v_funder, 'non_po', 'flat_rand_per_deal', 500, 0.08, date '2026-01-01');
+    raise exception 'C0.1 assert FAIL: flat type accepted a rate_fraction';
   exception when check_violation then null; end;
 
   -- (c) effective_to before/equal effective_from rejected.
   begin
-    insert into public.funder_commission_structures (funder_id, deal_type, rate_type, rate_value, effective_from, effective_to)
+    insert into public.funder_commission_structures (funder_id, deal_type, rate_type, rate_fraction, effective_from, effective_to)
     values (v_funder, 'non_po', 'percent_of_gross_funded', 0.08, date '2026-06-01', date '2026-01-01');
     raise exception 'C0.1 assert FAIL: effective_to before effective_from accepted';
   exception when check_violation then null; end;
 
   -- Valid open-ended rate.
-  insert into public.funder_commission_structures (funder_id, deal_type, rate_type, rate_value, effective_from)
+  insert into public.funder_commission_structures (funder_id, deal_type, rate_type, rate_fraction, effective_from)
   values (v_funder, 'non_po', 'percent_of_gross_funded', 0.08, date '2026-01-01')
   returning id into v_id1;
 
   -- (d) a second active (overlapping) rate for the same (funder, deal_type) is rejected.
   begin
-    insert into public.funder_commission_structures (funder_id, deal_type, rate_type, rate_value, effective_from)
+    insert into public.funder_commission_structures (funder_id, deal_type, rate_type, rate_fraction, effective_from)
     values (v_funder, 'non_po', 'percent_of_gross_funded', 0.10, date '2026-06-01');
     raise exception 'C0.1 assert FAIL: overlapping active rate accepted';
   exception when exclusion_violation then null; end;
@@ -385,17 +406,17 @@ begin
   --     is_owner()-gated, so it's asserted by contract below, not called here —
   --     auth.uid() is null during the migration).
   update public.funder_commission_structures set effective_to = date '2026-05-31' where id = v_id1;
-  insert into public.funder_commission_structures (funder_id, deal_type, rate_type, rate_value, effective_from)
+  insert into public.funder_commission_structures (funder_id, deal_type, rate_type, rate_fraction, effective_from)
   values (v_funder, 'non_po', 'percent_of_gross_funded', 0.10, date '2026-06-01')
   returning id into v_id2;
 
-  select rate_value into v_rate from public.funder_commission_structures
+  select rate_fraction into v_rate from public.funder_commission_structures
    where funder_id = v_funder and deal_type = 'non_po'
      and daterange(effective_from, effective_to, '[]') @> date '2026-03-01';
   if v_rate is distinct from 0.0800 then
     raise exception 'C0.1 assert FAIL: Feb lookup expected 0.0800 got %', v_rate; end if;
 
-  select rate_value into v_rate from public.funder_commission_structures
+  select rate_fraction into v_rate from public.funder_commission_structures
    where funder_id = v_funder and deal_type = 'non_po'
      and daterange(effective_from, effective_to, '[]') @> date '2026-07-01';
   if v_rate is distinct from 0.1000 then
@@ -426,7 +447,7 @@ begin
   select id into v_owner   from public.profiles where role = 'owner'   limit 1;
   select id into v_partner from public.profiles where role = 'partner' limit 1;
   if v_owner is not null then
-    insert into public.funder_commission_structures (funder_id, deal_type, rate_type, rate_value, effective_from)
+    insert into public.funder_commission_structures (funder_id, deal_type, rate_type, flat_amount, effective_from)
     values (v_funder, 'bridging', 'flat_rand_per_deal', 500, date '2026-01-01')
     returning id into v_rls_id;
 
