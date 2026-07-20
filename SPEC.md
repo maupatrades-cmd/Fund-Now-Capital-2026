@@ -122,8 +122,9 @@ Client detail gains tabs: Overview / Story / Deals / Documents / Communications 
 - Add a 'Story' section on lead detail, positioned **below** the Documents section.
 - At qualification, story rows migrate from lead → client alongside the documents migration trigger (same pattern as B3.2's lead→client document re-pointer).
 - Owner can export the story as structured markdown/text for use in Claude or other tools to draft funder-ready pitch narratives.
-- **Ownership model (build-time contract to settle before implementation):** the current `client_stories` 1:1 is keyed on `UNIQUE client_id` (NOT NULL). Lead-writable stories require an explicit owning key — model it on the `documents` pattern: nullable `client_id` **XOR** `lead_id` with a `num_nonnulls(lead_id, client_id) = 1` CHECK and a per-entity uniqueness constraint (one story per lead, one per client). Migration at qualify must re-point `client_id`/`lead_id` on **both** `client_stories` and `client_story_notes`, and repoint the story's `activity_logs` references, in one transaction. Define conflict behaviour when the lead maps to an **existing** client that already has a story (merge-append the impressions vs block-with-notice — decide at build). Owner-only RLS carries over unchanged (partners never see stories — S3).
-- Estimated 1 PR, ~2 hours build (the ownership-model migration may push this slightly).
+- Owner-only RLS carries over unchanged (partners never see stories — S3).
+
+_(The original build-time "ownership-model contract to settle before implementation" that stood here is **superseded by the As-built above.** For the record, three of its provisions were resolved differently in the shipped build: `client_story_notes` is **not** re-pointed at qualify — it keys on the stable `story_id`, so impressions ride along automatically; `activity_logs` references are **not** rewritten; and the "decide at build" conflict behaviour was resolved as **MERGE-APPEND**. The XOR ownership key + per-entity uniqueness landed as described.)_
 
 Priority: after Phase B closes (B5 SA validation ships first) — small enough to slot in as **B4.1** before Phase C opens, OR defer to Phase E1 if C0 momentum is prioritised. **Elevated to priority follow-up after B5** because it is the substrate for the E3/E6 auto-generation flow (see **S6a** Deal Package Auto-Generation and **S17b** Claude Story Refiner) — the story captured pre-qualification feeds the refined credit case. Suggested build order: **B5 → B4.1 → C0 → C1 …**
 
@@ -356,6 +357,11 @@ Commission calculation depends on the **per-funder rate structure** (see ROADMAP
 
 **Rate structure snapshot:** at each state transition (submitted, approved, funded) the rate in force at that moment is recorded as an **audit snapshot on the `commission_record`** (Phase C2) — this is the trail (what was live at each stage), distinct from the **authoritative** rate. The authoritative rate = the approval-time snapshot; that is the one the funded/actual calculation uses and the one **C1 (invoicing)** and **C3 (Doctor's earnings)** consume via the **funded-state actual** figure. A later funder rate change never rewrites a snapshot already taken.
 
+**Rate-storage conventions (C0.1, as built — bank for future sessions):**
+- **Split storage, exactly one column per `rate_type`.** `funder_commission_structures` stores the rate in `rate_fraction numeric(10,4)` for the percent types (`percent_of_gross_funded`, `percent_of_mdr`) **or** `flat_amount numeric(14,2)` for `flat_rand_per_deal` (money — rule 6; a flat fee ≥ R1M would overflow `numeric(10,4)`, hence the dedicated money column). A `CASE`-on-`rate_type` CHECK enforces exactly-one-set. `funder_rate_at()` returns the whole row; callers read the correct column by `rate_type`.
+- **Always store as fraction, display as %.** Percent rates persist as a 0..1 decimal fraction (`0.0800`), never `8` or `800`; the UI multiplies by 100 for display. `numeric` is exact decimal — no float drift.
+- **`is_purchase_order` and `deal_type` are different layers — do NOT auto-derive one from the other.** `deals.is_purchase_order` (boolean) drives the **internal commission tier** (`calculate_commission`); `deal_type` (enum) drives the **per-funder rate lookup** (`funder_rate_at`). They coexist by design. UX only: picking `deal_type = 'po'` **soft-hints** `is_purchase_order = true` (editable, never forced).
+
 ---
 
 ## S7B. DOCTOR COMMISSION CASHFLOW & DISCRETIONARY BONUSES (Part 5 — Roadmap C2/C3/C4/D)
@@ -389,13 +395,15 @@ Doctor sees all four states on his portal (Phase D + C3 integration; fictional f
 
 ### S7B.3 — Doctor invoicing = Model A (locked)
 Doctor **initiates** invoice generation from his portal when a commission is in **Payable** state. Auto-generation is deferred to future polish if volume justifies. This means **C4's shape:**
-- New table `partner_invoices` — **per-partner numbered** series (e.g. `INV-BD-XXXX` for Bright Destiny), PDF generated in the **partner's own branding** (logo, VAT, banking details).
-- Doctor's invoice shows **base-commission line items + bonus line items separately**.
+- New table `partner_invoices` — **per-partner numbered** series (e.g. `INV-BD-XXXX` for Bright Destiny), PDF generated in the **partner's own branding** (logo, VAT, banking details). **Concurrency-safe numbering (build-time, per rule 9):** the per-partner sequence is allocated **transactionally** (a per-partner counter row locked with `pg_advisory_xact_lock` or an atomic `UPDATE … RETURNING`, never a client-side max+1) and backed by a **DB unique constraint `(partner_id, invoice_number)`** so two concurrent generations can never mint the same number.
+- Doctor's invoice shows **base-commission line items + bonus line items separately**. **Single-claim rule (build-time, per rule 9):** each invoice line **atomically claims** exactly one source `commission_record` / bonus row via a **DB-enforced unique claim** (a unique key on the source id, or a nullable `partner_invoice_id` FK on the source set with a guarded `UPDATE … WHERE partner_invoice_id IS NULL`), so a payable commission/bonus can be billed on **one and only one** invoice — no double-claim across concurrent invoices.
 - The owner receives `partner_invoices` for **approval + payment recording**.
 - An **approved + paid** `partner_invoice` triggers the base + bonus `commission_state` → **Settled** (idempotent, advisory-locked, terminal-immutable per rule 9).
 
 ### S7B.4 — Partner branding profile (new — needed for C4)
 A `partner_branding_profile` table (or fields on the existing `referral_partners`): `logo_url`, `company_registration_number`, `vat_number`, `banking_details`, `physical_address`, `signature_image_url`. **Multi-partner-ready** — each partner has their own branding and their own invoice-numbering series. (Verify the live `referral_partners` shape before choosing table-vs-columns at C4 build time — schema-truth discipline.)
+
+**Access + storage controls (build-time — this is sensitive data: banking details + a signature image).** RLS: **owner full CRUD**; a partner may **read + update only their own** branding row (`referral_partner_id = auth.uid()`-scoped, Phase D), never another partner's — banking details are visible only to the owner and that partner. Assets (`logo_url`, `signature_image_url`) live in a **private** Supabase Storage bucket accessed via **short-lived signed URLs** — **never a public bucket / public URL** (a signature image must not be world-addressable). Every mutation uses `.select()` / `RETURNING` with a row-count check (silent-RLS rule). Banking-detail changes fire the owner security notification (S8).
 
 **Sequencing:** these are locked product decisions, not a build authorisation. The C2 (commission auto-write + bonus rows), C3 (Doctor earnings lifecycle + the four states), and C4 (partner invoicing + branding) scope proposals will each reference this section and Security rule 9 when they open. **C0 scope is unaffected** — C0 only supplies the per-funder rate substrate (S7A).
 
