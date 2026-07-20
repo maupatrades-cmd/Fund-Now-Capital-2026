@@ -8,6 +8,7 @@ import {
   Factory,
   ClipboardList,
   FolderOpen,
+  Percent,
   type LucideIcon,
 } from "lucide-react";
 
@@ -28,4 +29,5 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/calculator", label: "Calculator", icon: Calculator },
   { to: "/activity", label: "Activity", icon: Activity },
   { to: "/settings/industries", label: "Industries", icon: Factory },
+  { to: "/settings/funders", label: "Funder rates", icon: Percent },
 ];
