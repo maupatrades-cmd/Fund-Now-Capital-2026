@@ -27,6 +27,7 @@ import {
 import { one } from "@/hooks/useClients";
 import { ActivityFeed } from "@/components/activity/ActivityFeed";
 import { DocumentsPanel } from "@/components/clients/DocumentsPanel";
+import { StakeholdersPanel } from "@/components/stakeholders/StakeholdersPanel";
 
 const labelList = (options: { value: string; label: string }[], values: string[] | null) =>
   values && values.length ? values.map((v) => labelFor(options, v)).join(", ") : null;
@@ -149,6 +150,14 @@ export default function LeadDetailPage() {
           on qualify, these move to the client automatically.
         </p>
         <DocumentsPanel entity={{ kind: "lead", id: lead.id }} referralPartnerId={lead.referral_partner_id} />
+      </section>
+
+      <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+        <h3 className="mb-1 text-sm font-semibold text-brand-navy">Directors &amp; Shareholders</h3>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Capture directors, shareholders, sureties, and beneficial owners for this lead.
+        </p>
+        <StakeholdersPanel entity={{ kind: "lead", id: lead.id }} />
       </section>
 
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
