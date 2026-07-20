@@ -78,10 +78,13 @@ export function useSaveStakeholder(entity: StakeEntity) {
   return useMutation({
     mutationFn: async ({ id, input }: { id?: string; input: StakeholderInput }) => {
       if (id) {
+        // Scope by the owning entity too, not just the PK — a stale id from a
+        // different client/lead can never be edited through this entity's panel.
         const { data, error } = await supabase
           .from("client_stakeholders")
           .update(input)
           .eq("id", id)
+          .eq(entityColumn(entity.kind), entity.id)
           .select("id");
         if (error) throw error;
         if (!data || data.length !== 1) throw new Error("Stakeholder was not updated (no row written).");
@@ -109,6 +112,7 @@ export function useDeleteStakeholder(entity: StakeEntity) {
         .from("client_stakeholders")
         .delete()
         .eq("id", id)
+        .eq(entityColumn(entity.kind), entity.id)
         .select("id");
       if (error) throw error;
       if (!data || data.length !== 1) throw new Error("Stakeholder was not deleted (no row removed).");

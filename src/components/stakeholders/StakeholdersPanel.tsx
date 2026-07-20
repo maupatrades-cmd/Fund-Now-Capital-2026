@@ -309,14 +309,14 @@ function StakeholderForm({
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <label className={labelCls}>Full name</label>
-          <input className={fieldCls} {...register("full_name")} />
+          <label className={labelCls} htmlFor="sh-full-name">Full name</label>
+          <input id="sh-full-name" className={fieldCls} {...register("full_name")} />
           {errors.full_name && <p className={errCls}>{errors.full_name.message}</p>}
         </div>
 
         <div>
-          <label className={labelCls}>ID type</label>
-          <select className={fieldCls} {...register("id_type")}>
+          <label className={labelCls} htmlFor="sh-id-type">ID type</label>
+          <select id="sh-id-type" className={fieldCls} {...register("id_type")}>
             {ID_TYPES.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
@@ -326,8 +326,11 @@ function StakeholderForm({
         </div>
 
         <div>
-          <label className={labelCls}>{idType === "passport" ? "Passport number" : "SA ID number"}</label>
+          <label className={labelCls} htmlFor="sh-id-number">
+            {idType === "passport" ? "Passport number" : "SA ID number"}
+          </label>
           <input
+            id="sh-id-number"
             className={fieldCls}
             placeholder={idType === "passport" ? "6–12 letters/numbers" : "13 digits"}
             {...register("id_number")}
@@ -341,8 +344,8 @@ function StakeholderForm({
 
         {idType === "passport" && (
           <div className="sm:col-span-2">
-            <label className={labelCls}>Passport country</label>
-            <select className={fieldCls} {...register("passport_country")}>
+            <label className={labelCls} htmlFor="sh-passport-country">Passport country</label>
+            <select id="sh-passport-country" className={fieldCls} {...register("passport_country")}>
               <option value="">Select a country…</option>
               {COUNTRIES.map((c) => (
                 <option key={c.value} value={c.value}>
@@ -373,8 +376,9 @@ function StakeholderForm({
         </div>
 
         <div>
-          <label className={labelCls}>Shareholding %</label>
+          <label className={labelCls} htmlFor="sh-shareholding">Shareholding %</label>
           <input
+            id="sh-shareholding"
             type="number"
             min="0"
             max="100"
@@ -399,25 +403,25 @@ function StakeholderForm({
         </div>
 
         <div>
-          <label className={labelCls}>Cell</label>
-          <input className={fieldCls} placeholder="082 123 4567" {...register("cell")} />
+          <label className={labelCls} htmlFor="sh-cell">Cell</label>
+          <input id="sh-cell" className={fieldCls} placeholder="082 123 4567" {...register("cell")} />
           {errors.cell && <p className={errCls}>{errors.cell.message}</p>}
         </div>
 
         <div>
-          <label className={labelCls}>Email</label>
-          <input className={fieldCls} {...register("email")} />
+          <label className={labelCls} htmlFor="sh-email">Email</label>
+          <input id="sh-email" className={fieldCls} {...register("email")} />
           {errors.email && <p className={errCls}>{errors.email.message}</p>}
         </div>
 
         <div className="sm:col-span-2">
-          <label className={labelCls}>Physical address</label>
-          <input className={fieldCls} {...register("physical_address")} />
+          <label className={labelCls} htmlFor="sh-address">Physical address</label>
+          <input id="sh-address" className={fieldCls} {...register("physical_address")} />
         </div>
 
         <div className="sm:col-span-2">
-          <label className={labelCls}>Notes</label>
-          <textarea rows={2} className={fieldCls} {...register("notes")} />
+          <label className={labelCls} htmlFor="sh-notes">Notes</label>
+          <textarea id="sh-notes" rows={2} className={fieldCls} {...register("notes")} />
         </div>
       </div>
 

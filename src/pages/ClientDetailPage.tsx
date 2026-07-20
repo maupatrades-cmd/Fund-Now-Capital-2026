@@ -119,8 +119,8 @@ export default function ClientDetailPage() {
         <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
           <h3 className="mb-1 text-sm font-semibold text-brand-navy">Directors &amp; Shareholders</h3>
           <p className="mb-4 text-xs text-muted-foreground">
-            Directors, shareholders, sureties, and beneficial owners (FICA). Partners see only names,
-            roles, and shareholding — never ID/passport numbers or contact details.
+            Directors, shareholders, sureties, and beneficial owners (FICA) — SA ID or passport, with
+            shareholding and beneficial-owner tracking.
           </p>
           <StakeholdersPanel entity={{ kind: "client", id: client.id }} />
         </section>
