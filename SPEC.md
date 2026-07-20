@@ -358,6 +358,63 @@ Commission calculation depends on the **per-funder rate structure** (see ROADMAP
 
 ---
 
+## S7C. COMMISSION PRESENTATION LAYER (Doctor-facing vs Owner-facing) (Part 5 — Roadmap C2/C3/C4, D5)
+
+Fund Now Capital's commission structure is stored in the CRM at **full precision on the owner side**, but presented to Doctor (and future partners) in a simplified **"partner-share" framing that never reveals FNC's internal math**.
+
+**Backend `commission_records` stores the REAL math:**
+- `fnc_gross_commission` — funder pays FNC per rate structure (S7A).
+- `company_retention_amount` — 40% of gross, FNC internal.
+- `partner_pool_amount` — 60% of gross.
+- `doctor_tier_applied` — which % band (29 / 30 / 33 / 25 / 40).
+- `doctor_commission_amount` — tier% × partner_pool.
+- `owner_commission_amount` — partner_pool − doctor_commission_amount.
+
+*(Build-time reconciliation note: the C0.1 live `commission_records` columns are `gross_commission`, `company_retention`, `partner_pool`, `tier_pct`, `partner_share`, `owner_share`. C2 either renames to the S7C names above or maps them 1:1 — decide at the C2 build; the semantics are identical, this section fixes the presentation contract, not the column spelling.)*
+
+**Doctor's tiered commission structure (LOCKED per 2026-07-20 owner confirmation):**
+
+| FNC Gross Commission Band | Doctor's % of Partner Pool |
+|---|---|
+| R0 – R30,000 | 29% |
+| R30,001 – R80,000 | 29% |
+| R80,001 – R150,000 | 30% |
+| R150,001 – R300,000 | 33% |
+| R300,001 – R500,000 | 33% |
+| R500,001 – R1,000,000 | 25% |
+| R1,000,001+ | **TBD — owner to confirm before the first R1M+ deal** |
+| Sourcefin PO deals (any size) | 40% flat |
+
+Partner pool = 60% of FNC gross commission. Company retention = 40% of FNC gross commission.
+
+*(Reconciliation with the CLAUDE.md Commission Engine summary: the four coarse bands there — R0–80k → 29% · R80,001–150k → 30% · R150,001–500k → 33% · R500,001+ → 25% — collapse to identical effective rates; S7C only (a) splits the 500k+ band into R500,001–1,000,000 @ 25% and R1,000,001+ @ **TBD**, and (b) scopes the flat-40% PO tier to **Sourcefin** PO deals. Confirm whether the CLAUDE.md engine line + `calculate_commission()` should be reconciled to the 1M split at the C2 build — until then the live function's R500,001+ → 25% governs above R1M.)*
+
+**Owner UI** (existing `/calculator`, `/reports`, deal detail, commission records): **full transparency.** Shows `fnc_gross_commission`, `company_retention_amount`, `partner_pool_amount`, `doctor_tier_applied`, `doctor_commission_amount`, `owner_commission_amount`.
+
+**Doctor's Phase D portal** (per the D5 decision):
+- Shows Doctor's commission amount **in Rands ONLY.**
+- Presents as a **"50/50 partner split"** framing (marketing-honest, non-revealing).
+- **NEVER** shows `fnc_gross_commission`, company retention, tier logic, tier percentage, or `partner_pool_amount`.
+- **NEVER** shows the funder rate structure or FNC's rate from the funder.
+- Deal name may be anonymised as "Deal #X" if the owner prefers (Phase D UX decision).
+
+**Partner invoice PDFs (C4 — future `partner_invoices`):**
+- Line-item description: **"Referral partner commission per Referral Agreement".**
+- Amount: **Doctor's take only.**
+- **NEVER** shows the tier calculation or internal split math on the PDF.
+
+**Rationale (owner intent, verbatim):** *"The frontend shows 50/50 split written, but the backend runs the real tiered math. If Doctor saw 29% of partner pool, he would figure out FNC keeps 40% company retention plus 71% of partner pool = 82.6% total on lower-tier deals. That's the relationship-damage number I need protected."*
+
+**Regulatory:** Doctor's Referral Agreement specifies the tier math in his signed contract — he knows the rates. The CRM UX just doesn't rub his face in the exact percentage per band on every screen; it presents his earned commission cleanly. (Comparable to how Uber shows drivers "Uber commission R X, You earn R Y" rather than the internal cost-model breakdown.)
+
+**Wire this into:**
+- **C2** (Commission Records Auto-Wire) — backend stores the real math, no Doctor exposure.
+- **C3** (Doctor's Earnings Lifecycle on the portal) — portal shows only Doctor's cut in Rands.
+- **C4** (Doctor invoicing FNC) — PDF description neutral, no tier math.
+- **D5** (Doctor's Commission Estimator) — already locked to partner-share only.
+
+---
+
 ## S8. DOCTOR'S PAYROLL (Part 5 M3 — Roadmap C3–C5, portal screens D2)
 
 `doctor_earnings`: id, deal_id, deal_funder_submission_id, doctor_id FK referral_partners, commission_amount, tier_applied, status enum(earned/ready_to_invoice/invoiced/paid), earned_at (deal funded), ready_to_invoice_at (FNC received funder payment), invoiced_at, paid_at. Computed server-side from `calculate_commission` — never client-supplied.
