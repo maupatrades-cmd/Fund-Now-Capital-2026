@@ -13,6 +13,8 @@ import {
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { DEAL_STAGES } from "@/lib/dealStages";
+import { formatZAR } from "@/lib/format";
+import { useCelebrate } from "@/lib/celebration/ConfettiProvider";
 import {
   usePipeline,
   useClientOptions,
@@ -43,6 +45,7 @@ export default function PipelinePage() {
   const { data: clients } = useClientOptions();
   const { data: funders } = useFunderOptions();
   const updateStage = useUpdateDealStage();
+  const { celebrateOnce } = useCelebrate();
 
   const [filters, setFilters] = useState<PipelineFilters>(EMPTY_FILTERS);
   const [newOpen, setNewOpen] = useState(false);
@@ -85,7 +88,21 @@ export default function PipelinePage() {
             "Declined deals can't be moved — reopen from the deal detail page if needed.",
           );
         } else {
-          updateStage.mutate({ id: dealId, stage: newStage as PipelineDeal["stage"] });
+          updateStage.mutate(
+            { id: dealId, stage: newStage as PipelineDeal["stage"] },
+            {
+              onSuccess: () => {
+                // Deal dragged into Funded — celebrate once per deal (survives refresh).
+                if (newStage === "funded") {
+                  const commission =
+                    deal.gross_commission != null ? ` Commission earned: ${formatZAR(deal.gross_commission)}` : "";
+                  celebrateOnce(`funded:${dealId}`, {
+                    message: `🎉 ${one(deal.client)?.business_name ?? "Client"} — ${deal.reference ?? "Deal"} Funded!${commission}`,
+                  });
+                }
+              },
+            },
+          );
         }
       }
     }
