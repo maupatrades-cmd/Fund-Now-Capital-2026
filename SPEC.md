@@ -131,6 +131,40 @@ Priority: after Phase B closes (B5 SA validation ships first) — small enough t
 
 ---
 
+## S3a. STAKEHOLDERS — Directors, Shareholders, Beneficial Owners (Part 2 — Roadmap B6)
+
+**Status: docs only, NOT started (B6, opens before Phase B closes).** SA business finance requires capturing **directors, shareholders (25%+ holdings for POPIA/FICA), sureties, and beneficial owners** — plus **passport support for foreign directors**. The CRM today captures only a single `contact_name` + `contact_id_number` per lead/client (via `client_contacts`); B6 adds a full stakeholder structure. **Owner-locked decisions (2026-07-20):** (1) one row **per person** with a `roles` array; (2) shareholding-total over 100% **warns, never blocks**; (3) passport country is an **ISO dropdown**; (4) beneficial-owner is **auto-suggested at ≥25%, owner-overridable**; (5) **no ownership backfill** of the existing clients — the owner enters real cap-table data.
+
+**Table `client_stakeholders` (one row per person):**
+- `id uuid PK`, `client_id uuid` FK (nullable), `lead_id uuid` FK (nullable — set when captured pre-qualification).
+- `full_name text NOT NULL`.
+- `id_type` enum `stakeholder_id_type` (`sa_id` | `passport`) — drives the validation branch.
+- `id_number text` — SA ID (Luhn-validated via B5.1 `sa-validation.ts`) **or** passport number (free-text, 6–12 alphanumeric).
+- `passport_country text` — ISO 3166 **alpha-2** code, set only when `id_type = 'passport'` (nullable otherwise). **Decision 3:** captured via an ISO country **dropdown**, not free-text (avoids "RSA"/"South Africa"/"ZA" drift that would break future FICA reporting / E6 screening).
+- `roles stakeholder_role[] NOT NULL` — enum `stakeholder_role` (`director` | `shareholder` | `surety` | `key_person` | `signatory`). **Decision 1:** one row per *person* carrying all their hats, rather than a row per role — a director who is also a surety is one human, so PII/ID is captured once and shareholding/beneficial-owner/consent-routing attach to the person cleanly. (A non-empty CHECK guards `array_length(roles,1) >= 1`.)
+- `shareholding_percent numeric(5,2)` — nullable (only for holders). CHECK `shareholding_percent IS NULL OR (shareholding_percent BETWEEN 0 AND 100)`. **Decision 1 corollary:** the "shareholder needs a %" rule becomes `'shareholder' = ANY(roles) → shareholding_percent IS NOT NULL`.
+- `is_beneficial_owner bool NOT NULL DEFAULT false` — true when the person holds ≥25% direct/indirect beneficial interest (FICA). **Decision 4:** the UI **auto-suggests** on when `shareholding_percent >= 25` with a "FICA: ≥25% suggests beneficial owner" hint, but the owner can override either way (beneficial ownership can be true below 25% via agreements, or false above) — the DB stores the owner's final value, never auto-forces it.
+- `cell text`, `email text`, `physical_address text` — for consent-pack routing (S17). `notes text`.
+- `created_at`, `updated_at`, `created_by uuid` FK `profiles(id)`, `updated_by uuid` FK `profiles(id)`.
+
+**CHECK constraints:** `num_nonnulls(lead_id, client_id) = 1` (XOR — documents pattern); `id_type='passport' → passport_country IS NOT NULL`; `id_type='sa_id' → passport_country IS NULL`; the shareholding range + `'shareholder' = ANY(roles)` rule above; non-empty `roles`.
+
+**Validation (app-side, B5.1 lib):** SA ID → Luhn + DOB + citizenship digit; passport → free-text 6–12 alphanumeric **with** a required ISO country. **Shareholding total (decision 2):** the UI **warns** (amber) when the sum of `shareholding_percent` across a client's stakeholders exceeds 100% (and gently notes "X% unallocated" below 100) — but **never blocks the save**; real cap tables carry rounding, treasury shares, and partial-knowledge-at-capture.
+
+**Lead → client migration:** captured pre-qualification on a lead, stakeholders migrate `lead_id → client_id` at `qualify_lead` — the **same transactional re-pointer pattern as B3.2 documents**, in the same qualify path, preserving the `num_nonnulls = 1` CHECK. Legacy `contact_*` fields on `leads`/`clients` are **retained** (no data loss) but **deprecated** for new capture — B6 UI is the source of truth. At the first post-B6 qualification of a lead that has a `contact_id_number` but no stakeholder rows, a **`signatory` stakeholder is auto-created** from the contact fields for the owner to review.
+
+**RLS:** Owner — full CRUD. Partner — SELECT scoped to their referred leads/clients (via `referral_partner_id`), seeing **`full_name`, `roles`, `shareholding_percent` only** (FICA transparency); **never** `id_number`, `passport_country`, `cell`, `email`, `physical_address` (PII — same POPIA exclusion pattern as documents, CLAUDE.md rule 7). **No partner INSERT** in B6 (the Phase D portal handles partner capture). Every mutation uses `.select()`/RETURNING with a row-count check (silent-RLS rule).
+
+**Activity logging (A10):** `log_activity()` gains a `client_stakeholder` branch (CREATE/UPDATE/DELETE, linked to the owning client/lead) — same as documents/leads/clients.
+
+**Backfill (decision 5):** the three live clients (Mama Mabase, Fepa Sechaba, NRL Bakwena) start with **no stakeholder rows** — the owner enters real cap-table data when convenient. We do **not** auto-suggest ownership from the single legacy contact field: that would *invent client data we don't actually know* (a contact isn't necessarily a 25% owner), a FICA/data-integrity risk (CLAUDE.md "never invent facts").
+
+**Out of scope for B6 (deferred):** automatic beneficial-ownership calculation from nested corporate ownership (parent companies, trusts) → **Phase E / deferred polish**; sanctions/PEP screening on stakeholder identities → **Phase E6** (AI); consent-pack (S17) auto-population from stakeholders → **Phase E4** wires it.
+
+**PR breakdown:** **B6.1** — schema + enums + CHECKs + RLS + `log_activity()` branch + the `qualify_lead` stakeholder re-pointer + legacy-contact auto-create + DO-block assertions (FK-adds on the populated `leads`/`clients` use `NOT VALID` + `CREATE INDEX CONCURRENTLY` + `VALIDATE`; `client_stakeholders` itself is a new empty table, inline FKs). **B6.2** — UI: "Directors & Shareholders" section on lead + client detail, add/edit modal (SA-ID/passport toggle with conditional country dropdown, multi-role select, conditional shareholding, auto-suggest beneficial-owner toggle, contact fields), and a read-only summary card ("3 directors · 2 shareholders · 1 surety").
+
+---
+
 ## S4. NOTIFICATIONS (Part 4 — Roadmap A11/A12, D6)
 
 Tables:
