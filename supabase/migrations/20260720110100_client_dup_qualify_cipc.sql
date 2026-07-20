@@ -113,8 +113,11 @@ create trigger clients_cipc_block
 -- 3. qualify_lead — Path A (match by CIPC or name) + visibility gate + jsonb
 --    audit return. Re-declared in full from 20260720100000 (SECURITY DEFINER +
 --    search_path=''); the RETURN TYPE changes uuid → jsonb (callers updated).
+--    A return-type change can't be done by CREATE OR REPLACE, so DROP first.
 -- ===========================================================================
-create or replace function public.qualify_lead(p_lead_id uuid, p_override boolean default false)
+drop function if exists public.qualify_lead(uuid, boolean);
+
+create function public.qualify_lead(p_lead_id uuid, p_override boolean default false)
 returns jsonb
 language plpgsql
 security definer
