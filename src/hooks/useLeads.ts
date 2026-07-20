@@ -324,23 +324,38 @@ export function useLeadRequiredDocsMissing(leadId: string | undefined, enabled =
   });
 }
 
+// The jsonb audit shape qualify_lead returns (B5.2). match_kind is 'cipc'/'name'
+// when the lead re-pointed onto an existing client, null for a genuinely new
+// client, 'idempotent' on a re-qualify. The migrated counts show the re-point
+// triggers actually fired.
+export type QualifyResult = {
+  deal_id: string;
+  deal_reference: string | null;
+  client_id: string;
+  client_business_name: string | null;
+  matched_existing: boolean;
+  match_kind: "cipc" | "name" | "idempotent" | null;
+  stakeholder_count_migrated: number;
+  document_count_migrated: number;
+};
+
 // Qualify → atomic client + deal creation via the qualify_lead RPC. Returns the
-// deal id (existing one if the lead was already qualified — idempotent). When the
-// document gate isn't met the RPC rejects unless `override` is passed (which also
-// writes an activity_logs audit row server-side).
+// audit jsonb (Path A: re-points onto an existing client matched by CIPC or name
+// rather than duplicating). When the document gate isn't met the RPC rejects
+// unless `override` is passed (which also writes an activity_logs audit row).
 export function useQualifyLead() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, override }: { id: string; override?: boolean }): Promise<string> => {
+    mutationFn: async ({ id, override }: { id: string; override?: boolean }): Promise<QualifyResult> => {
       const { data, error } = await supabase.rpc("qualify_lead", {
         p_lead_id: id,
         p_override: override ?? false,
       });
       if (error) throw error;
-      if (!data) throw new Error("Qualification did not return a deal");
-      return data as string;
+      if (!data) throw new Error("Qualification did not return a result");
+      return data as QualifyResult;
     },
-    onSuccess: (_dealId, { id }) => {
+    onSuccess: (_result, { id }) => {
       qc.invalidateQueries({ queryKey: ["lead", id] });
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["deals"] });
