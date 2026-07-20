@@ -111,7 +111,7 @@ export default function ClientDetailPage() {
 
       {tab === "story" && (
         <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
-          <StoryPanel clientId={client.id} />
+          <StoryPanel entity={{ kind: "client", id: client.id }} title={client.business_name} />
         </section>
       )}
 

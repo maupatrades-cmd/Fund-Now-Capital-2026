@@ -1,23 +1,37 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Copy, Download } from "lucide-react";
 import {
   useClientStory,
   useSaveClientStory,
   useStoryNotes,
   useAddStoryNote,
+  buildStoryMarkdown,
   STORY_FIELDS,
+  type StoryEntity,
   type StoryFieldKey,
 } from "@/hooks/useClientStory";
 
 const ctl =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-brand-navy outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
+const btnGhost =
+  "inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-brand-navy hover:bg-slate-50 disabled:opacity-50";
 
 type Draft = Partial<Record<StoryFieldKey, string>>;
 
-export function StoryPanel({ clientId }: { clientId: string }) {
-  const { data: story, isLoading } = useClientStory(clientId);
-  const save = useSaveClientStory();
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "story";
+}
+
+export function StoryPanel({ entity, title }: { entity: StoryEntity; title?: string }) {
+  const { data: story, isLoading } = useClientStory(entity);
+  const save = useSaveClientStory(entity);
+  // Notes are also read inside <Impressions>; react-query dedupes on the shared
+  // key, so this second read costs no extra request and powers the export.
+  const { data: notes } = useStoryNotes(story?.id);
   const [draft, setDraft] = useState<Draft>({});
+
+  const exportTitle = title?.trim() || "Story";
 
   // Seed the form once per story identity (id + updated_at), NOT on every
   // background refetch — otherwise a refetch-on-window-focus/reconnect while the
@@ -39,11 +53,35 @@ export function StoryPanel({ clientId }: { clientId: string }) {
     const fields: Partial<Record<StoryFieldKey, string | null>> = {};
     for (const f of STORY_FIELDS) fields[f.key] = (draft[f.key] ?? "").trim() || null;
     try {
-      await save.mutateAsync({ clientId, fields });
+      await save.mutateAsync({ fields });
       toast.success("Story saved");
     } catch (e) {
       toast.error((e as Error).message || "Could not save story");
     }
+  };
+
+  const markdown = () => buildStoryMarkdown({ title: exportTitle, story: story ?? null, notes: notes ?? [] });
+  const hasStory = !!story;
+
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(markdown());
+      toast.success("Story markdown copied");
+    } catch {
+      toast.error("Couldn't copy — your browser blocked clipboard access");
+    }
+  };
+
+  const onDownload = () => {
+    const blob = new Blob([markdown()], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `client-story-${slugify(exportTitle)}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading story…</p>;
@@ -51,10 +89,20 @@ export function StoryPanel({ clientId }: { clientId: string }) {
   return (
     <div className="space-y-6">
       <div className="space-y-4">
-        <p className="text-xs text-muted-foreground">
-          The client's narrative — who they are, what drives them, how to work with them. Markdown is
-          fine. Saving the first field creates the story record.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <p className="max-w-xl text-xs text-muted-foreground">
+            The client's narrative — who they are, what drives them, how to work with them. Markdown is
+            fine. Saving the first field creates the story record.
+          </p>
+          <div className="flex shrink-0 gap-2">
+            <button type="button" className={btnGhost} onClick={onCopy} disabled={!hasStory} title="Copy story as markdown">
+              <Copy className="h-3.5 w-3.5" /> Copy markdown
+            </button>
+            <button type="button" className={btnGhost} onClick={onDownload} disabled={!hasStory} title="Download story as a .md file">
+              <Download className="h-3.5 w-3.5" /> Download .md
+            </button>
+          </div>
+        </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {STORY_FIELDS.map((f) => (
             <label
