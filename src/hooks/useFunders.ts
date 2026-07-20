@@ -10,6 +10,11 @@ export type Funder = {
   ticket_min: number | string | null;
   ticket_max: number | string | null;
   is_active: boolean;
+  // C0.3: true when FNC has a signed agreement with this funder. Only contracted
+  // funders can carry rate structures + be invoiced. short_code feeds the C1
+  // invoice payment reference (POLLEN → POLLEN-INV0032-CHICKANOS).
+  is_contracted: boolean;
+  short_code: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -26,6 +31,9 @@ export type FunderContact = {
 };
 
 // Payload for create/update — only the owner-editable columns.
+// is_contracted / short_code are optional: the funder create/edit form
+// (FunderFormPage) omits them, so they fall to their DB defaults (false / null);
+// the /settings/funders rate page sets them via a partial update.
 export type FunderInput = {
   name: string;
   display_name_for_partner: string;
@@ -35,6 +43,8 @@ export type FunderInput = {
   ticket_max: number | null;
   is_active: boolean;
   notes: string | null;
+  is_contracted?: boolean;
+  short_code?: string | null;
 };
 
 export function useFunders() {
