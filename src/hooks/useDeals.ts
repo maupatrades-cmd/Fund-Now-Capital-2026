@@ -116,8 +116,12 @@ export function useUpdateDealStage() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, stage }: { id: string; stage: DealStage }) => {
-      const { error } = await supabase.from("deals").update({ stage }).eq("id", id);
+      // RETURNING id + row-count check (silent-RLS rule) — a no-op update must
+      // not resolve successfully (it would fire the funded celebration + leave
+      // the optimistic move un-rolled-back).
+      const { data, error } = await supabase.from("deals").update({ stage }).eq("id", id).select("id");
       if (error) throw error;
+      if (!data || data.length !== 1) throw new Error("Deal stage was not updated (no row written).");
     },
     onMutate: async ({ id, stage }) => {
       await qc.cancelQueries({ queryKey: ["pipeline"] });

@@ -61,6 +61,7 @@ export function ConfettiProvider({ children }: { children: ReactNode }) {
   const raf = useRef<number | null>(null);
   const logo = useRef<HTMLImageElement | null>(null);
   const dismissTimer = useRef<number | null>(null);
+  const doneBtnRef = useRef<HTMLButtonElement | null>(null);
   const [card, setCard] = useState<{ message: string } | null>(null);
 
   useEffect(() => {
@@ -83,9 +84,11 @@ export function ConfettiProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Escape-to-dismiss the success card (keyboard a11y).
+  // On open: move focus into the dialog (the Done button) so keyboard/SR users
+  // land inside it; Escape dismisses.
   useEffect(() => {
     if (!card) return;
+    doneBtnRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") clearCard();
     };
@@ -199,7 +202,9 @@ export function ConfettiProvider({ children }: { children: ReactNode }) {
   return (
     <CelebrateContext.Provider value={{ celebrate, celebrateOnce }}>
       {children}
-      {/* Confetti canvas — pointer-events:none so it never blocks UI clicks. */}
+      {/* Confetti canvas — pointer-events:none so it never blocks UI clicks.
+          Kept BELOW the success card (z-index) so falling particles never
+          obscure the card text/button. */}
       <canvas
         ref={canvasRef}
         aria-hidden="true"
@@ -209,7 +214,7 @@ export function ConfettiProvider({ children }: { children: ReactNode }) {
           width: "100%",
           height: "100%",
           pointerEvents: "none",
-          zIndex: 80,
+          zIndex: 60,
         }}
       />
       {card && (
@@ -219,7 +224,7 @@ export function ConfettiProvider({ children }: { children: ReactNode }) {
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 70,
+            zIndex: 90,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -228,8 +233,9 @@ export function ConfettiProvider({ children }: { children: ReactNode }) {
           }}
         >
           <div
-            role="status"
-            aria-live="polite"
+            role="dialog"
+            aria-modal="true"
+            aria-label={card.message}
             onClick={(e) => e.stopPropagation()}
             style={{
               background: "#fff",
@@ -269,6 +275,7 @@ export function ConfettiProvider({ children }: { children: ReactNode }) {
               {card.message}
             </p>
             <button
+              ref={doneBtnRef}
               type="button"
               onClick={clearCard}
               style={{

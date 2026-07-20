@@ -101,6 +101,7 @@ export default function PipelinePage() {
                   });
                 }
               },
+              onError: (e) => toast.error((e as Error).message || "Could not move deal"),
             },
           );
         }

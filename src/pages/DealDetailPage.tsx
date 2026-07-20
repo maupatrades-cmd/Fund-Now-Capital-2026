@@ -70,6 +70,7 @@ export default function DealDetailPage() {
             });
           }
         },
+        onError: (e) => toast.error((e as Error).message || "Could not update stage"),
       },
     );
   };
