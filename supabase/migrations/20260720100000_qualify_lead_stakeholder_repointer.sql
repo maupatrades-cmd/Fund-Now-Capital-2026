@@ -166,9 +166,12 @@ begin
           array['director']::public.stakeholder_role[], v_owner)
   returning id into v_sid;
 
+  -- Scope the re-point to the synthetic row only (by id, never by lead_id) so a
+  -- real lead-side stakeholder can never be moved by this assertion. The XOR
+  -- CHECK-preservation being verified is identical regardless of the predicate.
   update public.client_stakeholders
      set client_id = v_client, lead_id = null
-   where lead_id = v_lead;
+   where id = v_sid;
 
   if not exists (
     select 1 from public.client_stakeholders
