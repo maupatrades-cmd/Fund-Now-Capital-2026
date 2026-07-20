@@ -1,15 +1,18 @@
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, AlertTriangle, Ban } from "lucide-react";
 import { toast } from "sonner";
 import {
   useClient,
   useCreateClient,
   useUpdateClient,
   useReferralPartners,
+  useCheckClientDuplicates,
   type ClientInput,
+  type ClientDuplicate,
 } from "@/hooks/useClients";
 import { useIndustries, type IndustryWithSubs } from "@/hooks/useIndustries";
 import { isValidCipc } from "@/lib/sa-validation";
@@ -74,6 +77,7 @@ export default function ClientFormPage() {
       key={c?.id ?? "new"}
       defaults={defaults}
       isEdit={isEdit}
+      excludeClientId={isEdit ? id! : null}
       partners={partners.data ?? []}
       industries={industries.data ?? []}
       submitting={createClient.isPending || updateClient.isPending}
@@ -114,6 +118,7 @@ export default function ClientFormPage() {
 function ClientForm({
   defaults,
   isEdit,
+  excludeClientId,
   partners,
   industries,
   submitting,
@@ -122,6 +127,7 @@ function ClientForm({
 }: {
   defaults: FormValues;
   isEdit: boolean;
+  excludeClientId: string | null;
   partners: { id: string; name: string }[];
   industries: IndustryWithSubs[];
   submitting: boolean;
@@ -140,6 +146,63 @@ function ClientForm({
   const subOptions =
     industries.find((i) => i.id === selectedIndustryId)?.sub_industries ?? [];
 
+  // Duplicate-detection gate (B5.2). A CIPC-vs-client collision blocks the save;
+  // a fuzzy business-name match warns and requires typed confirmation.
+  const checkDuplicates = useCheckClientDuplicates();
+  const [blockMatch, setBlockMatch] = useState<ClientDuplicate | null>(null);
+  const [warnMatches, setWarnMatches] = useState<ClientDuplicate[] | null>(null);
+  const [pending, setPending] = useState<FormValues | null>(null);
+  const [confirmText, setConfirmText] = useState("");
+
+  const clearGate = () => {
+    setBlockMatch(null);
+    setWarnMatches(null);
+    setPending(null);
+    setConfirmText("");
+  };
+
+  // Any field edit while a gate is showing wipes it, so a stale snapshot can't be
+  // confirmed.
+  const gateActive = !!blockMatch || !!warnMatches;
+  useEffect(() => {
+    if (!gateActive) return;
+    const sub = watch(() => clearGate());
+    return () => sub.unsubscribe();
+  }, [gateActive, watch]);
+
+  // Client-side pre-check before the write. The server independently rejects a
+  // CIPC-vs-client duplicate (clients_cipc_block), so a failed/bypassed check can
+  // never create one.
+  const guardedSubmit = async (v: FormValues) => {
+    clearGate();
+    let matches: ClientDuplicate[] = [];
+    try {
+      matches = await checkDuplicates.mutateAsync({
+        business_name: v.business_name!.trim(),
+        cipc_number: v.cipc_number?.trim() || null,
+        exclude_client_id: excludeClientId,
+      });
+    } catch (e) {
+      console.warn("client duplicate check failed", e);
+      toast.error("Couldn't check for duplicates — please try again.");
+      return;
+    }
+    const block = matches.find((m) => m.severity === "block");
+    if (block) {
+      setBlockMatch(block);
+      return;
+    }
+    const warns = matches.filter((m) => m.severity === "warn");
+    if (warns.length) {
+      setWarnMatches(warns);
+      setPending(v);
+      return;
+    }
+    onSubmit(v);
+  };
+
+  const checking = checkDuplicates.isPending;
+
   return (
     <div className="max-w-2xl space-y-4">
       <Link to="/clients" className="inline-flex items-center gap-1.5 text-sm text-brand-teal hover:underline">
@@ -147,7 +210,7 @@ function ClientForm({
       </Link>
 
       <form
-        onSubmit={handleSubmit(onSubmit)}
+        onSubmit={handleSubmit(guardedSubmit)}
         className="space-y-5 rounded-xl border border-border bg-white p-6 shadow-sm"
       >
         <h2 className="text-lg font-semibold text-brand-navy">
@@ -269,23 +332,116 @@ function ClientForm({
           <textarea id="notes" rows={3} className={inputCls} {...register("notes")} />
         </div>
 
+        {/* Hard block: an exact CIPC match against an existing client. */}
+        {blockMatch && (
+          <div className="flex items-start gap-3 rounded-xl border border-red-300 bg-red-50 p-4 text-sm">
+            <Ban className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+            <div className="space-y-1">
+              <p className="font-semibold text-red-800">
+                A client already exists for this CIPC number — {blockMatch.business_name}.
+              </p>
+              <p className="text-red-700">
+                A CIPC number is a unique legal identifier, so this is the same business.{" "}
+                <Link to={`/clients/${blockMatch.entity_id}`} className="font-medium underline">
+                  Open the existing client
+                </Link>{" "}
+                instead, or correct the CIPC number to continue.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Soft warn: fuzzy-name matches — save allowed after typed confirmation. */}
+        {warnMatches && (
+          <div className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <div>
+                <p className="font-semibold text-amber-900">This looks like a possible duplicate.</p>
+                <p className="text-amber-800">
+                  We found {warnMatches.length} similar {warnMatches.length === 1 ? "record" : "records"}.
+                  Check it isn't the same business before saving.
+                </p>
+              </div>
+            </div>
+            <ul className="space-y-1.5 pl-8">
+              {warnMatches.map((m) => (
+                <li key={`${m.entity}-${m.entity_id}-${m.match_kind}`} className="text-amber-900">
+                  <Link
+                    to={m.entity === "client" ? `/clients/${m.entity_id}` : `/leads/${m.entity_id}`}
+                    className="font-medium underline"
+                  >
+                    {m.business_name}
+                  </Link>{" "}
+                  <span className="text-amber-700">— {matchLabel(m)}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="pl-8">
+              <label className="block font-medium text-amber-900 mb-1.5">
+                Type <span className="font-mono font-bold">SAVE</span> to add this client anyway
+              </label>
+              <input
+                className="w-40 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-brand-navy outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder="SAVE"
+              />
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-3 pt-2">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-lg bg-brand-teal px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60"
-          >
-            {submitting ? "Saving…" : isEdit ? "Save changes" : "Add client"}
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-brand-navy hover:bg-slate-50"
-          >
-            Cancel
-          </button>
+          {warnMatches ? (
+            <>
+              <button
+                type="button"
+                disabled={submitting || confirmText.trim().toUpperCase() !== "SAVE"}
+                onClick={() => pending && onSubmit(pending)}
+                className="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+              >
+                {submitting ? "Saving…" : "Save anyway"}
+              </button>
+              <button
+                type="button"
+                onClick={clearGate}
+                className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-brand-navy hover:bg-slate-50"
+              >
+                Go back
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="submit"
+                disabled={submitting || checking}
+                className="rounded-lg bg-brand-teal px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60"
+              >
+                {checking ? "Checking…" : submitting ? "Saving…" : isEdit ? "Save changes" : "Add client"}
+              </button>
+              <button
+                type="button"
+                onClick={onCancel}
+                className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-brand-navy hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+            </>
+          )}
         </div>
       </form>
     </div>
   );
+}
+
+function matchLabel(m: ClientDuplicate): string {
+  const where = m.entity === "client" ? "existing client" : "existing lead";
+  switch (m.match_kind) {
+    case "cipc":
+      return `same CIPC number (${where})`;
+    case "name":
+      return `similar business name (${where})`;
+    default:
+      return where;
+  }
 }

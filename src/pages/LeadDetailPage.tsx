@@ -197,9 +197,23 @@ function QualificationPanel({ lead }: { lead: Lead }) {
     qualify.mutate(
       { id: lead.id, override },
       {
-        onSuccess: (dealId) => {
-          toast.success("Lead qualified — deal created");
-          navigate(`/deals/${dealId}`);
+        onSuccess: (r) => {
+          if (r.match_kind === "idempotent") {
+            // Already qualified — nothing created/migrated; just open the deal.
+            toast.success(
+              `${r.client_business_name ?? "This lead"} is already qualified — opening ${r.deal_reference ?? "the deal"}.`,
+            );
+          } else {
+            const migrated =
+              r.stakeholder_count_migrated > 0 || r.document_count_migrated > 0
+                ? ` ${r.stakeholder_count_migrated} stakeholder${r.stakeholder_count_migrated === 1 ? "" : "s"} + ${r.document_count_migrated} document${r.document_count_migrated === 1 ? "" : "s"} migrated.`
+                : "";
+            const where = r.matched_existing
+              ? `Qualified onto ${r.client_business_name ?? "existing client"}.`
+              : "Lead qualified — new client created.";
+            toast.success(`${where}${migrated} ${r.deal_reference ?? "Deal"} created.`);
+          }
+          navigate(`/deals/${r.deal_id}`);
         },
         onError: (e) => toast.error(e instanceof Error ? e.message : "Could not qualify lead"),
       },

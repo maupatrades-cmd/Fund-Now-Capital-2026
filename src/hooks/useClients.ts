@@ -179,6 +179,37 @@ export function useUpdateClient() {
   });
 }
 
+// One candidate match from find_client_duplicates (B5.2). severity 'block' is the
+// CIPC-vs-client hard stop (the server rejects it too); 'warn' is advisory.
+export type ClientDuplicate = {
+  match_kind: "cipc" | "name";
+  severity: "block" | "warn";
+  entity: "client" | "lead";
+  entity_id: string;
+  business_name: string;
+  similarity: number;
+};
+
+export type ClientDuplicateCheckArgs = {
+  business_name: string;
+  cipc_number?: string | null;
+  exclude_client_id?: string | null;
+};
+
+export function useCheckClientDuplicates() {
+  return useMutation({
+    mutationFn: async (args: ClientDuplicateCheckArgs): Promise<ClientDuplicate[]> => {
+      const { data, error } = await supabase.rpc("find_client_duplicates", {
+        p_business_name: args.business_name,
+        p_cipc: args.cipc_number ?? null,
+        p_exclude_client_id: args.exclude_client_id ?? null,
+      });
+      if (error) throw error;
+      return (data ?? []) as ClientDuplicate[];
+    },
+  });
+}
+
 export function useSaveClientContact() {
   const qc = useQueryClient();
   return useMutation({
