@@ -337,6 +337,8 @@ export type QualifyResult = {
   match_kind: "cipc" | "name" | "idempotent" | null;
   stakeholder_count_migrated: number;
   document_count_migrated: number;
+  story_count_migrated: number;
+  story_notes_count_migrated: number;
 };
 
 // Qualify → atomic client + deal creation via the qualify_lead RPC. Returns the

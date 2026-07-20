@@ -27,6 +27,7 @@ import {
 import { one } from "@/hooks/useClients";
 import { ActivityFeed } from "@/components/activity/ActivityFeed";
 import { DocumentsPanel } from "@/components/clients/DocumentsPanel";
+import { StoryPanel } from "@/components/clients/StoryPanel";
 import { StakeholdersPanel } from "@/components/stakeholders/StakeholdersPanel";
 
 const labelList = (options: { value: string; label: string }[], values: string[] | null) =>
@@ -153,6 +154,15 @@ export default function LeadDetailPage() {
       </section>
 
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+        <h3 className="mb-1 text-sm font-semibold text-brand-navy">Client story</h3>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Capture the narrative behind this business before qualification — it shapes how you frame the
+          funder submission. On qualify, the story and its impressions move to the client automatically.
+        </p>
+        <StoryPanel entity={{ kind: "lead", id: lead.id }} title={lead.business_name} />
+      </section>
+
+      <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
         <h3 className="mb-1 text-sm font-semibold text-brand-navy">Directors &amp; Shareholders</h3>
         <p className="mb-4 text-xs text-muted-foreground">
           Capture directors, shareholders, sureties, and beneficial owners for this lead — they move
@@ -204,10 +214,16 @@ function QualificationPanel({ lead }: { lead: Lead }) {
               `${r.client_business_name ?? "This lead"} is already qualified — opening ${r.deal_reference ?? "the deal"}.`,
             );
           } else {
-            const migrated =
-              r.stakeholder_count_migrated > 0 || r.document_count_migrated > 0
-                ? ` ${r.stakeholder_count_migrated} stakeholder${r.stakeholder_count_migrated === 1 ? "" : "s"} + ${r.document_count_migrated} document${r.document_count_migrated === 1 ? "" : "s"} migrated.`
-                : "";
+            const parts = [
+              r.stakeholder_count_migrated > 0
+                ? `${r.stakeholder_count_migrated} stakeholder${r.stakeholder_count_migrated === 1 ? "" : "s"}`
+                : null,
+              r.document_count_migrated > 0
+                ? `${r.document_count_migrated} document${r.document_count_migrated === 1 ? "" : "s"}`
+                : null,
+              r.story_count_migrated > 0 ? "story" : null,
+            ].filter(Boolean);
+            const migrated = parts.length ? ` ${parts.join(" + ")} migrated.` : "";
             const where = r.matched_existing
               ? `Qualified onto ${r.client_business_name ?? "existing client"}.`
               : "Lead qualified — new client created.";
