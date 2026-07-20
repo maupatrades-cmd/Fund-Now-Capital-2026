@@ -43,8 +43,12 @@ export function useUpdateDeal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, input }: { id: string; input: Record<string, unknown> }) => {
-      const { error } = await supabase.from("deals").update(input).eq("id", id);
+      // RETURNING id + row-count check — an RLS-filtered / no-op update otherwise
+      // resolves "successfully" (silent-RLS rule), which would e.g. fire a
+      // "Funded!" celebration for a stage change that never happened.
+      const { data, error } = await supabase.from("deals").update(input).eq("id", id).select("id");
       if (error) throw error;
+      if (!data || data.length !== 1) throw new Error("Deal was not updated (no row written).");
     },
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ["deal", v.id] });

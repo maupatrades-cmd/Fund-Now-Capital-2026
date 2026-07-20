@@ -22,6 +22,7 @@ import NotificationsPage from "@/pages/NotificationsPage";
 import NotificationPreferencesPage from "@/pages/NotificationPreferencesPage";
 import IndustriesPage from "@/pages/IndustriesPage";
 import FundersSettingsPage from "@/pages/FundersSettingsPage";
+import { ConfettiProvider } from "@/lib/celebration/ConfettiProvider";
 import { useSession } from "@/lib/useSession";
 import { queryClient } from "@/lib/queryClient";
 
@@ -87,8 +88,10 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AppRoutes />
-        <Toaster position="top-center" richColors />
+        <ConfettiProvider>
+          <AppRoutes />
+          <Toaster position="top-center" richColors />
+        </ConfettiProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );

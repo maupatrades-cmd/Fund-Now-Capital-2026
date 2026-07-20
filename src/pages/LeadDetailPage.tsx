@@ -4,6 +4,7 @@ import { ArrowLeft, Pencil, CheckCircle2, XCircle, PlayCircle } from "lucide-rea
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { formatZAR } from "@/lib/format";
+import { useCelebrate } from "@/lib/celebration/ConfettiProvider";
 import {
   ENTITY_TYPES,
   EMPLOYEE_RANGES,
@@ -187,6 +188,7 @@ const btnNeutral =
 
 function QualificationPanel({ lead }: { lead: Lead }) {
   const navigate = useNavigate();
+  const { celebrateOnce } = useCelebrate();
   const startQualifying = useStartQualifying();
   const qualify = useQualifyLead();
   const [confirmQualify, setConfirmQualify] = useState(false);
@@ -228,6 +230,11 @@ function QualificationPanel({ lead }: { lead: Lead }) {
               ? `Qualified onto ${r.client_business_name ?? "existing client"}.`
               : "Lead qualified — new client created.";
             toast.success(`${where}${migrated} ${r.deal_reference ?? "Deal"} created.`);
+            // Celebrate a real qualification (not the idempotent re-qualify) — once
+            // per created deal (survives refresh / re-visit via localStorage).
+            celebrateOnce(`qualify:${r.deal_id}`, {
+              message: `Qualified onto ${r.client_business_name ?? "the client"} — ${r.deal_reference ?? "the deal"} created`,
+            });
           }
           navigate(`/deals/${r.deal_id}`);
         },

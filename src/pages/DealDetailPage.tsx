@@ -9,6 +9,7 @@ import { stageUrgency, URGENCY_BADGE } from "@/lib/deals";
 import { one } from "@/hooks/useDeals";
 import { useToggleDealPriority } from "@/hooks/useDeals";
 import { useDeal, useUpdateDeal, useReopenDeal } from "@/hooks/useDealDetail";
+import { useCelebrate } from "@/lib/celebration/ConfettiProvider";
 import { FunderSubmissions } from "@/components/deals/FunderSubmissions";
 import { CommunicationsLog } from "@/components/deals/CommunicationsLog";
 import { DealDocuments } from "@/components/deals/DealDocuments";
@@ -19,6 +20,7 @@ export default function DealDetailPage() {
   const { id } = useParams();
   const { data: deal, isLoading, isError, error } = useDeal(id);
   const updateDeal = useUpdateDeal();
+  const { celebrateOnce } = useCelebrate();
   const togglePriority = useToggleDealPriority();
   const reopen = useReopenDeal();
   const [notes, setNotes] = useState<string | null>(null);
@@ -55,7 +57,22 @@ export default function DealDetailPage() {
       setReopenTo(stage);
       return;
     }
-    updateDeal.mutate({ id: deal.id, input: { stage } });
+    updateDeal.mutate(
+      { id: deal.id, input: { stage } },
+      {
+        onSuccess: () => {
+          // Deal reaching Funded is the money-real moment — celebrate once per deal.
+          if (stage === "funded") {
+            const commission =
+              deal.gross_commission != null ? ` Commission earned: ${formatZAR(deal.gross_commission)}` : "";
+            celebrateOnce(`funded:${deal.id}`, {
+              message: `🎉 ${client?.business_name ?? "Client"} — ${deal.reference ?? "Deal"} Funded!${commission}`,
+            });
+          }
+        },
+        onError: (e) => toast.error((e as Error).message || "Could not update stage"),
+      },
+    );
   };
 
   const confirmReopen = async () => {
