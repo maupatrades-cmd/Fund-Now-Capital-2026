@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Loader2, Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useFunders, type Funder } from "@/hooks/useFunders";
@@ -200,6 +203,49 @@ function RateRow({ row, onEdit, muted }: { row: RateStructure; onEdit: () => voi
 }
 
 // ---- add/edit modal ---------------------------------------------------------
+// Form stack per project convention: react-hook-form + zod (mirrors
+// StakeholdersPanel). Fields are strings; a superRefine enforces the
+// rate_type-conditional rule (percent needs 0..100, flat needs >= 0) and the
+// date order. Percent is entered/displayed as % (8.5), stored as a fraction
+// (0.085). Rendering stays plain <input className={fieldCls}> — the repo's RHF
+// forms don't use shadcn/ui Form components.
+const DEAL_TYPE_VALUES = DEAL_TYPES.map((d) => d.value) as [DealType, ...DealType[]];
+const RATE_TYPE_VALUES = RATE_TYPES.map((r) => r.value) as [FunderRateType, ...FunderRateType[]];
+
+const rateFormSchema = z
+  .object({
+    deal_type: z.enum(DEAL_TYPE_VALUES),
+    rate_type: z.enum(RATE_TYPE_VALUES),
+    rate_percent: z.string(),
+    flat_amount: z.string(),
+    effective_from: z.string().min(1, "A start date is required."),
+    effective_to: z.string(),
+    contract_clause_ref: z.string(),
+    notes: z.string(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.effective_to && v.effective_to <= v.effective_from) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["effective_to"], message: "The end date must be after the start date." });
+    }
+    if (isPercentRate(v.rate_type)) {
+      const n = Number(v.rate_percent);
+      if (v.rate_percent.trim() === "" || !Number.isFinite(n)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["rate_percent"], message: "Enter a percentage rate." });
+      } else if (n < 0 || n > 100) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["rate_percent"], message: "The percentage must be between 0 and 100." });
+      }
+    } else {
+      const n = Number(v.flat_amount);
+      if (v.flat_amount.trim() === "" || !Number.isFinite(n)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["flat_amount"], message: "Enter a flat rand amount." });
+      } else if (n < 0) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["flat_amount"], message: "The flat amount can't be negative." });
+      }
+    }
+  });
+
+type RateFormValues = z.infer<typeof rateFormSchema>;
+
 function RateFormModal({
   funder,
   existing,
@@ -212,21 +258,26 @@ function RateFormModal({
   const isEdit = existing !== null;
   const save = useSaveRateStructure();
   const del = useDeleteRateStructure();
+  const [serverErr, setServerErr] = useState<string | null>(null);
 
-  const [dealType, setDealType] = useState<DealType>(existing?.deal_type ?? "non_po");
-  const [rateType, setRateType] = useState<FunderRateType>(existing?.rate_type ?? "percent_of_gross_funded");
-  // Percent is entered/displayed as a whole/decimal % (8.5), stored as a fraction (0.085).
-  const [ratePercent, setRatePercent] = useState<string>(
-    existing?.rate_fraction != null ? String(Number(existing.rate_fraction) * 100) : "",
-  );
-  const [flatAmount, setFlatAmount] = useState<string>(
-    existing?.flat_amount != null ? String(existing.flat_amount) : "",
-  );
-  const [effectiveFrom, setEffectiveFrom] = useState<string>(existing?.effective_from ?? "");
-  const [effectiveTo, setEffectiveTo] = useState<string>(existing?.effective_to ?? "");
-  const [clauseRef, setClauseRef] = useState<string>(existing?.contract_clause_ref ?? "");
-  const [notes, setNotes] = useState<string>(existing?.notes ?? "");
-  const [err, setErr] = useState<string | null>(null);
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<RateFormValues>({
+    resolver: zodResolver(rateFormSchema),
+    defaultValues: {
+      deal_type: existing?.deal_type ?? "non_po",
+      rate_type: existing?.rate_type ?? "percent_of_gross_funded",
+      rate_percent: existing?.rate_fraction != null ? String(Number(existing.rate_fraction) * 100) : "",
+      flat_amount: existing?.flat_amount != null ? String(existing.flat_amount) : "",
+      effective_from: existing?.effective_from ?? "",
+      effective_to: existing?.effective_to ?? "",
+      contract_clause_ref: existing?.contract_clause_ref ?? "",
+      notes: existing?.notes ?? "",
+    },
+  });
 
   // Escape-to-dismiss (keyboard a11y).
   useEffect(() => {
@@ -237,40 +288,21 @@ function RateFormModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const pct = isPercentRate(rateType);
+  const pct = isPercentRate(watch("rate_type"));
 
-  const validate = (): string | null => {
-    if (!effectiveFrom) return "A start date is required.";
-    if (effectiveTo && effectiveTo <= effectiveFrom) return "The end date must be after the start date.";
-    if (pct) {
-      const n = Number(ratePercent);
-      if (ratePercent.trim() === "" || !Number.isFinite(n)) return "Enter a percentage rate.";
-      if (n < 0 || n > 100) return "The percentage must be between 0 and 100.";
-    } else {
-      const n = Number(flatAmount);
-      if (flatAmount.trim() === "" || !Number.isFinite(n)) return "Enter a flat rand amount.";
-      if (n < 0) return "The flat amount can't be negative.";
-    }
-    return null;
-  };
-
-  const onSubmit = async () => {
-    const v = validate();
-    if (v) {
-      setErr(v);
-      return;
-    }
-    setErr(null);
+  const onSubmit = async (v: RateFormValues) => {
+    setServerErr(null);
+    const isPct = isPercentRate(v.rate_type);
     const input: RateStructureInput = {
       funder_id: funder.id,
-      deal_type: dealType,
-      rate_type: rateType,
-      rate_fraction: pct ? Number(ratePercent) / 100 : null,
-      flat_amount: pct ? null : Number(flatAmount),
-      effective_from: effectiveFrom,
-      effective_to: effectiveTo.trim() || null,
-      contract_clause_ref: clauseRef.trim() || null,
-      notes: notes.trim() || null,
+      deal_type: v.deal_type,
+      rate_type: v.rate_type,
+      rate_fraction: isPct ? Number(v.rate_percent) / 100 : null,
+      flat_amount: isPct ? null : Number(v.flat_amount),
+      effective_from: v.effective_from,
+      effective_to: v.effective_to.trim() || null,
+      contract_clause_ref: v.contract_clause_ref.trim() || null,
+      notes: v.notes.trim() || null,
     };
     try {
       await save.mutateAsync({ id: existing?.id, input });
@@ -278,7 +310,7 @@ function RateFormModal({
       onClose();
     } catch (e) {
       const msg = (e as Error).message || "Could not save the rate structure.";
-      setErr(msg);
+      setServerErr(msg);
       toast.error(msg);
     }
   };
@@ -320,100 +352,107 @@ function RateFormModal({
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className={labelCls} htmlFor="fcs-deal-type">Deal type</label>
-            <select id="fcs-deal-type" className={fieldCls} value={dealType} onChange={(e) => setDealType(e.target.value as DealType)}>
-              {DEAL_TYPES.map((d) => (
-                <option key={d.value} value={d.value}>{d.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className={labelCls} htmlFor="fcs-rate-type">Rate type</label>
-            <select id="fcs-rate-type" className={fieldCls} value={rateType} onChange={(e) => setRateType(e.target.value as FunderRateType)}>
-              {RATE_TYPES.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {pct ? (
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className={labelCls} htmlFor="fcs-rate-percent">Rate (%)</label>
-              <input
-                id="fcs-rate-percent"
-                type="number"
-                min="0"
-                max="100"
-                step="0.01"
-                className={fieldCls}
-                value={ratePercent}
-                onChange={(e) => setRatePercent(e.target.value)}
-                placeholder="e.g. 8.5"
-              />
+              <label className={labelCls} htmlFor="fcs-deal-type">Deal type</label>
+              <select id="fcs-deal-type" className={fieldCls} {...register("deal_type")}>
+                {DEAL_TYPES.map((d) => (
+                  <option key={d.value} value={d.value}>{d.label}</option>
+                ))}
+              </select>
             </div>
-          ) : (
+
             <div>
-              <label className={labelCls} htmlFor="fcs-flat-amount">Flat amount (R)</label>
-              <input
-                id="fcs-flat-amount"
-                type="number"
-                min="0"
-                step="0.01"
-                className={fieldCls}
-                value={flatAmount}
-                onChange={(e) => setFlatAmount(e.target.value)}
-                placeholder="e.g. 5000"
-              />
+              <label className={labelCls} htmlFor="fcs-rate-type">Rate type</label>
+              <select id="fcs-rate-type" className={fieldCls} {...register("rate_type")}>
+                {RATE_TYPES.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
             </div>
-          )}
 
-          <div>
-            <label className={labelCls} htmlFor="fcs-clause">Contract clause ref</label>
-            <input id="fcs-clause" className={fieldCls} value={clauseRef} onChange={(e) => setClauseRef(e.target.value)} placeholder="optional" />
-          </div>
-
-          <div>
-            <label className={labelCls} htmlFor="fcs-from">Effective from</label>
-            <input id="fcs-from" type="date" className={fieldCls} value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
-          </div>
-
-          <div>
-            <label className={labelCls} htmlFor="fcs-to">Effective to</label>
-            <input id="fcs-to" type="date" className={fieldCls} value={effectiveTo} onChange={(e) => setEffectiveTo(e.target.value)} />
-            <p className="mt-1 text-xs text-muted-foreground">Leave blank while the rate is active.</p>
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className={labelCls} htmlFor="fcs-notes">Notes</label>
-            <textarea id="fcs-notes" rows={2} className={fieldCls} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="optional" />
-          </div>
-        </div>
-
-        {err && <p className={errCls}>{err}</p>}
-
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <div>
-            {isEdit && (
-              <button
-                type="button"
-                onClick={onDelete}
-                disabled={del.isPending}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
-              >
-                <Trash2 className="h-4 w-4" /> Delete
-              </button>
+            {pct ? (
+              <div>
+                <label className={labelCls} htmlFor="fcs-rate-percent">Rate (%)</label>
+                <input
+                  id="fcs-rate-percent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  className={fieldCls}
+                  placeholder="e.g. 8.5"
+                  {...register("rate_percent")}
+                />
+                {errors.rate_percent && <p className={errCls}>{errors.rate_percent.message}</p>}
+              </div>
+            ) : (
+              <div>
+                <label className={labelCls} htmlFor="fcs-flat-amount">Flat amount (R)</label>
+                <input
+                  id="fcs-flat-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={fieldCls}
+                  placeholder="e.g. 5000"
+                  {...register("flat_amount")}
+                />
+                {errors.flat_amount && <p className={errCls}>{errors.flat_amount.message}</p>}
+              </div>
             )}
+
+            <div>
+              <label className={labelCls} htmlFor="fcs-clause">Contract clause ref</label>
+              <input id="fcs-clause" className={fieldCls} placeholder="optional" {...register("contract_clause_ref")} />
+            </div>
+
+            <div>
+              <label className={labelCls} htmlFor="fcs-from">Effective from</label>
+              <input id="fcs-from" type="date" className={fieldCls} {...register("effective_from")} />
+              {errors.effective_from && <p className={errCls}>{errors.effective_from.message}</p>}
+            </div>
+
+            <div>
+              <label className={labelCls} htmlFor="fcs-to">Effective to</label>
+              <input id="fcs-to" type="date" className={fieldCls} {...register("effective_to")} />
+              {errors.effective_to ? (
+                <p className={errCls}>{errors.effective_to.message}</p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">Leave blank while the rate is active.</p>
+              )}
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className={labelCls} htmlFor="fcs-notes">Notes</label>
+              <textarea id="fcs-notes" rows={2} className={fieldCls} placeholder="optional" {...register("notes")} />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={onClose} className={btnNeutral}>Cancel</button>
-            <button type="button" onClick={onSubmit} disabled={save.isPending} className={btnPrimary}>
-              {save.isPending ? "Saving…" : isEdit ? "Save changes" : "Add rate"}
-            </button>
+
+          {serverErr && <p className={errCls}>{serverErr}</p>}
+
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <div>
+              {isEdit && (
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  disabled={del.isPending}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+                >
+                  <Trash2 className="h-4 w-4" /> Delete
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={onClose} className={btnNeutral}>Cancel</button>
+              <button type="submit" disabled={save.isPending} className={btnPrimary}>
+                {save.isPending ? "Saving…" : isEdit ? "Save changes" : "Add rate"}
+              </button>
+            </div>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );
