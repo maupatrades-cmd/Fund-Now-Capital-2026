@@ -27,14 +27,19 @@ export function dealTypeLabel(value: string | null): string {
   return DEAL_TYPES.find((d) => d.value === value)?.label ?? value;
 }
 
-// ---- funder_rate_type (DB enum: 3 values) -----------------------------------
+// ---- funder_rate_type (DB enum: 4 values) -----------------------------------
+// percent_of_finance_charge added in C0.3 — Pollen Finance and similar funders
+// pay FNC a % of the CLIENT's finance charge on the facility (not the funded
+// amount). See migration 20260720140000.
 export type FunderRateType =
   | "percent_of_gross_funded"
   | "percent_of_mdr"
-  | "flat_rand_per_deal";
+  | "flat_rand_per_deal"
+  | "percent_of_finance_charge";
 
 export const RATE_TYPES: { value: FunderRateType; label: string }[] = [
   { value: "percent_of_gross_funded", label: "% of gross funded" },
+  { value: "percent_of_finance_charge", label: "% of finance charge" },
   { value: "percent_of_mdr", label: "% of MDR" },
   { value: "flat_rand_per_deal", label: "Flat rand per deal" },
 ];
@@ -46,8 +51,29 @@ export function rateTypeLabel(value: string | null): string {
 
 // A percent rate stores a 0..1 fraction (`rate_fraction`); a flat rate stores a
 // rand amount (`flat_amount`). This drives which form field + formatter is used.
+// percent_of_finance_charge is a percent rate (stored as rate_fraction).
 export function isPercentRate(rateType: FunderRateType): boolean {
-  return rateType === "percent_of_gross_funded" || rateType === "percent_of_mdr";
+  return (
+    rateType === "percent_of_gross_funded" ||
+    rateType === "percent_of_mdr" ||
+    rateType === "percent_of_finance_charge"
+  );
+}
+
+// ---- payment_terms_days (C0.3) ----------------------------------------------
+// 0 = "Due on receipt" (no due date; skipped by the C1 overdue sweep); N = net-N.
+export const PAYMENT_TERMS_OPTIONS: { value: number; label: string }[] = [
+  { value: 0, label: "Due on receipt" },
+  { value: 7, label: "7 days" },
+  { value: 14, label: "14 days" },
+  { value: 30, label: "30 days" },
+  { value: 45, label: "45 days" },
+  { value: 60, label: "60 days" },
+];
+
+export function paymentTermsLabel(days: number | null | undefined): string {
+  if (days === null || days === undefined || days === 0) return "Due on receipt";
+  return `${days} day${days === 1 ? "" : "s"} from invoice date`;
 }
 
 // ---- display -----------------------------------------------------------------
@@ -85,6 +111,10 @@ export type RateStructure = {
   effective_from: string; // date (ISO)
   effective_to: string | null; // date | null (null = active/open-ended)
   contract_clause_ref: string | null;
+  // C0.3: payment terms (0 = due on receipt) + the human agreement reference
+  // that flows onto the C1 invoice ("Lead Provider Agreement dated 28 April 2026").
+  payment_terms_days: number;
+  contract_reference: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -100,6 +130,8 @@ export type RateStructureInput = {
   effective_from: string;
   effective_to: string | null;
   contract_clause_ref: string | null;
+  payment_terms_days: number;
+  contract_reference: string | null;
   notes: string | null;
 };
 

@@ -5,7 +5,8 @@ import type { RateStructure, RateStructureInput } from "@/lib/funderCommissions"
 
 const RATE_COLUMNS =
   "id, funder_id, deal_type, rate_type, rate_fraction, flat_amount, " +
-  "effective_from, effective_to, contract_clause_ref, notes, created_at, updated_at";
+  "effective_from, effective_to, contract_clause_ref, payment_terms_days, " +
+  "contract_reference, notes, created_at, updated_at";
 
 // All per-funder rate structures (owner-only via RLS). Ordered so the active
 // (open-ended) row surfaces first per (funder, deal_type), history below it.

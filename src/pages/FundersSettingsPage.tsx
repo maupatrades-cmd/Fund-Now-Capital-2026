@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, ChevronDown, ChevronRight, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { useFunders, type Funder } from "@/hooks/useFunders";
+import { useFunders, useUpdateFunder, type Funder } from "@/hooks/useFunders";
 import {
   useRateStructures,
   useSaveRateStructure,
@@ -13,9 +13,11 @@ import {
 import {
   DEAL_TYPES,
   RATE_TYPES,
+  PAYMENT_TERMS_OPTIONS,
   dealTypeLabel,
   rateTypeLabel,
   formatRateValue,
+  paymentTermsLabel,
   isPercentRate,
   isActive,
   type RateStructure,
@@ -43,10 +45,15 @@ export default function FundersSettingsPage() {
   const { data: rates, isLoading: ratesLoading } = useRateStructures();
   const [editing, setEditing] = useState<Editing | null>(null);
 
-  const activeFunders = useMemo(
-    () => (funders ?? []).filter((f) => f.is_active),
-    [funders],
-  );
+  // Show all active funders (contracted or not) so the owner can flag which ones
+  // FNC has a signed agreement with. Sort contracted first for quick access.
+  const funderList = useMemo(() => {
+    const active = (funders ?? []).filter((f) => f.is_active);
+    return [...active].sort((a, b) => {
+      if (a.is_contracted !== b.is_contracted) return a.is_contracted ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [funders]);
 
   // group rates by funder_id
   const ratesByFunder = useMemo(() => {
@@ -59,9 +66,13 @@ export default function FundersSettingsPage() {
     return map;
   }, [rates]);
 
+  const contractedCount = useMemo(
+    () => funderList.filter((f) => f.is_contracted).length,
+    [funderList],
+  );
   const fundersWithRates = useMemo(
-    () => activeFunders.filter((f) => (ratesByFunder.get(f.id)?.length ?? 0) > 0).length,
-    [activeFunders, ratesByFunder],
+    () => funderList.filter((f) => (ratesByFunder.get(f.id)?.length ?? 0) > 0).length,
+    [funderList, ratesByFunder],
   );
 
   if (fundersLoading || ratesLoading) {
@@ -77,18 +88,18 @@ export default function FundersSettingsPage() {
       <div>
         <h1 className="text-2xl font-bold text-brand-navy">Funder commission rates</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          What Fund Now Capital earns <strong>from each funder</strong> per signed broker agreement. These rates
-          drive invoicing (C1) and honest commission calculations (C2). Rates are effective-dated — to change a
-          funder's rate, <strong>close the current one</strong> (set an end date), then add the new one. Owner-only;
-          never shown to partners.
+          What Fund Now Capital earns <strong>from each funder</strong> per signed broker agreement. Flag a funder as{" "}
+          <strong>contracted</strong> once you have a signed agreement — only then can you set its commission rate and{" "}
+          invoice it. Rates are effective-dated: to change one, <strong>close the current rate</strong> (set an end
+          date), then add the new one. Owner-only; never shown to partners.
         </p>
         <p className="mt-2 text-xs text-muted-foreground">
-          {activeFunders.length} active funders · {fundersWithRates} with a rate set
+          {contractedCount} contracted · {fundersWithRates} with a rate set · {funderList.length} active funders
         </p>
       </div>
 
       <div className="space-y-3">
-        {activeFunders.map((f) => (
+        {funderList.map((f) => (
           <FunderRateCard
             key={f.id}
             funder={f}
@@ -97,7 +108,7 @@ export default function FundersSettingsPage() {
             onEdit={(row) => setEditing({ funder: f, row })}
           />
         ))}
-        {activeFunders.length === 0 && (
+        {funderList.length === 0 && (
           <p className="rounded-xl border border-border bg-white p-5 text-sm text-muted-foreground">
             No active funders. Add funders in the Funder panel first.
           </p>
@@ -127,49 +138,96 @@ function FunderRateCard({
   onEdit: (row: RateStructure) => void;
 }) {
   const [showHistory, setShowHistory] = useState(false);
+  const updateFunder = useUpdateFunder();
   const active = rows.filter(isActive);
   const history = rows.filter((r) => !isActive(r));
 
+  const onToggleContracted = async () => {
+    const next = !funder.is_contracted;
+    // Turning OFF a funder that still has rates: confirm (rates are preserved but
+    // become read-only). Turning ON is frictionless.
+    if (!next && rows.length > 0) {
+      const ok = window.confirm(
+        `Mark ${funder.name} as no longer contracted? Its ${rows.length} rate structure(s) are kept but become ` +
+          `read-only until you flag it contracted again.`,
+      );
+      if (!ok) return;
+    }
+    try {
+      await updateFunder.mutateAsync({ id: funder.id, input: { is_contracted: next } });
+      toast.success(next ? `${funder.name} flagged contracted` : `${funder.name} un-flagged`);
+    } catch (e) {
+      toast.error((e as Error).message || "Could not update the funder.");
+    }
+  };
+
   return (
     <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-brand-navy">{funder.name}</h2>
-        <button type="button" onClick={onAdd} className={btnPrimary}>
-          <Plus className="h-4 w-4" /> Add rate
-        </button>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-sm font-semibold text-brand-navy">{funder.name}</h2>
+          {funder.is_contracted && (
+            <span className="rounded-full bg-brand-green/10 px-2 py-0.5 text-[11px] font-medium text-brand-green ring-1 ring-brand-green/20">
+              Contracted
+            </span>
+          )}
+        </div>
+        <label
+          className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-muted-foreground"
+          title="Turn on once you have a signed broker / lead-provider agreement with this funder. Only contracted funders can carry rates and be invoiced."
+        >
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-brand-teal"
+            checked={funder.is_contracted}
+            disabled={updateFunder.isPending}
+            onChange={onToggleContracted}
+          />
+          Contracted (signed agreement)
+        </label>
       </div>
 
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No rate structure yet.</p>
+      {funder.is_contracted ? (
+        <>
+          <ShortCodeEditor funder={funder} />
+          <div className="mb-2 mt-3 flex items-center justify-end">
+            <button type="button" onClick={onAdd} className={btnPrimary}>
+              <Plus className="h-4 w-4" /> Add rate
+            </button>
+          </div>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No rate structure yet.</p>
+          ) : (
+            <RateList
+              active={active}
+              history={history}
+              showHistory={showHistory}
+              setShowHistory={setShowHistory}
+              onEdit={onEdit}
+            />
+          )}
+        </>
       ) : (
         <div className="space-y-2">
-          {active.map((r) => (
-            <RateRow key={r.id} row={r} onEdit={() => onEdit(r)} />
-          ))}
-          {active.length === 0 && (
-            <p className="text-sm text-amber-700">
-              No active rate — all rates for this funder are closed. Add a current rate.
+          {rows.length > 0 ? (
+            <>
+              <p className="flex items-center gap-1.5 text-xs text-amber-700">
+                <Lock className="h-3.5 w-3.5" /> Not contracted — existing rates are read-only. Flag as contracted to
+                manage them.
+              </p>
+              <div className="space-y-2 opacity-70">
+                {active.map((r) => (
+                  <RateRow key={r.id} row={r} muted />
+                ))}
+                {history.map((r) => (
+                  <RateRow key={r.id} row={r} muted />
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Flag as contracted (signed agreement) to add a commission rate and enable invoicing.
             </p>
-          )}
-
-          {history.length > 0 && (
-            <div className="pt-1">
-              <button
-                type="button"
-                onClick={() => setShowHistory((s) => !s)}
-                className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-brand-navy"
-              >
-                {showHistory ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                {showHistory ? "Hide" : "Show"} closed rates ({history.length})
-              </button>
-              {showHistory && (
-                <div className="mt-2 space-y-2 border-l-2 border-border pl-3">
-                  {history.map((r) => (
-                    <RateRow key={r.id} row={r} onEdit={() => onEdit(r)} muted />
-                  ))}
-                </div>
-              )}
-            </div>
           )}
         </div>
       )}
@@ -177,7 +235,111 @@ function FunderRateCard({
   );
 }
 
-function RateRow({ row, onEdit, muted }: { row: RateStructure; onEdit: () => void; muted?: boolean }) {
+// Rate list for a contracted funder: active rows + collapsible closed history.
+function RateList({
+  active,
+  history,
+  showHistory,
+  setShowHistory,
+  onEdit,
+}: {
+  active: RateStructure[];
+  history: RateStructure[];
+  showHistory: boolean;
+  setShowHistory: (fn: (s: boolean) => boolean) => void;
+  onEdit: (row: RateStructure) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      {active.map((r) => (
+        <RateRow key={r.id} row={r} onEdit={() => onEdit(r)} />
+      ))}
+      {active.length === 0 && (
+        <p className="text-sm text-amber-700">
+          No active rate — all rates for this funder are closed. Add a current rate.
+        </p>
+      )}
+
+      {history.length > 0 && (
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => setShowHistory((s) => !s)}
+            className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-brand-navy"
+          >
+            {showHistory ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            {showHistory ? "Hide" : "Show"} closed rates ({history.length})
+          </button>
+          {showHistory && (
+            <div className="mt-2 space-y-2 border-l-2 border-border pl-3">
+              {history.map((r) => (
+                <RateRow key={r.id} row={r} onEdit={() => onEdit(r)} muted />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Inline editor for the funder's payment-reference short code (C0.3 / C1).
+function ShortCodeEditor({ funder }: { funder: Funder }) {
+  const updateFunder = useUpdateFunder();
+  const [value, setValue] = useState(funder.short_code ?? "");
+
+  // Keep in sync if the funder refetches with a new value.
+  useEffect(() => {
+    setValue(funder.short_code ?? "");
+  }, [funder.short_code]);
+
+  const normalized = value.trim().toUpperCase();
+  const current = funder.short_code ?? "";
+  const dirty = normalized !== current;
+
+  const onSave = async () => {
+    try {
+      await updateFunder.mutateAsync({
+        id: funder.id,
+        input: { short_code: normalized || null },
+      });
+      toast.success("Short code saved");
+    } catch (e) {
+      toast.error((e as Error).message || "Could not save the short code.");
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <div className="min-w-[12rem]">
+        <label className={labelCls} htmlFor={`short-${funder.id}`}>
+          Payment-reference short code
+        </label>
+        <input
+          id={`short-${funder.id}`}
+          className={fieldCls}
+          placeholder="e.g. POLLEN"
+          value={value}
+          maxLength={20}
+          onChange={(e) => setValue(e.target.value)}
+        />
+      </div>
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={!dirty || updateFunder.isPending}
+        className={btnNeutral + " disabled:opacity-50"}
+      >
+        {updateFunder.isPending ? "Saving…" : "Save"}
+      </button>
+      <p className="mb-2 text-[11px] text-muted-foreground">
+        Used in invoice references, e.g. <span className="font-mono">{normalized || "POLLEN"}-INV0032-CHICKANOS</span>.
+      </p>
+    </div>
+  );
+}
+
+function RateRow({ row, onEdit, muted }: { row: RateStructure; onEdit?: () => void; muted?: boolean }) {
   return (
     <div
       className={
@@ -192,12 +354,20 @@ function RateRow({ row, onEdit, muted }: { row: RateStructure; onEdit: () => voi
         {formatDate(row.effective_from)} →{" "}
         {row.effective_to ? formatDate(row.effective_to) : <span className="text-brand-green font-medium">active</span>}
       </span>
-      {row.contract_clause_ref && (
-        <span className="text-xs text-muted-foreground">clause {row.contract_clause_ref}</span>
+      <span className="text-xs text-muted-foreground">{paymentTermsLabel(row.payment_terms_days)}</span>
+      {row.contract_reference && (
+        <span className="text-xs text-muted-foreground italic">{row.contract_reference}</span>
       )}
-      <button type="button" onClick={onEdit} className="ml-auto text-muted-foreground hover:text-brand-navy" aria-label="Edit rate">
-        <Pencil className="h-4 w-4" />
-      </button>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="ml-auto text-muted-foreground hover:text-brand-navy"
+          aria-label="Edit rate"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 }
@@ -220,6 +390,8 @@ const rateFormSchema = z
     flat_amount: z.string(),
     effective_from: z.string().min(1, "A start date is required."),
     effective_to: z.string(),
+    payment_terms_days: z.string(),
+    contract_reference: z.string(),
     contract_clause_ref: z.string(),
     notes: z.string(),
   })
@@ -274,6 +446,8 @@ function RateFormModal({
       flat_amount: existing?.flat_amount != null ? String(existing.flat_amount) : "",
       effective_from: existing?.effective_from ?? "",
       effective_to: existing?.effective_to ?? "",
+      payment_terms_days: existing?.payment_terms_days != null ? String(existing.payment_terms_days) : "0",
+      contract_reference: existing?.contract_reference ?? "",
       contract_clause_ref: existing?.contract_clause_ref ?? "",
       notes: existing?.notes ?? "",
     },
@@ -301,6 +475,8 @@ function RateFormModal({
       flat_amount: isPct ? null : Number(v.flat_amount),
       effective_from: v.effective_from,
       effective_to: v.effective_to.trim() || null,
+      payment_terms_days: Number(v.payment_terms_days) || 0,
+      contract_reference: v.contract_reference.trim() || null,
       contract_clause_ref: v.contract_clause_ref.trim() || null,
       notes: v.notes.trim() || null,
     };
@@ -404,9 +580,31 @@ function RateFormModal({
             )}
 
             <div>
+              <label className={labelCls} htmlFor="fcs-terms">Payment terms</label>
+              <select id="fcs-terms" className={fieldCls} {...register("payment_terms_days")}>
+                {PAYMENT_TERMS_OPTIONS.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className={labelCls} htmlFor="fcs-contract-ref">Contract reference</label>
+              <input
+                id="fcs-contract-ref"
+                className={fieldCls}
+                placeholder="e.g. Lead Provider Agreement dated 28 April 2026"
+                {...register("contract_reference")}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Appears on every invoice generated under this rate.</p>
+            </div>
+
+            <div>
               <label className={labelCls} htmlFor="fcs-clause">Contract clause ref</label>
               <input id="fcs-clause" className={fieldCls} placeholder="optional" {...register("contract_clause_ref")} />
             </div>
+
+            <div className="hidden sm:block" aria-hidden="true" />
 
             <div>
               <label className={labelCls} htmlFor="fcs-from">Effective from</label>
