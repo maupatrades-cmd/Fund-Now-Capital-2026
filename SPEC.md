@@ -358,6 +358,49 @@ Commission calculation depends on the **per-funder rate structure** (see ROADMAP
 
 ---
 
+## S7B. DOCTOR COMMISSION CASHFLOW & DISCRETIONARY BONUSES (Part 5 — Roadmap C2/C3/C4/D)
+
+**Status: docs only, locked 2026-07-20. NOT started — governs the C2/C3/C4 build proposals when their time comes.** Extends S7A's Estimated/Potential/Actual *calculation* states with the **cashflow settlement** lifecycle: S7A answers "how much", S7B answers "when does Doctor actually get paid, and in what state is that money". Every transition here is subject to **CLAUDE.md Security rule 9** (money-state transitions are idempotent + DB-lock-protected + claim-then-act + transition-guarded + terminal-immutable).
+
+**Owner intent (verbatim):** *"Doctor gets paid if I get paid. I need to release invoices on my end then have outstanding then have transparency. E.g. Fepa Sechaba at Merchant Capital — client funded → real commission calculated → I generate invoice to funder → Doctor sees 'client funded, outstanding' → funder pays me → I update outstanding to paid → Doctor generates his invoice with his logo → I approve → paid. Also I need to add discretionary bonuses to any deal — base might be R5,000, I add R10,000 extra bonus."*
+
+### S7B.1 — Doctor commission has FOUR settlement states (not two)
+A commission record carries a `commission_state` distinct from S7A's amount states:
+
+1. **Earned** — deal Funded, commission calculated (S7A Actual on `amount_funded`), no invoice activity yet.
+2. **Outstanding** — FNC has invoiced the **funder** (C1 invoice issued), awaiting the funder's payment.
+3. **Payable** — the funder has **paid FNC** (money actually received) → Doctor may now invoice FNC (C4).
+4. **Settled** — Doctor's invoice (C4) is approved **and** paid by FNC.
+
+**State transitions (each guarded + idempotent + advisory-locked per rule 9):**
+- **Earned → Outstanding:** the C1 invoice to the funder is issued.
+- **Outstanding → Payable:** the funder invoice is marked paid (cash received by FNC). **Critical: no settlement is triggered by "deal funded" alone — cash must actually be in FNC's account before Doctor's commission is Payable.**
+- **Payable → Settled:** Doctor's partner-invoice (C4) is approved **and** its FNC payment is recorded.
+
+Doctor sees all four states on his portal (Phase D + C3 integration; fictional funder names per S11).
+
+### S7B.2 — Discretionary bonuses (new addition to C2/C3)
+- On any deal, the owner can attach a **discretionary bonus** for the referral partner (Doctor), **separate from base commission** — its own record/row, its own lifecycle.
+- Fields: `bonus_amount`, `bonus_reason` (text), `created_by`, `created_at`, `bonus_state` (mirrors the four `commission_state` values above).
+- The bonus flows through the **same Earned → Outstanding → Payable → Settled** lifecycle as base commission.
+- Doctor sees the bonus **separately** on his portal; reports distinguish **base vs bonus** (accounting + tax).
+- **Once paid, the bonus is immutable audit-truth** — amount and reason can never be retroactively changed (rule 9(e): corrections are new reversal rows, never edits).
+- Example: base R5,000 + owner-added bonus R10,000 = **R15,000** on Doctor's invoice (shown as separate line items).
+
+### S7B.3 — Doctor invoicing = Model A (locked)
+Doctor **initiates** invoice generation from his portal when a commission is in **Payable** state. Auto-generation is deferred to future polish if volume justifies. This means **C4's shape:**
+- New table `partner_invoices` — **per-partner numbered** series (e.g. `INV-BD-XXXX` for Bright Destiny), PDF generated in the **partner's own branding** (logo, VAT, banking details).
+- Doctor's invoice shows **base-commission line items + bonus line items separately**.
+- The owner receives `partner_invoices` for **approval + payment recording**.
+- An **approved + paid** `partner_invoice` triggers the base + bonus `commission_state` → **Settled** (idempotent, advisory-locked, terminal-immutable per rule 9).
+
+### S7B.4 — Partner branding profile (new — needed for C4)
+A `partner_branding_profile` table (or fields on the existing `referral_partners`): `logo_url`, `company_registration_number`, `vat_number`, `banking_details`, `physical_address`, `signature_image_url`. **Multi-partner-ready** — each partner has their own branding and their own invoice-numbering series. (Verify the live `referral_partners` shape before choosing table-vs-columns at C4 build time — schema-truth discipline.)
+
+**Sequencing:** these are locked product decisions, not a build authorisation. The C2 (commission auto-write + bonus rows), C3 (Doctor earnings lifecycle + the four states), and C4 (partner invoicing + branding) scope proposals will each reference this section and Security rule 9 when they open. **C0 scope is unaffected** — C0 only supplies the per-funder rate substrate (S7A).
+
+---
+
 ## S8. DOCTOR'S PAYROLL (Part 5 M3 — Roadmap C3–C5, portal screens D2)
 
 `doctor_earnings`: id, deal_id, deal_funder_submission_id, doctor_id FK referral_partners, commission_amount, tier_applied, status enum(earned/ready_to_invoice/invoiced/paid), earned_at (deal funded), ready_to_invoice_at (FNC received funder payment), invoiced_at, paid_at. Computed server-side from `calculate_commission` — never client-supplied.
