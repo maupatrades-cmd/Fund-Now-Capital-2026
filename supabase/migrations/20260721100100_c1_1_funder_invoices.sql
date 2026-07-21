@@ -302,14 +302,14 @@ begin
 
   if v_rate_type = 'percent_of_gross_funded' then
     v_commission := round(v_rate_frac * v_sub.amount_funded, 2);
-    v_rate_disp  := trim(to_char(v_rate_frac * 100, 'FM999990.####')) || '%';
+    v_rate_disp  := trim(trailing '.' from to_char(v_rate_frac * 100, 'FM999990.99')) || '%';
     v_basis      := 'funded amount';
   elsif v_rate_type = 'percent_of_finance_charge' then
     if v_fin_charge is null then
       raise exception 'This funder charges commission on the finance charge — capture the finance charge amount first';
     end if;
     v_commission := round(v_rate_frac * v_fin_charge, 2);
-    v_rate_disp  := trim(to_char(v_rate_frac * 100, 'FM999990.####')) || '%';
+    v_rate_disp  := trim(trailing '.' from to_char(v_rate_frac * 100, 'FM999990.99')) || '%';
     v_basis      := 'finance charge on the facility';
   elsif v_rate_type = 'flat_rand_per_deal' then
     v_commission := round(v_flat, 2);
