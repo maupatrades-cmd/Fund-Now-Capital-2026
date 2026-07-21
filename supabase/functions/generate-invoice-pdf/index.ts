@@ -12,7 +12,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { jsPDF } from "jspdf";
-import { FNC_LOGO_PNG } from "./logo.ts";
+import { FNC_LOGO_JPEG } from "./logo.ts";
 
 // ---- locked FNC business constants (INV-0031) -------------------------------
 const FNC = {
@@ -89,7 +89,7 @@ function renderPdf(inv: InvoiceRow, funder: FunderRow): Uint8Array {
   // Gradient "n" mark, top-left; the company text sits to its right (matches INV-0031).
   const LOGO = 46; // pt (~16mm) square
   const TX = M + LOGO + 12; // company-text left edge, beside the mark
-  doc.addImage(FNC_LOGO_PNG, "PNG", M, y - 8, LOGO, LOGO);
+  doc.addImage(FNC_LOGO_JPEG, "JPEG", M, y - 8, LOGO, LOGO);
   doc.setFont("helvetica", "bold").setFontSize(16).setTextColor(...NAVY);
   doc.text(FNC.name, TX, y);
   doc.setFont("helvetica", "italic").setFontSize(9).setTextColor(...TEAL);
