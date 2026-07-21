@@ -413,6 +413,47 @@ Partner pool = 60% of FNC gross commission. Company retention = 40% of FNC gross
 - **C4** (Doctor invoicing FNC) — PDF description neutral, no tier math.
 - **D5** (Doctor's Commission Estimator) — already locked to partner-share only.
 
+### S7C.1 Frontend calculation formula (Doctor-facing displays)
+
+The 50/50 partnership presentation is **mathematically consistent** with the tiered backend math, using this formula.
+
+**Given:** `doctor_actual_commission` — the real output of the tiered engine (29/30/33/25/40 × partner pool).
+
+**Doctor-facing display:**
+- `displayed_deal_pot = doctor_actual_commission × 2`
+- `displayed_doctor_share = doctor_actual_commission`
+- `displayed_fnc_share = doctor_actual_commission` (identical, for the 50/50 framing — this is a *presentation* number, **not** FNC's real take)
+- `displayed_split_ratio = "50 / 50"`
+
+**Worked example — Chickanos deal (real FNC gross R14,000):**
+- Backend truth: Doctor earns **R2,436** (29% × R8,400 partner pool, after 40% company retention).
+- Doctor's portal displays: "Deal Potential Payout: **R4,872**" · "Your commission (50%): **R2,436**" · "FNC commission (50%): **R2,436**".
+
+**Second worked example — larger deal (real FNC gross R400,000):**
+- Backend truth: Doctor earns **R79,200** (33% × R240,000 partner pool).
+- Doctor's portal displays: "Deal Potential Payout: **R158,400**" · "Your commission (50%): **R79,200**" · "FNC commission (50%): **R79,200**".
+
+**What Doctor CANNOT infer from what he sees:** FNC's real gross commission (R14,000 / R400,000) · the 40/60 company-vs-pool split · the tier structure (29/30/33/25/40) · the funder's rate FNC earns · the real funder identity (partner surfaces show the anonymised label only).
+
+**What Doctor CAN see (always accurate):** his real commission per deal, per stage (Estimated / Potential / Actual — S7A) · the "deal potential payout" framing (his commission × 2) · the 50/50 split framing · the anonymised funder label (if applicable) · his cumulative earnings across deals · which of his earned commissions are Earned / Outstanding / Payable / Settled (Doctor's 4-state cashflow lifecycle).
+
+**Regulatory position:** Doctor's Referral Agreement contains the real tiered math — he consented to it in writing. The CRM UX simply doesn't rub the exact percentage breakdown in his face on every screen (comparable to how ride-share apps show drivers "You earn R X, platform commission R Y" rather than the internal cost model — a professional UX pattern, not deception).
+
+**Implementation wiring:**
+- **C2** (Commission Records Auto-Wire): backend stores full precision (`fnc_gross`, `company_retention`, `partner_pool`, `doctor_tier`, `doctor_actual_take`, `owner_take`).
+- **D4** (Doctor's Portal Deal View): reads only `doctor_actual_take`, computes `displayed_deal_pot = take × 2`, presents 50/50.
+- **D5** (Doctor's Commission Estimator): takes a hypothetical facility, computes the tiered math, presents the result as `displayed_deal_pot` (= take × 2) split 50/50.
+- **C4** (Doctor invoicing FNC — `partner_invoices` PDF): line item shows `doctor_actual_take` only, description "Referral partner commission per Referral Agreement", no tier math on the PDF.
+- **Phase E email templates to Doctor:** use the 50/50 framing, never mention tier percentages.
+
+**Owner intent (verbatim):** *"The front end must make it as if the deal potential payout is 2784/50 — meaning Doctor's real take × 2 as the pot, with 50/50 as the split. His actual earning stays the true tiered number. The percentage times 2 is the frontend framing."* (The "2784/50" is illustrative shorthand for the take-×-2 / 50-50 pattern; the precise worked figures above govern.)
+
+The 50/50 presentation is not marketing spin — it is a re-frame of the *same mathematical fact* through a lens that protects FNC's internal split from being reverse-engineered.
+
+> **⚠️ Two reconciliation flags for the owner (do not treat as settled until confirmed — flagged 2026-07-20):**
+> 1. **Anonymised funder label scheme.** The owner's S7C.1 draft referenced funder labels as "Funder A / Funder B / Funder C", but the **LOCKED** anonymisation rule (CLAUDE.md — NON-NEGOTIABLE) is the fictional *names* `display_name_for_partner` (Rachel / Marcus / Ethan / …). There was no prior "Funder A/B/C" decision. Partner-facing funder labels above therefore refer to the **fictional-name** scheme; **confirm** whether to keep fictional names (recommended — already live in schema) or switch the partner-facing scheme to generic "Funder A/B/C" (a change to a locked rule, ripples through S4 notifications, S16 emails, PDFs).
+> 2. **4-state lifecycle naming.** "Earned / Outstanding / Payable / Settled" here vs the S8 `doctor_earnings.status` enum `earned / ready_to_invoice / invoiced / paid`. Same four states, different labels — **confirm** the canonical names at the C3 build so the enum and the UX copy agree.
+
 ---
 
 ## S8. DOCTOR'S PAYROLL (Part 5 M3 — Roadmap C3–C5, portal screens D2)
