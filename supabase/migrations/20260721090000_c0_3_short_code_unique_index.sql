@@ -15,38 +15,37 @@ create unique index if not exists funders_short_code_unique
   where short_code is not null;
 
 -- ===========================================================================
--- Assertions (RAISE → roll the migration back). The negative test mutates two
--- real funders then reverts; the failing UPDATE persists nothing.
+-- Assertions (RAISE → roll the migration back). Catalog-only — inspects the
+-- index definition via pg_index / pg_get_indexdef and mutates NO rows, so it's
+-- replay-safe and can never disturb a real short_code (the earlier row-mutating
+-- test could wipe a code on re-apply — CodeRabbit #70).
 -- ===========================================================================
 do $$
 declare
-  v_a uuid;
-  v_b uuid;
+  v_def    text;
+  v_unique boolean;
 begin
-  if not exists (
-    select 1 from pg_indexes
-     where schemaname = 'public' and indexname = 'funders_short_code_unique'
-  ) then
+  select pg_get_indexdef(i.indexrelid), i.indisunique
+    into v_def, v_unique
+  from pg_index i
+  where i.indexrelid = 'public.funders_short_code_unique'::regclass;
+
+  if v_def is null then
     raise exception 'C0.3-fix assert FAIL: funders_short_code_unique index missing';
   end if;
-
-  -- Case-insensitive collision is rejected (two real funders, reverted after).
-  select id into v_a from public.funders order by name limit 1;
-  select id into v_b from public.funders where id <> v_a order by name limit 1;
-
-  if v_a is not null and v_b is not null then
-    update public.funders set short_code = 'ZZTESTUNIQ' where id = v_a;
-    begin
-      update public.funders set short_code = 'zztestuniq' where id = v_b;  -- case variant
-      raise exception 'C0.3-fix assert FAIL: case-insensitive duplicate short_code accepted';
-    exception when unique_violation then null;  -- expected block
-    end;
-    update public.funders set short_code = null where id = v_a;  -- revert
-  else
-    raise notice 'C0.3-fix uniqueness live-test skipped (need two funders)';
+  if not v_unique then
+    raise exception 'C0.3-fix assert FAIL: index is not UNIQUE (def: %)', v_def;
+  end if;
+  -- case-insensitive: keyed on upper(short_code)
+  if position('upper(short_code)' in lower(v_def)) = 0 then
+    raise exception 'C0.3-fix assert FAIL: index is not case-insensitive on short_code (def: %)', v_def;
+  end if;
+  -- partial: only constrains non-null codes
+  if position('where' in lower(v_def)) = 0 then
+    raise exception 'C0.3-fix assert FAIL: index is not partial (expected WHERE short_code IS NOT NULL) (def: %)', v_def;
   end if;
 
-  raise notice 'C0.3-fix assertions passed (short_code unique index present + case-insensitive)';
+  raise notice 'C0.3-fix assertions passed (unique + case-insensitive + partial short_code index)';
 end $$;
 
 notify pgrst, 'reload schema';
