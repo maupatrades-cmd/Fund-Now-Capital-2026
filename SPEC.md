@@ -526,6 +526,16 @@ Part 3 F5/F6 (Phase F): `learning_content`, `doctor_badges`, `doctor_activity_fe
 
 **D1 first-login T&C acceptance (docs — Phase D):** the D1 partner-routing + portal-shell first-login flow includes **T&C acceptance**. The partner sees the FNC **Partner T&Cs** (versioned) + an explicit "Accept" button. Acceptance is recorded with timestamp + T&C version. Subsequent logins bypass this step **unless** the T&Cs have been updated to a newer version. (Partner T&C content — commission split, referral protocol, deal ownership, confidentiality — see the T&Cs subsection in **S17**.)
 
+### S11.2 Partner branding logo (image storage — Phase C4 / D onboarding)
+
+Each referral partner has their own logo, used on invoices they generate against FNC (Phase C4 `partner_invoices` PDFs). Logos are stored in Supabase Storage bucket **`partner-branding`** at path `{partner_id}/logo.{ext}` — one canonical logo per partner. The owner uploads the partner logo during partner profile setup (Phase D partner onboarding, or manually via a `/settings/partners` UI); it is embedded in every PDF invoice generated for that partner.
+
+**Doctor's (Bright Destiny) logo — received 2026-07-21:** gold shield + winged crest + rising bar chart + upward arrow; warm gold + burgundy on black; brand text "Bring Destiny — FINANCE & PARTNERS" as shown on the logo. The owner holds the source image (JPG) and will upload it during partner setup.
+
+**Spelling note:** the logo displays "**Bring Destiny**" (verb form); the CRM `referral_partners` business name currently reads "**Bright Destiny**". The owner will confirm the legal name with Doctor before the Phase D onboarding UI collects the definitive brand assets. Interim: the CRM **display name stays "Bright Destiny"**, but the PDF logo (an image, not text) shows whatever the logo says.
+
+**Assets:** logo JPG staged locally by the owner (2026-07-21) for reference; upload happens during the C4 `partner_invoices` build or the Phase D partner profile UI, whichever ships first. **Do NOT create the `partner-branding` bucket yet — that is C4 territory.**
+
 **Follow-on Deal Workflow (locked deferral — Phase D, docs only):** repeat clients (a client returning for more funding after a prior funded deal) get a dedicated workflow in Phase D, not before. Scope:
 - New column `deals.parent_deal_id` (nullable FK to the prior funded deal on the same client). **Constraints (build-time):** the parent must be a **funded** deal for the **same** `client_id`, and the chain must be **acyclic** — enforce via a DB constraint/trigger or transactional validation, not just a nullable FK.
 - `deal_sequence_number` per client — **assigned atomically and concurrency-safe** (unique per client; two simultaneous follow-ons must not collide on the same number).
