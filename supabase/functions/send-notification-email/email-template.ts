@@ -73,6 +73,8 @@ export type EmailModel = {
 };
 
 export function eventCategory(eventType: string): string {
+  // Invoice events (C1.1) — group under "invoice" (incl. FUNDER_INVOICE_ISSUED).
+  if (eventType.startsWith("INVOICE_") || eventType === "FUNDER_INVOICE_ISSUED") return "invoice";
   if (eventType.startsWith("LEAD_")) return "lead";
   if (eventType.startsWith("DEAL_")) return "deal";
   if (eventType.startsWith("COMMISSION_")) return "commission";
@@ -120,6 +122,16 @@ export function resolveVariant(eventType: string): EmailVariant {
     case "DOCUMENT_EXPIRING_30D":
     case "DOCUMENT_EXPIRING_7D":
     case "DOCUMENT_EXPIRED":
+      return "weekly_summary";
+    // FNC → funder invoicing (C1.1, SPEC S7 tone map): an issued invoice is good
+    // news (money going out) → deal_approved; a payment received → commission_paid;
+    // an overdue invoice is action-needed/neutral → weekly_summary. Copy is
+    // DB-composed into body_text (funder/client/amount).
+    case "FUNDER_INVOICE_ISSUED":
+      return "deal_approved";
+    case "INVOICE_MARKED_PAID":
+      return "commission_paid";
+    case "INVOICE_OVERDUE":
       return "weekly_summary";
     default:
       return "generic";
