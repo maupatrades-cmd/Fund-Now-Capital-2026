@@ -229,6 +229,8 @@ declare
   v_terms_text text;
   v_due        date;
   v_ref        text;
+  v_funder_short text;
+  v_client_short text;
   v_desc       text;
   v_contract   text;
   v_rate_disp  text;
@@ -321,6 +323,21 @@ begin
     raise exception 'Unknown rate_type %', v_rate_type;
   end if;
 
+  -- Resolve the payment-reference shortcodes and validate them BEFORE consuming a
+  -- sequence number. Both must be non-NULL — a NULL would propagate through `||` and
+  -- blow up the payment_reference_expected NOT NULL insert with an opaque message.
+  -- Fail fast with an actionable one instead (funder short_code is owner-set at
+  -- /settings/funders; client short_code is auto-suggested but can be NULL for a name
+  -- with no alphanumerics). Guarding here (pre-nextval) keeps the invoice sequence
+  -- gapless — a failed guard must never burn a number.
+  v_funder_short := public.funder_shortcode(v_sub.funder_id);
+  v_client_short := public.client_shortcode(v_deal.client_id);
+  if v_funder_short is null or v_client_short is null then
+    raise exception 'Cannot generate invoice: funder short_code=%, client short_code=%. Both must be set before invoicing.',
+      v_funder_short, v_client_short
+      using hint = 'Set the missing short_code(s) in /settings/funders (funder) or on the client detail page.';
+  end if;
+
   -- Consume a number only now that we are certainly creating one (no gaps).
   v_number     := 'INV-' || lpad(nextval('public.funder_invoices_seq')::text, 4, '0');
 
@@ -332,9 +349,9 @@ begin
     v_due        := public.current_sast_date() + v_terms_days;
   end if;
 
-  -- Payment reference: {FUNDER-SHORT}-INV{NNNN}-{CLIENT-SHORT}.
-  v_ref := public.funder_shortcode(v_sub.funder_id) || '-INV' ||
-           split_part(v_number, '-', 2) || '-' || public.client_shortcode(v_deal.client_id);
+  -- Payment reference: {FUNDER-SHORT}-INV{NNNN}-{CLIENT-SHORT}. Shortcodes were
+  -- resolved + NOT-NULL-guarded above (pre-nextval); safe to concatenate now.
+  v_ref := v_funder_short || '-INV' || split_part(v_number, '-', 2) || '-' || v_client_short;
 
   v_desc := 'Lead Provider Commission — commission earned per the ' ||
             coalesce(v_contract, 'Lead Provider Agreement') || ', calculated as ' ||
