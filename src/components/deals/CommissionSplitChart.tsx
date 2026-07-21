@@ -126,13 +126,13 @@ export function CommissionSplitChart({
                 dot="#5dba5d"
                 label="Partner pool"
                 amount={formatZAR(pool)}
-                percent={fmtPct(poolFrac)}
+                percent={pct(poolFrac)}
               />
               <Readout
                 dot="#2da8b8"
                 label="Company retention"
                 amount={formatZAR(retention)}
-                percent={fmtPct(retFrac)}
+                percent={pct(retFrac)}
               />
             </div>
           )
@@ -184,11 +184,6 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
       <span className={strong ? "font-bold text-brand-navy" : "font-medium text-brand-navy"}>{value}</span>
     </div>
   );
-}
-
-// Whole-percent from a 0..1 fraction (60% / 40%).
-function fmtPct(frac: number): string {
-  return `${Math.round(frac * 100)}%`;
 }
 
 // Track the OS "reduce motion" setting so the draw-in can be skipped.
