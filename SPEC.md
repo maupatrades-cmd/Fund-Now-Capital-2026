@@ -437,7 +437,7 @@ The 50/50 partnership presentation is **mathematically consistent** with the tie
 
 **What Doctor CAN see (always accurate):** his real commission per deal, per stage (Estimated / Potential / Actual — S7A) · the "deal potential payout" framing (his commission × 2) · the 50/50 split framing · the anonymised funder label (if applicable) · his cumulative earnings across deals · which of his earned commissions are Earned / Outstanding / Payable / Settled (Doctor's 4-state cashflow lifecycle).
 
-**Regulatory position:** Doctor's Referral Agreement contains the real tiered math — he consented to it in writing. The CRM UX simply doesn't rub the exact percentage breakdown in his face on every screen (comparable to how ride-share apps show drivers "You earn R X, platform commission R Y" rather than the internal cost model — a professional UX pattern, not deception).
+**Product/UX policy (internal — not a compliance conclusion):** Doctor's Referral Agreement already contains the real tiered math (he agreed to it in writing), so the portal doesn't need to repeat the exact per-band breakdown on every screen — it presents his earned commission cleanly instead (comparable to how ride-share apps show drivers "You earn R X, platform commission R Y" rather than the internal cost model). This is a product presentation decision; any regulatory sign-off is tracked separately, not asserted here.
 
 **Implementation wiring:**
 - **C2** (Commission Records Auto-Wire): backend stores full precision (`fnc_gross`, `company_retention`, `partner_pool`, `doctor_tier`, `doctor_actual_take`, `owner_take`).
@@ -514,13 +514,13 @@ Part 3 F2 Commission Estimator: inputs (facility slider, deal type toggle, funde
 
 ### S11.1 Two-view commission display (owner-side vs partner-side) — LOCKED 2026-07-21
 
-The commission engine (`calculate_commission`) computes **ONE real number** per deal (40% company retention + 60% partner pool + tiered Doctor share by deal size). That single real number is the source of truth for everything that touches money — real `commission_records` (C2), real invoice generation (C1 FNC→funders, C4 Doctor→FNC), and real accounting + reports (C6). Only the **display** of it differs by audience.
+The commission engine (`calculate_commission`) computes the **real commission split** per deal — 40% company retention + 60% partner pool + tiered Doctor share by deal size — and the **full breakdown (gross, retention, pool, Doctor take, owner take) is persisted** for `commission_records` (C2), invoice generation (C1 FNC→funders, C4 Doctor→FNC), and accounting + reports (C6). Doctor's **one real commission amount** (his tiered take, per commission outcome) is the figure his portal surfaces; only its **display** differs by audience.
 
 **Owner-side** (`business.lekgoro`, `/calculator`, deal detail, reports): the **real** calculation shown transparently — Gross → 40% retention → 60% pool → tier band % → Doctor share + Owner share, every rand accounted for. This is the calculator already built.
 
 **Partner-side** (Doctor's portal — D4 deal view + D5 Commission Estimator; Phase D, no build yet): a **hypothetical 50/50 view**. Doctor's real commission (e.g. R5,000) is displayed as 50% of a **notional pool** (R10,000 = 2 × his real commission). The notional pool is **display-only, never persisted** — it exists only in the rendered UI. Purpose: present his earnings in the "we split 50/50" mental model he's familiar with, without exposing FNC's internal split math (retention %, tier bands, owner share). Aligns with the D5 partner-share-only decision.
 
-**Implementation contract (Phase D):** compute the real commission via `calculate_commission`, then render "your 50% share = R X" alongside "total deal earnings = R 2X". **Never** show retention, tier band, or owner share to Doctor. **Real invoicing (C4) uses the REAL commission number — the 50/50 view is display-only.** Full formula + worked examples: **S7C.1**; audience/tone policy: **S7C**.
+**Implementation contract (Phase D):** compute the real commission via `calculate_commission`, then render "your 50% share = R X" alongside "Deal Potential Payout = R 2X" — the R 2X pot is a **display-only notional figure (never persisted)**, not real earnings. **Never** show retention, tier band, or owner share to Doctor. **Real invoicing (C4) uses the REAL commission number — the 50/50 view is display-only.** Full formula + worked examples: **S7C.1**; audience/tone policy: **S7C**.
 
 Part 3 F5/F6 (Phase F): `learning_content`, `doctor_badges`, `doctor_activity_feed` tables; badges (first deal funded, 4-week streak, 10 quality leads, R100k earnings, repeat client); notification celebrations. Estimator outputs use ranges, never exact internal rates. Real-time recalc, no submit buttons. Mobile-first layouts.
 
