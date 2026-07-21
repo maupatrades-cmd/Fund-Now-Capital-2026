@@ -12,6 +12,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { jsPDF } from "jspdf";
+import { FNC_LOGO_PNG } from "./logo.ts";
 
 // ---- locked FNC business constants (INV-0031) -------------------------------
 const FNC = {
@@ -84,15 +85,19 @@ function renderPdf(inv: InvoiceRow, funder: FunderRow): Uint8Array {
   const M = 40; // margin
   let y = 48;
 
-  // ---- header: company block (left) + TAX INVOICE (right) --------------------
+  // ---- header: FNC brand mark + company block (left) + TAX INVOICE (right) ---
+  // Gradient "n" mark, top-left; the company text sits to its right (matches INV-0031).
+  const LOGO = 46; // pt (~16mm) square
+  const TX = M + LOGO + 12; // company-text left edge, beside the mark
+  doc.addImage(FNC_LOGO_PNG, "PNG", M, y - 8, LOGO, LOGO);
   doc.setFont("helvetica", "bold").setFontSize(16).setTextColor(...NAVY);
-  doc.text(FNC.name, M, y);
+  doc.text(FNC.name, TX, y);
   doc.setFont("helvetica", "italic").setFontSize(9).setTextColor(...TEAL);
-  doc.text(FNC.tagline, M, y + 14);
+  doc.text(FNC.tagline, TX, y + 14);
   doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(...INK);
-  doc.text(FNC.address, M, y + 30);
-  doc.text(`CIPC: ${FNC.cipc}  |  Tel: ${FNC.tel}  |  Mobile: ${FNC.mobile}`, M, y + 42);
-  doc.text(`Email: ${FNC.email}  |  Web: ${FNC.web}`, M, y + 54);
+  doc.text(FNC.address, TX, y + 30);
+  doc.text(`CIPC: ${FNC.cipc}  |  Tel: ${FNC.tel}  |  Mobile: ${FNC.mobile}`, TX, y + 42);
+  doc.text(`Email: ${FNC.email}  |  Web: ${FNC.web}`, TX, y + 54);
 
   doc.setFont("helvetica", "bold").setFontSize(22).setTextColor(...NAVY);
   doc.text("TAX INVOICE", W - M, y + 2, { align: "right" });
