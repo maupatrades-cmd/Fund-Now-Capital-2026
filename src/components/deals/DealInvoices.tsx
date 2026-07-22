@@ -255,7 +255,13 @@ function GenerateInvoiceModal({
       // modal, persist it back to the submission before generating (row-count
       // checked per the silent-RLS rule).
       const enteredFc = financeChargeNum != null && Number.isFinite(financeChargeNum) ? financeChargeNum : null;
-      if (isFinanceChargeRate && enteredFc !== toNum(submission.finance_charge_amount)) {
+      // Compare against the raw stored value (null-aware). toNum(null) === 0 would
+      // make entering 0 against a stored null look unchanged, skip the update, and
+      // leave the column null while the RPC invoices a 0 charge — breaking the
+      // single source of truth.
+      const storedFc =
+        submission.finance_charge_amount != null ? toNum(submission.finance_charge_amount) : null;
+      if (isFinanceChargeRate && enteredFc !== storedFc) {
         const { data, error } = await supabase
           .from("deal_funder_submissions")
           .update({ finance_charge_amount: enteredFc })
