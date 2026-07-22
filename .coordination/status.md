@@ -33,11 +33,14 @@ Does NOT touch anything in OLD CC 1's C2.2 zone.
 - Contracted funders needing values (8, all 5 fields currently NULL):
   Better Banc · Bridgement · Brighton Capital · Business Partners · Flow48 ·
   GenFin · Merchant Capital · Sourcefin.
-- ⚠️ Task listed **"Bright Rock"** as contracted — no such funder exists. Closest:
-  **Brighton Capital** (contracted) + **Rockfin** (NOT contracted). Flagged to owner.
-- ⚠️ **Brighton Capital** `short_code = "BRIGHT ON"` (has a space — looks malformed;
-  ref format is spaceless e.g. POLLEN/MERCHANT). Not my field to fix — flagged to
-  owner (aligns with the parked "Brighton Capital / Flow48 reconciliation" item).
+- ✅ RESOLVED (owner, 2026-07-22): **"Bright Rock" = Brighton Capital.** Rockfin is
+  unrelated + not contracted. Brighton Capital is the 6th of the 8 to populate.
+- 📌 NOTED follow-up (owner, 2026-07-22): **Brighton Capital `short_code` fix.**
+  Currently `"BRIGHT ON"` (has a space — malformed; ref format is spaceless upper,
+  e.g. POLLEN/MERCHANT). Proposed value: `BRIGHTON` — AWAITING owner confirmation of
+  the exact string before executing. Tracked as a separate, clearly-marked optional
+  UPDATE at the foot of scratchpad/funder-billing-populate.sql (NOT run until owner
+  confirms the value). Feeds the payment reference `{FUNDER-SHORT}-INV{NNNN}-{CLIENT-SHORT}`.
 
 **Deliverable:** `scratchpad/funder-billing-populate.sql` — template UPDATEs with
 placeholders, one block per funder, keyed by funder `id` (immutable) with `name`
