@@ -236,6 +236,12 @@ export function computeInvoicePreview(args: {
       if (financeCharge == null) {
         return { ok: false, reason: "This funder charges commission on the finance charge — enter the finance charge amount first." };
       }
+      // Reject negatives here (the single gate for preview/canGenerate/doGenerate).
+      // input min="0" doesn't stop a typed/pasted -1, which would otherwise persist
+      // to the submission and have the RPC create a negative-commission invoice.
+      if (financeCharge < 0) {
+        return { ok: false, reason: "Finance charge cannot be negative." };
+      }
       commission = round2(frac * financeCharge);
       rateDisplay = ratePercentDisplay(frac);
       basis = "finance charge on the facility";
