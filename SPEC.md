@@ -372,6 +372,61 @@ Commission calculation depends on the **per-funder rate structure** (see ROADMAP
 
 ---
 
+## S7B. FUNDER RATE STRUCTURE FUTURE WORK — C2+ ENHANCEMENTS (Part 5 — Roadmap C2+)
+
+**Docs only — no schema change here.** This section banks real business truth from the owner's signed funder agreements and weekly earnings updates, and scopes the `funder_commission_structures` / `deal_funder_submissions` enhancements those agreements will need. Design options below are proposals; the owner confirms the final schema at C2 (or later) build time. Nothing here is built yet.
+
+### S7B.1 Merchant Capital — agreement details (real business truth, banked 2026-07-22)
+
+From the owner's signed Merchant Capital agreement:
+- **Rate structure:** 10% of **Revenue** on the **first** Cash Advance to any borrower (VAT inclusive); 5% of Revenue on **subsequent** Cash Advances to the **same** borrower. Separate, much lower **"Referred Channel"** tier: 1% first, 0.5% subsequent.
+- **Payment cadence:** weekly payment run — invoice by **4pm Tuesday**, payment on **Thursday** (NOT "Due on receipt" and not a fixed N-day term).
+- **Exclusivity:** FNC undertakes to refer all Qualifying Leads to Merchant Capital **first**; refers elsewhere only if (i) Merchant Capital declines, (ii) the SLA is not met, or (iii) the lead does not meet the Qualifying Lead criteria.
+- **Partner category:** Small Partner.
+- **Contract commencement:** 2026-04-28.
+
+**Schema enhancements needed (BLOCKING for real Merchant Capital deal commission computation in Phase C2):**
+1. **New `funder_rate_type` value `percent_of_revenue`** — commission = `rate_fraction × revenue_amount`. "Revenue" is Merchant Capital's term for the gross amount collected from the merchant over the advance term (distinct from the amount funded to the borrower).
+2. **New column `deal_funder_submissions.revenue_amount numeric(14,2)` nullable** — required when the applied `rate_type = percent_of_revenue` at approval/funding time.
+3. **First-vs-subsequent tier logic on `funder_commission_structures`** — today there is one rate per (funder, deal_type). Merchant Capital needs `first_advance_rate` (0.10) + `subsequent_advance_rate` (0.05) per (funder, deal_type), PLUS a way to determine "is this borrower's first cash advance from this funder?" (a lookup over prior `deal_funder_submissions` in a funded state for the same client + funder + Cash Advance product). Design options (all deferred): (a) two rate columns on the structure row; (b) an extra row per structure keyed by `applies_to_advance_sequence enum(first, subsequent)`; (c) trigger logic at deal creation to auto-detect first vs subsequent.
+4. **Payment cadence beyond `payment_terms_days`** — today `payment_terms_days integer NOT NULL DEFAULT 0` (0 = Due on receipt). Merchant Capital uses a weekly payment run (invoice Tuesday 4pm → pay Thursday). Design options: (a) add `payment_cadence_type text` with values like `due_on_receipt` / `net_days` / `weekly_payment_run` / `monthly_payment_run`; (b) a separate `payment_cadence` table joined via the structure; (c) keep `payment_terms_days` and handle special cadence at the overdue-detection sweep level.
+5. **Referred Channel tier** — Merchant Capital differentiates a "Referred Channel" with much lower rates (1% first, 0.5% subsequent). Owner to clarify what "Referred Channel" means (probably deals reaching Merchant Capital through some other partnership arrangement, not directly from FNC). **Deferred to owner clarification.**
+
+### S7B.2 Flow48 — agreement details (real business truth, Flow48 partner earnings comms "Edition 2", banked 2026-07-22)
+
+- **Rate structure:** 2.5% of deal size on **new** deals; 2.0% of deal size on **repeat** deals (subsequent advances to the same borrower).
+- **Rate type:** `percent_of_gross_funded` — **already in the enum, no new rate_type needed for Flow48** (of the amount funded to the borrower).
+- **First-vs-subsequent tier logic:** same pattern as Merchant Capital (needs the S7B.1(3) enhancement).
+- **Partner communication philosophy:** volume-friendly — the credit team assesses; the partner refers without pre-qualifying.
+- **Cadence:** weekly partner-earnings update rhythm ("Edition 2" of an ongoing series). Payment cadence TBD (owner to confirm).
+
+### S7B.3 Cross-funder contrast (for schema-design work)
+
+| Funder | rate_type | Rate(s) | First vs subsequent | Payment cadence |
+|---|---|---|---|---|
+| **Merchant Capital** | `percent_of_revenue` (NEW) — Revenue = amount collected from merchant over the advance term (≠ amount funded) | 10% / 5% (Referred Channel 1% / 0.5%) | Yes | Weekly payment run (invoice Tue 4pm → pay Thu) |
+| **Flow48** | `percent_of_gross_funded` (exists) — of the amount funded to the borrower | 2.5% / 2.0% | Yes | TBD (owner to confirm) |
+| **Pollen Finance** (live) | `percent_of_finance_charge` (exists) | 10% | n/a | Due on receipt |
+
+**This confirms `first-vs-subsequent` is a real, cross-funder pattern — not a Merchant Capital quirk.** The C2 schema enhancement to support it is genuinely needed for the whole panel over time.
+
+**Suggested design pattern for C2 (owner confirms at C2 scope time):**
+- Add `applies_to_advance_sequence enum('first','subsequent')` to `funder_commission_structures`, nullable (null = applies to all).
+- One structure row per (funder, deal_type, advance_sequence).
+- Trigger at deal creation: check prior funded deals for the same client + funder → classify 'first' or 'subsequent' → apply the corresponding rate at approval.
+- Idempotent: if the client's first-with-this-funder classification is already stored on the submission, don't re-derive.
+
+**Standing question (owner confirms at C2 scope time):** how is "same borrower" determined for repeat classification — `client_id` match? CIPC match? Business-name fuzzy match? Owner's likely mental model: same `client_id` (linked via a previous DEAL-XXX to the same client).
+
+### S7B.4 Referrer canonical address correction (banked 2026-07-22)
+
+FNC's Polokwane office address is **73 Marshall Street, Polokwane 0699** (per the Merchant Capital agreement). Earlier documentation showed `75 Marshall Street` — a transcription error from the C1.1a email-template design conversation. Canonical value: **73 Marshall Street**.
+- **S16.3 locked contact block** — corrected in this PR (docs).
+- **Live code artifacts still to correct at the next template touch (not urgent — no active mail goes out under the wrong address):** the `send-notification-email` Edge Function footer (`supabase/functions/send-notification-email/email-template.ts`, the `75 Marshall Street` occurrences ~L441 + ~L524) → `73`. Deferred (not touched in this docs-only PR).
+- **PDF invoice (`generate-invoice-pdf`):** Cedarwood House / Bryanston remains the **primary** office in the header. **If/when** the PDF references the second office, it must read **73 Marshall Street, Polokwane 0699**. (No `75` currently appears in the PDF spec/header, so there is nothing to correct there today — this is a forward guard.)
+
+---
+
 ## S7C. COMMISSION PRESENTATION LAYER (Doctor-facing vs Owner-facing) (Part 5 — Roadmap C2/C3/C4, D5)
 
 Fund Now Capital's commission structure is stored in the CRM at **full precision on the owner side**, but presented to Doctor (and future partners) in a simplified **"partner-share" framing that never reveals FNC's internal math**.
@@ -794,7 +849,7 @@ A shared shell (gradient header → cyan bar → white content card → deep-nav
 Header gradient navy `#1a3a52`→teal `#2da8b8` (135°) · cyan accent bar `#3ec6d9` · CTA gradient green `#5dba5d`→teal `#2da8b8` (90°) · footer deep-navy `#0f2233` · white `#ffffff` content card · body ink `#1e293b` · H1 `#1a3a52` · small print `#64748b` · icon accent `#2da8b8`. Typography: **Inter** (matching the app), declared `Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif` — clients that lack Inter fall back to the web-safe stack, so never rely on Inter-only styling. 600px shell.
 
 ### S16.3 Locked contact block (Phase A closure — use exactly)
-Fund Now Capital (Pty) Ltd · CIPC 2026/066284/07 · 010 102 0534 · hello@fundnowcapital.africa · www.fundnowcapital.africa · Cedarwood House, 128 Ballyclare Drive, Bryanston 2191 (Sandton) · 75 Marshall Street, Polokwane 0699 · LinkedIn (Fund Now Capital) + TikTok @fundnowcapital · tagline "Many funders. More approvals." **Never** put a personal email (e.g. `thapelol@…`) on an automated footer — `hello@` is the shared reply inbox.
+Fund Now Capital (Pty) Ltd · CIPC 2026/066284/07 · 010 102 0534 · hello@fundnowcapital.africa · www.fundnowcapital.africa · Cedarwood House, 128 Ballyclare Drive, Bryanston 2191 (Sandton) · 73 Marshall Street, Polokwane 0699 · LinkedIn (Fund Now Capital) + TikTok @fundnowcapital · tagline "Many funders. More approvals." **Never** put a personal email (e.g. `thapelol@…`) on an automated footer — `hello@` is the shared reply inbox. *(Polokwane street number corrected 75 → **73** on 2026-07-22 per the Merchant Capital signed agreement; earlier `75` was a transcription error from the C1.1a email-template design conversation. The live `send-notification-email/email-template.ts` footer still reads `75` — correct it to `73` at the next template touch; see S7B "Referrer canonical address correction".)*
 
 ### S16.4 Which variant each future email extends
 - **Deal-state notifications** (`DEAL_APPROVED`) → **`deal_approved`** layout.
