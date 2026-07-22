@@ -17,6 +17,8 @@ import FundersPage from "@/pages/FundersPage";
 import FunderDetailPage from "@/pages/FunderDetailPage";
 import FunderFormPage from "@/pages/FunderFormPage";
 import CalculatorPage from "@/pages/CalculatorPage";
+import InvoicesPage from "@/pages/InvoicesPage";
+import InvoiceDetailPage from "@/pages/InvoiceDetailPage";
 import ActivityPage from "@/pages/ActivityPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import NotificationPreferencesPage from "@/pages/NotificationPreferencesPage";
@@ -58,6 +60,8 @@ function AppRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/deals/:id" element={<DealDetailPage />} />
+        <Route path="/invoices" element={<InvoicesPage />} />
+        <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
         <Route path="/leads" element={<LeadsPage />} />
         <Route path="/leads/new" element={<LeadFormPage />} />
         <Route path="/leads/:id" element={<LeadDetailPage />} />
