@@ -63,14 +63,17 @@ export function DealInvoices({
     [invoices],
   );
 
-  // Fundable = deal is Funded, the submission has an amount_funded, and it has no
-  // active invoice yet. Finance-charge completeness is handled inside the modal
-  // (the only place a submission's finance charge can be captured/edited).
+  // Fundable = deal is Funded (or already Invoiced), the submission has an
+  // amount_funded, and it has no active invoice yet. Issuing the first invoice
+  // advances the deal Funded → Invoiced, so `invoiced` must stay eligible or a
+  // multi-funder deal would lose the Generate button for its remaining
+  // submissions after the first issue. Finance-charge completeness is handled
+  // inside the modal (the only place a submission's finance charge is captured).
   const fundable = useMemo(
     () =>
       (submissions ?? []).filter(
         (s) =>
-          stage === "funded" &&
+          (stage === "funded" || stage === "invoiced") &&
           s.amount_funded != null &&
           !invoicedSubmissionIds.has(s.id),
       ),
