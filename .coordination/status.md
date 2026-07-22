@@ -51,9 +51,10 @@ guard. Owner fills real values; NEW CC 1 executes after review.
   vat_registration `NULL` (PENDING owner confirm) · accounts_email
   `info@merchantcapital.co.za` (general — may swap for AP/finance inbox). 1 row,
   RETURNING-verified.
-  - 📌 phone `+27 11 217 2880` from contract — **no `phone` column on funders**;
-    skipped per owner "Otherwise skip". Value preserved here. Owner to decide whether
-    to add a nullable `phone` column (schema change) — not part of INVOICE TO block.
+  - ✅ phone `+27 11 217 2880` — owner approved adding a `phone` column. Migration
+    `20260722190000_funders_add_phone.sql` (nullable text, metadata-only) applied to
+    live DB via apply_migration + repo file committed; Merchant Capital phone populated
+    (RETURNING-verified). Not part of the INVOICE TO block — general funder contact only.
 
 **Still blocked on:** owner values for the remaining 7 funders (Bridgement, Sourcefin,
 GenFin, Better Banc, Brighton Capital, Flow48, Business Partners) + Merchant Capital
