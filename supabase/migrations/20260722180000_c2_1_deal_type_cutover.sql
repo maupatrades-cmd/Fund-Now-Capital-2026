@@ -53,10 +53,20 @@ begin
     end if;
   end if;
 
-  -- C2.1: keep deal_type and is_purchase_order consistent regardless of which the
-  -- caller supplied. deal_type is authoritative when present; otherwise derive it
-  -- from the legacy boolean (so rows written before the UI dropdown ships stay valid).
+  -- C2.1: keep deal_type and is_purchase_order consistent, deriving from whichever
+  -- field the caller actually changed. This matters during the UI transition: the
+  -- current deal-edit form still writes ONLY is_purchase_order (no deal_type), and a
+  -- naive "deal_type is authoritative when non-null" rule would silently revert that
+  -- boolean-only write once every row is backfilled. So:
+  --   * no deal_type supplied (null)                    -> derive deal_type from the boolean
+  --   * UPDATE that changed the boolean but not deal_type -> derive deal_type from the boolean (legacy path)
+  --   * otherwise (deal_type supplied / changed)         -> deal_type authoritative, derive the boolean
   if new.deal_type is null then
+    new.deal_type := case when new.is_purchase_order then 'po'::public.deal_type
+                          else 'non_po'::public.deal_type end;
+  elsif tg_op = 'UPDATE'
+        and new.is_purchase_order is distinct from old.is_purchase_order
+        and new.deal_type is not distinct from old.deal_type then
     new.deal_type := case when new.is_purchase_order then 'po'::public.deal_type
                           else 'non_po'::public.deal_type end;
   else
