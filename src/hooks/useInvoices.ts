@@ -80,6 +80,9 @@ export type FundableSubmission = {
   finance_charge_amount: string | number | null;
   approved_at: string | null;
   funded_at: string | null;
+  // The rate pinned at approval (C2 substrate; null in production today). The
+  // generate RPC prefers this over the live rate, so the preview must too.
+  applied_rate_snapshot: Record<string, unknown> | null;
   funder: { id: string; name: string; short_code: string | null } | null;
 };
 
@@ -92,7 +95,7 @@ export function useFundableSubmissions(dealId: string | undefined) {
         .from("deal_funder_submissions")
         .select(
           "id, deal_id, funder_id, status, amount_funded, finance_charge_amount, approved_at, funded_at, " +
-            "funder:funders!left(id, name, short_code)",
+            "applied_rate_snapshot, funder:funders!left(id, name, short_code)",
         )
         .eq("deal_id", dealId!)
         .order("created_at", { ascending: true });

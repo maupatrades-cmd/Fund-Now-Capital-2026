@@ -16,6 +16,7 @@ import {
 } from "@/hooks/useInvoices";
 import {
   computeInvoicePreview,
+  rateFromSnapshot,
   resolveEffectiveRate,
   toNum,
   todaySastISO,
@@ -186,9 +187,15 @@ function GenerateInvoiceModal({
     submission.approved_at?.slice(0, 10) ??
     submission.funded_at?.slice(0, 10) ??
     todaySastISO();
+  // Snapshot-first, exactly like generate_funder_invoice: prefer the submission's
+  // applied_rate_snapshot; fall back to the live effective rate only when there's
+  // no snapshot (the case in production today). Keeps the preview in agreement
+  // with the invoice the RPC actually creates.
   const rate = useMemo(
-    () => resolveEffectiveRate(rates, submission.funder_id, dealType, asOf),
-    [rates, submission.funder_id, dealType, asOf],
+    () =>
+      rateFromSnapshot(submission.applied_rate_snapshot) ??
+      resolveEffectiveRate(rates, submission.funder_id, dealType, asOf),
+    [rates, submission.applied_rate_snapshot, submission.funder_id, dealType, asOf],
   );
 
   const isFinanceChargeRate = rate?.rate_type === "percent_of_finance_charge";

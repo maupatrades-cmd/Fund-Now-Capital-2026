@@ -205,8 +205,38 @@ function addDaysISO(iso: string, days: number): string {
   ).padStart(2, "0")}`;
 }
 
+// The subset of a rate the preview actually reads. Both a live RateStructure
+// (from resolveEffectiveRate) and a submission's applied_rate_snapshot satisfy
+// it, so the preview can prefer the snapshot exactly as the RPC does.
+export type PreviewRate = Pick<
+  RateStructure,
+  "rate_type" | "rate_fraction" | "flat_amount" | "payment_terms_days" | "contract_reference"
+>;
+
+// Build a preview rate from a submission's applied_rate_snapshot, reading the
+// same fields generate_funder_invoice reads (snapshot-first). Keeps the preview
+// in exact agreement with the invoice the RPC creates; when C2.1's shared gross
+// helper lands, both the preview and the RPC can resolve gross the same way.
+// Returns null when there is no usable snapshot (→ caller falls back to the live
+// rate via resolveEffectiveRate). applied_rate_snapshot is null in production
+// today (C2 not shipped), so this is currently always a no-op fallback.
+export function rateFromSnapshot(
+  snapshot: Record<string, unknown> | null | undefined,
+): PreviewRate | null {
+  if (!snapshot) return null;
+  const rateType = snapshot.rate_type as FunderRateType | undefined;
+  if (!rateType) return null;
+  return {
+    rate_type: rateType,
+    rate_fraction: (snapshot.rate_fraction as number | string | null) ?? null,
+    flat_amount: (snapshot.flat_amount as number | string | null) ?? null,
+    payment_terms_days: Number(snapshot.payment_terms_days ?? 0),
+    contract_reference: (snapshot.contract_reference as string | null) ?? null,
+  };
+}
+
 export function computeInvoicePreview(args: {
-  rate: RateStructure | null;
+  rate: PreviewRate | null;
   amountFunded: number;
   financeCharge: number | null;
   funderName: string;
