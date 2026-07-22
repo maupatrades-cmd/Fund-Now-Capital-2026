@@ -9,6 +9,7 @@ import {
   ClipboardList,
   FolderOpen,
   Percent,
+  Receipt,
   type LucideIcon,
 } from "lucide-react";
 
@@ -26,6 +27,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/clients", label: "Clients", icon: Users },
   { to: "/documents", label: "Documents", icon: FolderOpen },
   { to: "/funders", label: "Funders", icon: Landmark },
+  { to: "/invoices", label: "Invoices", icon: Receipt },
   { to: "/calculator", label: "Calculator", icon: Calculator },
   { to: "/activity", label: "Activity", icon: Activity },
   { to: "/settings/industries", label: "Industries", icon: Factory },

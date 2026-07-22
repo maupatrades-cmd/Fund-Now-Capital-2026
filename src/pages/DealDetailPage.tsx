@@ -11,6 +11,7 @@ import { useToggleDealPriority } from "@/hooks/useDeals";
 import { useDeal, useUpdateDeal, useReopenDeal } from "@/hooks/useDealDetail";
 import { useCelebrate } from "@/lib/celebration/ConfettiProvider";
 import { FunderSubmissions } from "@/components/deals/FunderSubmissions";
+import { DealInvoices } from "@/components/deals/DealInvoices";
 import { CommunicationsLog } from "@/components/deals/CommunicationsLog";
 import { DealDocuments } from "@/components/deals/DealDocuments";
 import { StageHistory } from "@/components/deals/StageHistory";
@@ -192,6 +193,16 @@ export default function DealDetailPage() {
       {/* Funder submissions with embedded commission calculator */}
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
         <FunderSubmissions dealId={deal.id} isPurchaseOrder={deal.is_purchase_order} />
+      </section>
+
+      {/* Invoices — generate/track FNC → funder invoices for this deal (C1.2) */}
+      <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+        <DealInvoices
+          dealId={deal.id}
+          clientId={deal.client_id}
+          isPurchaseOrder={deal.is_purchase_order}
+          stage={deal.stage}
+        />
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
