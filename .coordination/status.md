@@ -44,4 +44,17 @@ Does NOT touch anything in OLD CC 1's C2.2 zone.
 placeholders, one block per funder, keyed by funder `id` (immutable) with `name`
 guard. Owner fills real values; NEW CC 1 executes after review.
 
-**Blocked on:** owner-provided billing details per funder (5 fields × 8 funders).
+**Progress — billing fields populated (owner-provided values):**
+- ✅ **Merchant Capital** (2026-07-22): legal_name `Merchant Capital (Pty) Ltd`
+  (owner best-guess — verify vs invoice header) · billing_address `32 Impala Road,
+  Chislehurston, Johannesburg 2196, South Africa` · CIPC `2012/217256/07` ·
+  vat_registration `NULL` (PENDING owner confirm) · accounts_email
+  `info@merchantcapital.co.za` (general — may swap for AP/finance inbox). 1 row,
+  RETURNING-verified.
+  - 📌 phone `+27 11 217 2880` from contract — **no `phone` column on funders**;
+    skipped per owner "Otherwise skip". Value preserved here. Owner to decide whether
+    to add a nullable `phone` column (schema change) — not part of INVOICE TO block.
+
+**Still blocked on:** owner values for the remaining 7 funders (Bridgement, Sourcefin,
+GenFin, Better Banc, Brighton Capital, Flow48, Business Partners) + Merchant Capital
+VAT confirmation.
