@@ -50,9 +50,12 @@ export function DealInvoices({
   isPurchaseOrder: boolean;
   stage: string;
 }) {
-  const { data: invoices, isLoading } = useDealInvoices(dealId);
-  const { data: submissions } = useFundableSubmissions(dealId);
+  const { data: invoices, isLoading, isError: invoicesError } = useDealInvoices(dealId);
+  const { data: submissions, isError: submissionsError } = useFundableSubmissions(dealId);
   const [generateFor, setGenerateFor] = useState<FundableSubmission | null>(null);
+
+  // A failed fetch must not masquerade as "no invoices" (silent empty state).
+  const hasError = invoicesError || submissionsError;
 
   const dealType: DealType = isPurchaseOrder ? "po" : "non_po";
 
@@ -88,6 +91,10 @@ export function DealInvoices({
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : hasError ? (
+        <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          Couldn't load this deal's invoices. Refresh the page to try again.
+        </p>
       ) : invoices && invoices.length > 0 ? (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
@@ -127,7 +134,7 @@ export function DealInvoices({
         </p>
       )}
 
-      {fundable.length > 0 && (
+      {!hasError && fundable.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
           {fundable.map((s) => (
             <button
