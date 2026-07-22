@@ -327,6 +327,12 @@ export async function getInvoicePdfUrl(path: string, expiresIn = 3600): Promise<
   if (error || !data?.signedUrl) {
     throw new Error(error?.message ?? "Could not create a download link for this PDF.");
   }
+  // https-only allow-list before we hand the URL to window navigation. The full
+  // URL is returned untouched — Supabase signed URLs carry a required `?token=…`
+  // query param, so we must never strip the query string.
+  if (!/^https:\/\//i.test(data.signedUrl)) {
+    throw new Error("Refusing to open a non-HTTPS PDF link.");
+  }
   return data.signedUrl;
 }
 

@@ -25,16 +25,26 @@ export function InvoicePdfButton({
     );
   }
 
-  const open = async () => {
+  const open = () => {
+    // Open the tab synchronously inside the click gesture so the browser doesn't
+    // treat the later (post-await) open as a popup and block it. We can't pass
+    // `noopener` here — that makes window.open return null and we'd lose the
+    // handle — so we sever the opener manually instead (same security benefit).
+    const win = window.open("about:blank", "_blank");
+    if (win) win.opener = null;
     setLoading(true);
-    try {
-      const url = await getInvoicePdfUrl(invoice.pdf_storage_path!);
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (e) {
-      toast.error((e as Error).message || "Could not open the PDF");
-    } finally {
-      setLoading(false);
-    }
+    getInvoicePdfUrl(invoice.pdf_storage_path!)
+      .then((url) => {
+        if (win) win.location.href = url;
+        // Popup blocked despite the synchronous open → fall back to same-tab
+        // navigation rather than failing silently.
+        else window.location.assign(url);
+      })
+      .catch((e) => {
+        if (win) win.close();
+        toast.error((e as Error).message || "Could not open the PDF");
+      })
+      .finally(() => setLoading(false));
   };
 
   return (
