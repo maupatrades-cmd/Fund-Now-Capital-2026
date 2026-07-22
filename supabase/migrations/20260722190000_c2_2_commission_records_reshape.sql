@@ -21,9 +21,12 @@
 --      fnc_gross_commission() helper (G2), split delegated to the partner-aware
 --      commission_records_recompute() trigger (single split site, calls
 --      calculate_commission()), advisory-locked + idempotent.
---   4. A funded-transition trigger on deals that calls the RPC when a deal enters
---      'funded'. Idempotent — safe if it fires twice.
---   5. Reconciles the two existing triggers with the new state machine.
+--   4. Two funded-transition triggers that call the RPC — one on deals (stage -> funded)
+--      and a companion on deal_funder_submissions (amount_funded set while the deal is
+--      already funded) — so the commission is written regardless of which order the two
+--      facts land. Both idempotent.
+--   5. Reconciles the existing triggers with the new state machine, and FREEZES the
+--      earned split against incidental UPDATEs (partner deletion, C2.3 state changes).
 --
 -- EMPTY-TABLE RATIONALE (mirrors the C2.1 header precedent)
 --   commission_records has 0 rows, so inline ALTERs / ADD CONSTRAINT / CREATE INDEX
@@ -133,13 +136,24 @@ comment on column public.commission_records.partner_invoice_id is
 comment on column public.commission_records.notes is
   'Free-text provenance/audit notes (e.g. how the rate was resolved when the record was written).';
 
--- 2. Reconcile commission_records_recompute() — now partner-aware ------------
+-- 2. Reconcile commission_records_recompute() — partner-aware + ledger-frozen -
 --   Still the single site that fills the split columns from calculate_commission()
 --   (single source of split math, G2), so a stray direct INSERT can never violate
---   commission_records_sums_ck. New: when the deal has no referral partner (G4), the
---   owner keeps 100% of the pool — partner_share = 0, tier_pct = 0, owner_share = pool.
---   The 40% company_retention still stands (it is FNC-internal); owner_share + retention
---   both accrue to the owner, so "owner keeps 100%" holds and the sums check is exact.
+--   commission_records_sums_ck. When the deal has no referral partner (G4), the owner
+--   keeps 100% of the pool — partner_share = 0, tier_pct = 0, owner_share = pool. The
+--   40% company_retention still stands (FNC-internal); owner_share + retention both
+--   accrue to the owner, so "owner keeps 100%" holds and the sums check is exact.
+--
+--   FROZEN LEDGER (Macroscope #80 High): the split is recomputed ONLY on INSERT, or on
+--   an UPDATE that actually changes gross_commission or is_purchase_order. Every other
+--   UPDATE leaves the already-earned split untouched. This is essential because:
+--     * referral_partner_id is ON DELETE SET NULL — deleting a partner fires this trigger
+--       via the FK-null UPDATE; without the guard the no-partner branch would silently
+--       rewrite historical partner_share to 0 and hand the pool to the owner;
+--     * C2.3 advances state (earned -> outstanding -> ...) and links invoices via UPDATE
+--       — none of those may recompute the money.
+--   A genuine partner *re-point* is therefore a deliberate owner action, never a trigger
+--   side effect. An audit ledger's earned amounts are immutable once written.
 create or replace function public.commission_records_recompute()
  returns trigger
  language plpgsql
@@ -148,6 +162,13 @@ as $function$
 declare
   b public.commission_breakdown;
 begin
+  -- Freeze: only (re)compute when the split's inputs actually change.
+  if tg_op = 'UPDATE'
+     and new.gross_commission  is not distinct from old.gross_commission
+     and new.is_purchase_order is not distinct from old.is_purchase_order then
+    return new;
+  end if;
+
   b := public.calculate_commission(new.gross_commission, new.is_purchase_order);
   new.tier_pct          := b.tier_pct;
   new.company_retention := b.company_retention;
@@ -331,6 +352,40 @@ create trigger deals_write_commission_on_funded
   after insert or update of stage on public.deals
   for each row execute function public.deals_write_commission_on_funded();
 
+-- 4b. Companion trigger on the submission (Macroscope #80 Medium) -------------
+--   The deals-stage trigger only covers "amount_funded set, THEN stage -> funded". The
+--   opposite ordering — deal reaches 'funded' BEFORE the submission carries amount_funded
+--   (e.g. the owner moves the stage first, then captures the funded amount) — would leave
+--   the deals trigger with nothing to write and never re-fire. This companion writes the
+--   commission when amount_funded becomes non-null AND the parent deal is already funded.
+--   Both paths call the idempotent, advisory-locked write_commission_record, so they can
+--   never double-write; whichever event completes the (funded stage + funded amount) pair
+--   is the one that writes.
+create or replace function public.submissions_write_commission_on_funded()
+ returns trigger
+ language plpgsql
+ security definer
+ set search_path to ''
+as $function$
+declare
+  v_stage public.deal_stage;
+begin
+  if new.amount_funded is not null
+     and (tg_op = 'INSERT' or old.amount_funded is distinct from new.amount_funded) then
+    select stage into v_stage from public.deals where id = new.deal_id;
+    if v_stage = 'funded' then
+      perform public.write_commission_record(new.deal_id);
+    end if;
+  end if;
+  return null;
+end;
+$function$;
+
+drop trigger if exists submissions_write_commission_on_funded on public.deal_funder_submissions;
+create trigger submissions_write_commission_on_funded
+  after insert or update of amount_funded on public.deal_funder_submissions
+  for each row execute function public.submissions_write_commission_on_funded();
+
 -- 5. Assertions --------------------------------------------------------------
 --   Structural checks need no data. Behavioural checks build synthetic rows with
 --   EXPLICIT references (never nextval — so the deals reference sequence is not burned,
@@ -345,9 +400,10 @@ declare
   v_pred boolean;
   -- behavioural
   v_client uuid; v_partner uuid; v_funder uuid; v_funder2 uuid; v_owner uuid;
-  v_deal uuid; v_deal2 uuid; v_deal3 uuid;
-  v_sub1 uuid; v_sub2 uuid; v_sub3 uuid; v_sub4 uuid;
+  v_deal uuid; v_deal2 uuid; v_deal3 uuid; v_deal4 uuid;
+  v_sub1 uuid; v_sub2 uuid; v_sub3 uuid; v_sub4 uuid; v_sub5 uuid;
   v_rec public.commission_records;
+  v_partner_rec_id uuid;
   v_res1 jsonb; v_res2 jsonb;
   v_cnt int; v_g numeric; v_ps numeric;
 begin
@@ -427,11 +483,17 @@ begin
     raise exception 'assert failed: recompute is not partner-aware (G4)';
   end if;
 
-  -- (h) funded trigger is on deals, AFTER, for stage
+  -- (h) both funded triggers present (deals stage + submission amount_funded)
   if not exists (
     select 1 from pg_trigger
     where tgrelid='public.deals'::regclass and tgname='deals_write_commission_on_funded' and not tgisinternal) then
     raise exception 'assert failed: deals_write_commission_on_funded trigger missing';
+  end if;
+  if not exists (
+    select 1 from pg_trigger
+    where tgrelid='public.deal_funder_submissions'::regclass
+      and tgname='submissions_write_commission_on_funded' and not tgisinternal) then
+    raise exception 'assert failed: submissions_write_commission_on_funded trigger missing';
   end if;
 
   -- (i) RLS policy matrix unchanged and correct (owner full, partner read own)
@@ -472,11 +534,20 @@ begin
       (deal_id, deal_funder_submission_id, referral_partner_id, gross_commission, is_purchase_order, status, earned_at)
       values (v_deal, v_sub1, v_partner, 100000, false, 'earned', now())
       returning * into v_rec;
+    v_partner_rec_id := v_rec.id;
     if v_rec.company_retention <> 40000.00 then raise exception 'assert: retention % (exp 40000)', v_rec.company_retention; end if;
     if v_rec.partner_pool      <> 60000.00 then raise exception 'assert: pool % (exp 60000)', v_rec.partner_pool; end if;
     if v_rec.tier_pct          <> 0.3000   then raise exception 'assert: tier_pct % (exp 0.3000)', v_rec.tier_pct; end if;
     if v_rec.partner_share     <> 18000.00 then raise exception 'assert: partner_share % (exp 18000)', v_rec.partner_share; end if;
     if v_rec.owner_share       <> 42000.00 then raise exception 'assert: owner_share % (exp 42000)', v_rec.owner_share; end if;
+
+    -- (1b) FROZEN LEDGER (Macroscope #80 High): nulling referral_partner_id on an existing
+    -- row (the exact effect of ON DELETE SET NULL when a partner is deleted) must NOT
+    -- rewrite the earned split. gross/is_po unchanged -> recompute returns early.
+    update public.commission_records set referral_partner_id = null where id = v_partner_rec_id;
+    select partner_share, owner_share into v_ps, v_g from public.commission_records where id = v_partner_rec_id;
+    if v_ps <> 18000.00 then raise exception 'assert freeze: partner_share rewritten to % on FK-null (exp frozen 18000)', v_ps; end if;
+    if v_g  <> 42000.00 then raise exception 'assert freeze: owner_share rewritten to % on FK-null (exp frozen 42000)', v_g; end if;
 
     -- (2) G4: no partner -> partner_share 0, tier 0, owner keeps the pool, sums exact
     insert into public.commission_records
@@ -527,6 +598,22 @@ begin
       update public.deals set stage='funded' where id=v_deal3;        -- funded transition
       select count(*) into v_cnt from public.commission_records where deal_id=v_deal3 and status<>'void';
       if v_cnt <> 1 then raise exception 'assert: funded trigger did not write commission (got %)', v_cnt; end if;
+
+      -- (4) reverse ordering (Macroscope #80 Medium): deal reaches funded BEFORE the
+      -- submission carries amount_funded — the companion trigger must fill the gap.
+      insert into public.deals (client_id, reference, stage, is_purchase_order, referral_partner_id)
+        values (v_client, 'C2_2_ORD_ROLLBACK', 'document_collection', false, v_partner)
+        returning id into v_deal4;
+      insert into public.deal_funder_submissions (deal_id, funder_id, status, amount_funded, applied_rate_snapshot)
+        values (v_deal4, v_funder, 'approved', null,
+                jsonb_build_object('rate_type','percent_of_gross_funded','rate_fraction',0.10,'flat_amount',null,'source','test'))
+        returning id into v_sub5;
+      update public.deals set stage='funded' where id=v_deal4;        -- no funded amount yet
+      select count(*) into v_cnt from public.commission_records where deal_id=v_deal4;
+      if v_cnt <> 0 then raise exception 'assert: commission written before amount_funded set (got %)', v_cnt; end if;
+      update public.deal_funder_submissions set amount_funded = 750000 where id = v_sub5;  -- companion fires
+      select count(*) into v_cnt from public.commission_records where deal_id=v_deal4 and status<>'void';
+      if v_cnt <> 1 then raise exception 'assert: companion trigger did not write on amount_funded (got %)', v_cnt; end if;
     end if;
 
     raise notice 'C2.2 behavioural assertions passed (recompute split + G4 no-partner + RPC idempotency + funded trigger).';
