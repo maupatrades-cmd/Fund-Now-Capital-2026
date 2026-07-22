@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Plus } from "lucide-react";
@@ -54,6 +54,14 @@ export function DealInvoices({
   const { data: invoices, isLoading, isError: invoicesError } = useDealInvoices(dealId);
   const { data: submissions, isError: submissionsError } = useFundableSubmissions(dealId);
   const [generateFor, setGenerateFor] = useState<FundableSubmission | null>(null);
+
+  // Close any open Generate modal when navigating to a different deal (the parent
+  // route reuses this component for a cached deal without unmounting it), so a
+  // stale submission from deal A can't be previewed/invoiced against B's
+  // dealId/clientId. Mirrors DealDetailPage's reset-on-:id pattern.
+  useEffect(() => {
+    setGenerateFor(null);
+  }, [dealId]);
 
   // A failed fetch must not masquerade as "no invoices" (silent empty state).
   const hasError = invoicesError || submissionsError;
