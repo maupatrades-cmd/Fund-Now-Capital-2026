@@ -7,12 +7,23 @@
 // send-notification-email). Deployed verify_jwt=false.
 // Env: WEBHOOK_SECRET, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 //
+// Rendered with pdf-lib (NOT jsPDF): jsPDF's image embedding is unreliable under
+// the Deno edge runtime (the logo embedded invisibly, then crashed on raw bytes).
+// pdf-lib is pure-JS and runtime-deterministic, so it embeds the JPEG logo
+// identically in Node and Deno — the local rasterized render predicts production.
+//
 // The FNC company/banking constants below are the real business truth (owner-
 // locked, INV-0031). VAT is intentionally OFF (FNC is not VAT-registered).
 
 import { createClient } from "@supabase/supabase-js";
-import { jsPDF } from "jspdf";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { FNC_LOGO_JPEG } from "./logo.ts";
+
+// Decode the embedded JPEG to raw bytes once, at module load.
+const LOGO_BYTES: Uint8Array = Uint8Array.from(
+  atob(FNC_LOGO_JPEG.split(",")[1]),
+  (c) => c.charCodeAt(0),
+);
 
 // ---- locked FNC business constants (INV-0031) -------------------------------
 const FNC = {
@@ -35,10 +46,16 @@ const FNC = {
   vatDisclaimer: "Fund Now Capital (Pty) Ltd is not currently registered for VAT.",
 };
 
-const NAVY: [number, number, number] = [26, 58, 82]; // #1a3a52
-const TEAL: [number, number, number] = [45, 168, 184]; // #2da8b8
-const INK: [number, number, number] = [30, 51, 70];
-const MUTED: [number, number, number] = [138, 160, 179];
+type RGB = [number, number, number];
+const NAVY: RGB = [26, 58, 82]; // #1a3a52
+const TEAL: RGB = [45, 168, 184]; // #2da8b8
+const INK: RGB = [30, 51, 70];
+const MUTED: RGB = [138, 160, 179];
+const WHITE: RGB = [255, 255, 255];
+const PANEL: RGB = [245, 248, 250];
+const FOOT: RGB = [200, 214, 224];
+const HAIR: RGB = [225, 232, 238];
+const col = (c: RGB) => rgb(c[0] / 255, c[1] / 255, c[2] / 255);
 
 function formatR(v: number | string | null | undefined): string {
   if (v === null || v === undefined || v === "") return "R 0.00";
@@ -53,6 +70,11 @@ function formatDate(iso: string | null): string {
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" });
 }
+
+// Strip characters the WinAnsi standard fonts can't encode (keeps dynamic client/
+// funder data from throwing at draw time).
+const safe = (s: unknown): string =>
+  String(s ?? "").replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u00FF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u2026]/g, "");
 
 type InvoiceRow = {
   id: string;
@@ -79,114 +101,160 @@ type FunderRow = {
   vat_registration: string | null;
 };
 
-function renderPdf(inv: InvoiceRow, funder: FunderRow): Uint8Array {
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const W = doc.internal.pageSize.getWidth();
-  const M = 40; // margin
+async function renderPdf(inv: InvoiceRow, funder: FunderRow): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([595.28, 841.89]); // A4 pt
+  const W = page.getWidth();
+  const H = page.getHeight();
+  const reg = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const ital = await doc.embedFont(StandardFonts.HelveticaOblique);
+  const fontOf = (f: string) => (f === "bold" ? bold : f === "ital" ? ital : reg);
+
+  // top-down drawing helpers (pdf-lib origin is bottom-left → flip y)
+  const text = (
+    str: unknown,
+    x: number,
+    yTop: number,
+    o: { size?: number; font?: string; color?: RGB; align?: "left" | "right" } = {},
+  ) => {
+    const { size = 9, font = "reg", color = INK, align = "left" } = o;
+    const f = fontOf(font);
+    const s = safe(str);
+    const xx = align === "right" ? x - f.widthOfTextAtSize(s, size) : x;
+    page.drawText(s, { x: xx, y: H - yTop, size, font: f, color: col(color) });
+  };
+  const rect = (x: number, yTop: number, w: number, h: number, color: RGB) =>
+    page.drawRectangle({ x, y: H - (yTop + h), width: w, height: h, color: col(color) });
+  const hline = (x1: number, yTop: number, x2: number, thickness: number, color: RGB) =>
+    page.drawLine({ start: { x: x1, y: H - yTop }, end: { x: x2, y: H - yTop }, thickness, color: col(color) });
+  const splitText = (str: unknown, font: string, size: number, maxW: number): string[] => {
+    const f = fontOf(font);
+    const words = safe(str).split(/\s+/).filter(Boolean);
+    const lines: string[] = [];
+    let cur = "";
+    for (const w of words) {
+      const t = cur ? cur + " " + w : w;
+      if (f.widthOfTextAtSize(t, size) <= maxW) cur = t;
+      else {
+        if (cur) lines.push(cur);
+        cur = w;
+      }
+    }
+    if (cur) lines.push(cur);
+    return lines.length ? lines : [""];
+  };
+
+  const M = 40;
   let y = 48;
 
-  // ---- header: FNC brand mark + company block (left) + TAX INVOICE (right) ---
-  // Gradient "n" mark, top-left; the company text sits to its right (matches INV-0031).
-  const LOGO = 46; // pt (~16mm) square
-  const TX = M + LOGO + 12; // company-text left edge, beside the mark
-  doc.addImage(FNC_LOGO_JPEG, "JPEG", M, y - 8, LOGO, LOGO);
-  doc.setFont("helvetica", "bold").setFontSize(16).setTextColor(...NAVY);
-  doc.text(FNC.name, TX, y);
-  doc.setFont("helvetica", "italic").setFontSize(9).setTextColor(...TEAL);
-  doc.text(FNC.tagline, TX, y + 14);
-  doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(...INK);
-  doc.text(FNC.address, TX, y + 30);
-  doc.text(`CIPC: ${FNC.cipc}  |  Tel: ${FNC.tel}  |  Mobile: ${FNC.mobile}`, TX, y + 42);
-  doc.text(`Email: ${FNC.email}  |  Web: ${FNC.web}`, TX, y + 54);
+  // ---- header: logo + company block + TAX INVOICE ----
+  const LOGO = 46;
+  const TX = M + LOGO + 12;
+  const logo = await doc.embedJpg(LOGO_BYTES);
+  page.drawImage(logo, { x: M, y: H - (y - 8 + LOGO), width: LOGO, height: LOGO });
+  text(FNC.name, TX, y + 4, { size: 16, font: "bold", color: NAVY });
+  text(FNC.tagline, TX, y + 18, { size: 9, font: "ital", color: TEAL });
+  text(FNC.address, TX, y + 32, { size: 8, color: INK });
+  text(`CIPC: ${FNC.cipc}  |  Tel: ${FNC.tel}  |  Mobile: ${FNC.mobile}`, TX, y + 44, { size: 8, color: INK });
+  text(`Email: ${FNC.email}  |  Web: ${FNC.web}`, TX, y + 56, { size: 8, color: INK });
 
-  doc.setFont("helvetica", "bold").setFontSize(22).setTextColor(...NAVY);
-  doc.text("TAX INVOICE", W - M, y + 2, { align: "right" });
-  doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...INK);
-  const rMeta = [
+  text("TAX INVOICE", W - M, y + 6, { size: 22, font: "bold", color: NAVY, align: "right" });
+  const rMeta: [string, string][] = [
     ["Invoice Number", inv.invoice_number],
     ["Invoice Date", formatDate(inv.issued_date)],
     ["Payment Terms", inv.payment_terms],
   ];
-  let ry = y + 22;
+  let ry = y + 24;
   for (const [k, v] of rMeta) {
-    doc.setTextColor(...MUTED).text(k, W - M - 150, ry);
-    doc.setFont("helvetica", "bold").setTextColor(...INK).text(String(v), W - M, ry, { align: "right" });
-    doc.setFont("helvetica", "normal");
+    text(k, W - M - 150, ry, { size: 9, color: MUTED });
+    text(String(v), W - M, ry, { size: 9, font: "bold", color: INK, align: "right" });
     ry += 14;
   }
 
   y += 76;
-  doc.setDrawColor(...TEAL).setLineWidth(1.5).line(M, y, W - M, y);
+  hline(M, y, W - M, 1.5, TEAL);
   y += 22;
 
-  // ---- INVOICE TO (null-safe) ------------------------------------------------
-  doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(...MUTED).text("INVOICE TO", M, y);
+  // ---- INVOICE TO ----
+  text("INVOICE TO", M, y, { size: 9, font: "bold", color: MUTED });
   y += 15;
-  doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(...NAVY);
-  doc.text(funder.legal_name || funder.name, M, y);
+  text(funder.legal_name || funder.name, M, y, { size: 11, font: "bold", color: NAVY });
   y += 14;
-  doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...INK);
   if (funder.billing_address) {
-    doc.text(funder.billing_address, M, y);
+    text(funder.billing_address, M, y, { size: 9, color: INK });
     y += 12;
   }
-  const reg: string[] = [];
-  if (funder.company_registration) reg.push(`Company Registration: ${funder.company_registration}`);
-  if (funder.vat_registration) reg.push(`VAT Registration: ${funder.vat_registration}`);
-  if (reg.length) {
-    doc.text(reg.join("  |  "), M, y);
+  const regBits: string[] = [];
+  if (funder.company_registration) regBits.push(`Company Registration: ${funder.company_registration}`);
+  if (funder.vat_registration) regBits.push(`VAT Registration: ${funder.vat_registration}`);
+  if (regBits.length) {
+    text(regBits.join("  |  "), M, y, { size: 9, color: INK });
     y += 12;
   }
   y += 12;
 
-  // ---- reference row: Client / Facility / Finance charge ---------------------
+  // ---- reference row: Client (wide) / Facility / Finance charge --------------
+  // The client-reference column gets more width; long client names clip/shrink so
+  // they never overflow into the amount columns.
+  const boxW = W - 2 * M;
   const showFinance = inv.finance_charge_amount !== null && inv.finance_charge_amount !== undefined;
-  const cols: [string, string][] = [
-    ["CLIENT REFERENCE", inv.client_reference],
-    ["FACILITY ADVANCED", formatR(inv.facility_advanced)],
-  ];
-  if (showFinance) cols.push(["FINANCE CHARGE", formatR(inv.finance_charge_amount)]);
-  doc.setFillColor(245, 248, 250).rect(M, y, W - 2 * M, 44, "F");
-  const colW = (W - 2 * M) / cols.length;
-  cols.forEach(([label, val], i) => {
-    const cx = M + i * colW + 10;
-    doc.setFont("helvetica", "bold").setFontSize(7.5).setTextColor(...MUTED).text(label, cx, y + 16);
-    doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(...NAVY).text(val, cx, y + 32);
-  });
+  const cols: { label: string; value: string; w: number }[] = showFinance
+    ? [
+        { label: "CLIENT REFERENCE", value: inv.client_reference, w: boxW * 0.46 },
+        { label: "FACILITY ADVANCED", value: formatR(inv.facility_advanced), w: boxW * 0.27 },
+        { label: "FINANCE CHARGE", value: formatR(inv.finance_charge_amount), w: boxW * 0.27 },
+      ]
+    : [
+        { label: "CLIENT REFERENCE", value: inv.client_reference, w: boxW * 0.6 },
+        { label: "FACILITY ADVANCED", value: formatR(inv.facility_advanced), w: boxW * 0.4 },
+      ];
+  rect(M, y, boxW, 44, PANEL);
+  let cx = M;
+  for (const c of cols) {
+    const innerX = cx + 10;
+    const innerW = c.w - 16;
+    text(c.label, innerX, y + 16, { size: 7.5, font: "bold", color: MUTED });
+    let size = 10;
+    let lines = splitText(c.value, "bold", size, innerW);
+    if (lines.length > 1) {
+      size = 8;
+      lines = splitText(c.value, "bold", size, innerW);
+    }
+    text(lines[0], innerX, y + 30, { size, font: "bold", color: NAVY });
+    if (lines[1]) text(lines[1], innerX, y + 40, { size, font: "bold", color: NAVY });
+    cx += c.w;
+  }
   y += 62;
 
-  // ---- description / amount --------------------------------------------------
-  doc.setFillColor(...NAVY).rect(M, y, W - 2 * M, 20, "F");
-  doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(255, 255, 255);
-  doc.text("DESCRIPTION", M + 10, y + 13);
-  doc.text("AMOUNT (ZAR)", W - M - 10, y + 13, { align: "right" });
+  // ---- description header + line ----
+  rect(M, y, boxW, 20, NAVY);
+  text("DESCRIPTION", M + 10, y + 13, { size: 8.5, font: "bold", color: WHITE });
+  text("AMOUNT (ZAR)", W - M - 10, y + 13, { size: 8.5, font: "bold", color: WHITE, align: "right" });
   y += 30;
 
-  doc.setFont("helvetica", "bold").setFontSize(9.5).setTextColor(...NAVY);
-  doc.text("Lead Provider Commission", M + 10, y);
-  y += 14;
-  doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(...INK);
-  const narrative = doc.splitTextToSize(inv.commission_description, W - 2 * M - 130);
-  doc.text(narrative, M + 10, y);
-  doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(...NAVY);
-  doc.text(formatR(inv.commission_amount), W - M - 10, y, { align: "right" });
-  y += narrative.length * 11 + 16;
+  text("Lead Provider Commission", M + 10, y, { size: 9.5, font: "bold", color: NAVY });
+  text(formatR(inv.commission_amount), W - M - 10, y, { size: 10, font: "bold", color: NAVY, align: "right" });
+  const narr = splitText(inv.commission_description, "reg", 8.5, boxW - 130);
+  let ny = y + 14;
+  for (const l of narr) {
+    text(l, M + 10, ny, { size: 8.5, color: INK });
+    ny += 11;
+  }
+  y = ny + 6;
 
-  doc.setDrawColor(225, 232, 238).setLineWidth(0.75).line(M, y, W - M, y);
+  hline(M, y, W - M, 0.75, HAIR);
   y += 22;
 
-  // ---- total due -------------------------------------------------------------
-  doc.setFont("helvetica", "bold").setFontSize(12).setTextColor(...NAVY);
-  doc.text("TOTAL DUE", M + 10, y);
-  doc.setFontSize(15);
-  doc.text(formatR(inv.total_amount), W - M - 10, y, { align: "right" });
-  doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(...MUTED);
-  doc.text("Not VAT registered", W - M - 10, y + 12, { align: "right" });
+  // ---- total due ----
+  text("TOTAL DUE", M + 10, y, { size: 12, font: "bold", color: NAVY });
+  text(formatR(inv.total_amount), W - M - 10, y, { size: 15, font: "bold", color: NAVY, align: "right" });
+  text("Not VAT registered", W - M - 10, y + 12, { size: 7.5, font: "ital", color: MUTED, align: "right" });
   y += 34;
 
-  // ---- payment instructions --------------------------------------------------
-  doc.setFillColor(245, 248, 250).rect(M, y, W - 2 * M, 96, "F");
-  doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(...MUTED).text("PAYMENT INSTRUCTIONS", M + 10, y + 16);
+  // ---- payment instructions ----
+  rect(M, y, boxW, 96, PANEL);
+  text("PAYMENT INSTRUCTIONS", M + 10, y + 16, { size: 8.5, font: "bold", color: MUTED });
   const pay: [string, string][] = [
     ["Account Name", FNC.bank.accountName],
     ["Bank", FNC.bank.bank],
@@ -196,33 +264,34 @@ function renderPdf(inv: InvoiceRow, funder: FunderRow): Uint8Array {
     ["Reference", inv.payment_reference_expected],
   ];
   let py = y + 30;
-  doc.setFontSize(8.5);
   for (const [k, v] of pay) {
-    doc.setFont("helvetica", "normal").setTextColor(...MUTED).text(k, M + 10, py);
-    doc.setFont("helvetica", "bold").setTextColor(...INK).text(v, M + 150, py);
+    text(k, M + 10, py, { size: 8.5, color: MUTED });
+    text(v, M + 150, py, { size: 8.5, font: "bold", color: INK });
     py += 11;
   }
   y += 112;
 
-  // ---- disclaimer ------------------------------------------------------------
-  doc.setFont("helvetica", "normal").setFontSize(7.5).setTextColor(...MUTED);
-  const disc = doc.splitTextToSize(
+  // ---- disclaimer ----
+  const disc = splitText(
     `Note: ${FNC.vatDisclaimer} The ${formatR(inv.total_amount)} amount is the gross commission per the Lead Provider ` +
       `Agreement. For queries please contact ${FNC.ownerName} on ${FNC.mobile} or ${FNC.email}.`,
-    W - 2 * M,
+    "reg",
+    7.5,
+    boxW,
   );
-  doc.text(disc, M, y);
-  y += disc.length * 10 + 8;
+  for (const l of disc) {
+    text(l, M, y, { size: 7.5, color: MUTED });
+    y += 10;
+  }
 
-  // ---- footer band -----------------------------------------------------------
-  const H = doc.internal.pageSize.getHeight();
-  doc.setFillColor(...NAVY).rect(0, H - 46, W, 46, "F");
-  doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(255, 255, 255);
-  doc.text("Thank you for your business.", W / 2, H - 28, { align: "center" });
-  doc.setFont("helvetica", "normal").setFontSize(7.5).setTextColor(200, 214, 224);
-  doc.text(`${FNC.name}  |  CIPC ${FNC.cipc}  |  ${FNC.web}`, W / 2, H - 14, { align: "center" });
+  // ---- footer band ----
+  rect(0, H - 46, W, 46, NAVY);
+  const thanks = "Thank you for your business.";
+  text(thanks, W / 2 - bold.widthOfTextAtSize(thanks, 10) / 2, H - 28, { size: 10, font: "bold", color: WHITE });
+  const foot = `${FNC.name}  |  CIPC ${FNC.cipc}  |  ${FNC.web}`;
+  text(foot, W / 2 - reg.widthOfTextAtSize(foot, 7.5) / 2, H - 14, { size: 7.5, color: FOOT });
 
-  return new Uint8Array(doc.output("arraybuffer"));
+  return await doc.save();
 }
 
 Deno.serve(async (req: Request) => {
@@ -232,8 +301,13 @@ Deno.serve(async (req: Request) => {
   }
 
   let invoiceId: string | undefined;
+  let returnBase64 = false;
   try {
-    invoiceId = (await req.json())?.invoice_id;
+    const reqBody = await req.json();
+    invoiceId = reqBody?.invoice_id;
+    // Optional: also return the rendered PDF inline (base64). Used to verify the
+    // render without a storage round-trip; the C1.2 preview flow can reuse it.
+    returnBase64 = reqBody?.return_base64 === true;
   } catch {
     return new Response("Bad request", { status: 400 });
   }
@@ -266,7 +340,12 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: fErr?.message ?? "funder not found" }), { status: 404 });
   }
 
-  const pdf = renderPdf(inv as InvoiceRow, funder as FunderRow);
+  let pdf: Uint8Array;
+  try {
+    pdf = await renderPdf(inv as InvoiceRow, funder as FunderRow);
+  } catch (e) {
+    return new Response(JSON.stringify({ error: `render failed: ${String((e as Error)?.message ?? e)}` }), { status: 500 });
+  }
   const path = `funder-invoices/${inv.invoice_number}.pdf`;
 
   const { error: upErr } = await supabase.storage
@@ -285,7 +364,13 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: `path write failed: ${updErr?.message ?? "no row"}` }), { status: 500 });
   }
 
-  return new Response(JSON.stringify({ ok: true, path }), {
+  const respBody: Record<string, unknown> = { ok: true, path };
+  if (returnBase64) {
+    let bin = "";
+    for (let i = 0; i < pdf.length; i++) bin += String.fromCharCode(pdf[i]);
+    respBody.pdf_base64 = btoa(bin);
+  }
+  return new Response(JSON.stringify(respBody), {
     headers: { "Content-Type": "application/json" },
   });
 });
