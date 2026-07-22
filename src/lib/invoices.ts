@@ -245,7 +245,7 @@ export function computeInvoicePreview(args: {
   clientShort: string | null;
   now?: Date;
 }): InvoicePreview {
-  const { rate, amountFunded, financeCharge, funderName, clientBusinessName } = args;
+  const { rate, amountFunded, financeCharge, funderName, funderShort, clientShort, clientBusinessName } = args;
   if (!rate) {
     return { ok: false, reason: "No commission rate structure for this funder/deal type. Capture it in Settings → Funder rates first." };
   }
@@ -292,8 +292,21 @@ export function computeInvoicePreview(args: {
   const paymentTerms = termsDays === 0 ? "Due on receipt" : `${termsDays} days from invoice date`;
   const dueDate = termsDays === 0 ? today : addDaysISO(today, termsDays);
 
-  const funderShort = args.funderShort ?? "FUNDER";
-  const clientShort = args.clientShort ?? "CLIENT";
+  // Both short codes must exist — generate_funder_invoice rejects null short
+  // codes, and they form the payment reference. Gate here with a clear setup
+  // message instead of letting Generate hit a server error.
+  if (!funderShort || !clientShort) {
+    const missing =
+      !funderShort && !clientShort
+        ? "The funder and client both need a short code"
+        : !funderShort
+          ? "This funder has no short code"
+          : "This client has no short code";
+    return {
+      ok: false,
+      reason: `${missing} — set it before invoicing (funder: Settings → Funder rates; client: the client page).`,
+    };
+  }
   const paymentReferencePattern = `${funderShort}-INV####-${clientShort}`;
 
   const contract = rate.contract_reference ?? "Lead Provider Agreement";

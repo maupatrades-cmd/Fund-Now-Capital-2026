@@ -184,7 +184,7 @@ function GenerateInvoiceModal({
   dealType: DealType;
   onClose: () => void;
 }) {
-  const { data: rates } = useRateStructures();
+  const { data: rates, isError: ratesError, isLoading: ratesLoading } = useRateStructures();
   const generate = useGenerateInvoice();
 
   // Client short_code + business name for the payment-reference preview.
@@ -214,12 +214,17 @@ function GenerateInvoiceModal({
   // applied_rate_snapshot; fall back to the live effective rate only when there's
   // no snapshot (the case in production today). Keeps the preview in agreement
   // with the invoice the RPC actually creates.
-  const rate = useMemo(
-    () =>
-      rateFromSnapshot(submission.applied_rate_snapshot) ??
-      resolveEffectiveRate(rates, submission.funder_id, dealType, asOf),
-    [rates, submission.applied_rate_snapshot, submission.funder_id, dealType, asOf],
+  const snapshotRate = useMemo(
+    () => rateFromSnapshot(submission.applied_rate_snapshot),
+    [submission.applied_rate_snapshot],
   );
+  const rate = useMemo(
+    () => snapshotRate ?? resolveEffectiveRate(rates, submission.funder_id, dealType, asOf),
+    [snapshotRate, rates, submission.funder_id, dealType, asOf],
+  );
+  // A failed/still-loading rate fetch (with no snapshot to fall back on) must not
+  // read as "no rate configured" — surface it distinctly and block Generate.
+  const rateFetchBlocked = !snapshotRate && (ratesLoading || ratesError);
 
   const isFinanceChargeRate = rate?.rate_type === "percent_of_finance_charge";
   const [financeCharge, setFinanceCharge] = useState<string>(
@@ -242,26 +247,36 @@ function GenerateInvoiceModal({
     [rate, submission, financeChargeNum, client],
   );
 
-  // Require the client record to be loaded before generating — otherwise the
-  // preview (and the created invoice's description / payment reference) would be
-  // built on the "the client" / null-short-code placeholders while the query is
-  // still in flight or has errored.
-  const canGenerate = preview.ok && !!client;
+  // Require the client record to be loaded (and the rate resolvable) before
+  // generating — otherwise the preview (and the created invoice's description /
+  // payment reference) would be built on the "the client" / null-short-code
+  // placeholders while the query is still in flight or has errored.
+  const canGenerate = preview.ok && !!client && !rateFetchBlocked;
 
   const doGenerate = async () => {
     if (!preview.ok) return;
     try {
-      // One source of truth: if the finance charge was entered/changed in the
-      // modal, persist it back to the submission before generating (row-count
-      // checked per the silent-RLS rule).
       const enteredFc = financeChargeNum != null && Number.isFinite(financeChargeNum) ? financeChargeNum : null;
       // Compare against the raw stored value (null-aware). toNum(null) === 0 would
-      // make entering 0 against a stored null look unchanged, skip the update, and
-      // leave the column null while the RPC invoices a 0 charge — breaking the
-      // single source of truth.
+      // make entering 0 against a stored null look unchanged.
       const storedFc =
         submission.finance_charge_amount != null ? toNum(submission.finance_charge_amount) : null;
-      if (isFinanceChargeRate && enteredFc !== storedFc) {
+
+      // Generate first (the RPC already receives the finance charge via
+      // p_finance_charge, so it doesn't depend on the submission write).
+      const result = await generate.mutateAsync({
+        submissionId: submission.id,
+        dealId,
+        financeCharge: enteredFc,
+      });
+      const num = (result as { invoice_number?: string }).invoice_number;
+      const created = (result as { was_created?: boolean }).was_created;
+
+      // Persist the finance charge to the submission (one source of truth) ONLY
+      // when this call actually created the invoice. If an invoice already existed
+      // (was_created === false — e.g. another session created it), that invoice's
+      // snapshot governs; overwriting the submission here would desync it.
+      if (created && isFinanceChargeRate && enteredFc !== storedFc) {
         const { data, error } = await supabase
           .from("deal_funder_submissions")
           .update({ finance_charge_amount: enteredFc })
@@ -271,13 +286,6 @@ function GenerateInvoiceModal({
         if (!data || data.length !== 1) throw new Error("Finance charge was not saved (no row written).");
       }
 
-      const result = await generate.mutateAsync({
-        submissionId: submission.id,
-        dealId,
-        financeCharge: enteredFc,
-      });
-      const num = (result as { invoice_number?: string }).invoice_number;
-      const created = (result as { was_created?: boolean }).was_created;
       toast.success(created === false ? `Invoice ${num ?? ""} already exists` : `Draft ${num ?? "invoice"} created`);
       onClose();
     } catch (e) {
@@ -292,13 +300,6 @@ function GenerateInvoiceModal({
         Preview for <span className="font-medium text-brand-navy">{submission.funder?.name}</span> —{" "}
         {client?.business_name ?? "client"}
       </div>
-
-      {clientLoading && <p className="text-xs text-muted-foreground">Loading client details…</p>}
-      {clientError && (
-        <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
-          Couldn't load client details — refresh before generating.
-        </p>
-      )}
 
       {isFinanceChargeRate && (
         <div>
@@ -320,7 +321,21 @@ function GenerateInvoiceModal({
         </div>
       )}
 
-      {preview.ok ? (
+      {clientLoading ? (
+        <p className="text-xs text-muted-foreground">Loading client details…</p>
+      ) : clientError ? (
+        <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+          Couldn't load client details — refresh before generating.
+        </p>
+      ) : rateFetchBlocked ? (
+        ratesError ? (
+          <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+            Couldn't load rate structures — refresh and try again.
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">Loading rate structures…</p>
+        )
+      ) : preview.ok ? (
         <dl className="space-y-2 rounded-lg border border-border bg-slate-50 p-4 text-sm">
           <Row label="Facility advanced" value={formatZAR(preview.facilityAdvanced, { cents: true })} />
           {preview.rateType === "percent_of_finance_charge" && (
