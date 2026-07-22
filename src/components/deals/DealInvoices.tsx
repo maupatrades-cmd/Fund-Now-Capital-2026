@@ -179,7 +179,11 @@ function GenerateInvoiceModal({
   const generate = useGenerateInvoice();
 
   // Client short_code + business name for the payment-reference preview.
-  const { data: client } = useQuery({
+  const {
+    data: client,
+    isLoading: clientLoading,
+    isError: clientError,
+  } = useQuery({
     queryKey: ["client-short-info", clientId],
     queryFn: async (): Promise<{ business_name: string; short_code: string | null }> => {
       const { data, error } = await supabase
@@ -229,7 +233,11 @@ function GenerateInvoiceModal({
     [rate, submission, financeChargeNum, client],
   );
 
-  const canGenerate = preview.ok;
+  // Require the client record to be loaded before generating — otherwise the
+  // preview (and the created invoice's description / payment reference) would be
+  // built on the "the client" / null-short-code placeholders while the query is
+  // still in flight or has errored.
+  const canGenerate = preview.ok && !!client;
 
   const doGenerate = async () => {
     if (!preview.ok) return;
@@ -269,6 +277,13 @@ function GenerateInvoiceModal({
         Preview for <span className="font-medium text-brand-navy">{submission.funder?.name}</span> —{" "}
         {client?.business_name ?? "client"}
       </div>
+
+      {clientLoading && <p className="text-xs text-muted-foreground">Loading client details…</p>}
+      {clientError && (
+        <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+          Couldn't load client details — refresh before generating.
+        </p>
+      )}
 
       {isFinanceChargeRate && (
         <div>
