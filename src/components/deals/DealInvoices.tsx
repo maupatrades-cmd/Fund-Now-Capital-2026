@@ -16,6 +16,7 @@ import {
 } from "@/hooks/useInvoices";
 import {
   computeInvoicePreview,
+  formatInvoiceDate,
   rateFromSnapshot,
   resolveEffectiveRate,
   toNum,
@@ -318,7 +319,12 @@ function GenerateInvoiceModal({
             <Row label="Total due" value={formatZAR(preview.total, { cents: true })} strong />
           </div>
           <Row label="Payment terms" value={preview.paymentTerms} />
+          <Row label="Due date" value={formatInvoiceDate(preview.dueDate)} />
           <Row label="Payment reference" value={preview.paymentReferencePattern} />
+          <div className="border-t border-border pt-2">
+            <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Description</dt>
+            <dd className="mt-1 text-sm text-brand-navy">{preview.description}</dd>
+          </div>
           <p className="pt-1 text-xs text-muted-foreground">
             The invoice number (####) is assigned when the draft is created. Final figures are recomputed
             and the rate snapshotted server-side on generate.
