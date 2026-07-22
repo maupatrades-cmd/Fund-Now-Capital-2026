@@ -294,6 +294,10 @@ async function renderPdf(inv: InvoiceRow, funder: FunderRow): Promise<Uint8Array
   return await doc.save();
 }
 
+// Every JSON response (success and error) carries this so callers see a truthful
+// content-type — plain `new Response(JSON.stringify(...))` would default to text/plain.
+const JSON_HEADERS = { "Content-Type": "application/json" } as const;
+
 Deno.serve(async (req: Request) => {
   const secret = Deno.env.get("WEBHOOK_SECRET");
   if (!secret || req.headers.get("X-Webhook-Secret") !== secret) {
@@ -328,7 +332,7 @@ Deno.serve(async (req: Request) => {
     .eq("id", invoiceId)
     .single();
   if (invErr || !inv) {
-    return new Response(JSON.stringify({ error: invErr?.message ?? "invoice not found" }), { status: 404 });
+    return new Response(JSON.stringify({ error: invErr?.message ?? "invoice not found" }), { status: 404, headers: JSON_HEADERS });
   }
 
   const { data: funder, error: fErr } = await supabase
@@ -337,14 +341,14 @@ Deno.serve(async (req: Request) => {
     .eq("id", inv.funder_id)
     .single();
   if (fErr || !funder) {
-    return new Response(JSON.stringify({ error: fErr?.message ?? "funder not found" }), { status: 404 });
+    return new Response(JSON.stringify({ error: fErr?.message ?? "funder not found" }), { status: 404, headers: JSON_HEADERS });
   }
 
   let pdf: Uint8Array;
   try {
     pdf = await renderPdf(inv as InvoiceRow, funder as FunderRow);
   } catch (e) {
-    return new Response(JSON.stringify({ error: `render failed: ${String((e as Error)?.message ?? e)}` }), { status: 500 });
+    return new Response(JSON.stringify({ error: `render failed: ${String((e as Error)?.message ?? e)}` }), { status: 500, headers: JSON_HEADERS });
   }
   const path = `funder-invoices/${inv.invoice_number}.pdf`;
 
@@ -352,7 +356,7 @@ Deno.serve(async (req: Request) => {
     .from("invoices")
     .upload(path, pdf, { contentType: "application/pdf", upsert: true });
   if (upErr) {
-    return new Response(JSON.stringify({ error: `upload failed: ${upErr.message}` }), { status: 500 });
+    return new Response(JSON.stringify({ error: `upload failed: ${upErr.message}` }), { status: 500, headers: JSON_HEADERS });
   }
 
   const { data: updated, error: updErr } = await supabase
@@ -361,7 +365,7 @@ Deno.serve(async (req: Request) => {
     .eq("id", invoiceId)
     .select("id");
   if (updErr || !updated || updated.length !== 1) {
-    return new Response(JSON.stringify({ error: `path write failed: ${updErr?.message ?? "no row"}` }), { status: 500 });
+    return new Response(JSON.stringify({ error: `path write failed: ${updErr?.message ?? "no row"}` }), { status: 500, headers: JSON_HEADERS });
   }
 
   const respBody: Record<string, unknown> = { ok: true, path };
@@ -370,7 +374,5 @@ Deno.serve(async (req: Request) => {
     for (let i = 0; i < pdf.length; i++) bin += String.fromCharCode(pdf[i]);
     respBody.pdf_base64 = btoa(bin);
   }
-  return new Response(JSON.stringify(respBody), {
-    headers: { "Content-Type": "application/json" },
-  });
+  return new Response(JSON.stringify(respBody), { headers: JSON_HEADERS });
 });
