@@ -1,17 +1,15 @@
 # Agent Coordination Status
 
-## OLD CC 1 — C2.2 Backend
+## OLD CC 1 — C2 Backend (C2.2 done, C2.3 in review)
 - Session started: 2026-07-22 23:42 SAST
-- Task: commission_records reshape + write_commission_record RPC + funded-transition trigger
-- PR #80 MERGED + APPLIED TO LIVE + verified (migration c2_2_commission_records_reshape). commission_state enum + reshape + write_commission_record + both funded triggers live; commission_records 0 rows; grants anon-free.
-- PR #82 OPEN (hotfix) — corrects two C2.2 self-check assertions (search_path proconfig match + explicit anon revoke to match house money-RPC grant matrix). Already applied to live; PR syncs the committed file to reality, no re-apply.
-- PR #81 OPEN (docs only, SPEC.md S7B) — funder rate structure future work (Merchant Capital + Flow48) + Polokwane address 75→73 correction. Zero code/schema change.
-- Files touched: supabase/migrations/20260722190000_c2_2_commission_records_reshape.sql (#80/#82); SPEC.md (#81, S7B + S16.3)
-- Tables/RPCs affected: commission_records (reshape), deals + deal_funder_submissions (funded triggers), write_commission_record (NEW), commission_records_recompute (partner-aware + frozen), notify_commission_paid (inert, re-point is C2.3)
-- Blocked on: owner merge of #81 (docs) + #82 (hotfix). C2.2 itself is DONE + live.
-- Cross-lane note for NEW CC 1/2: I do NOT touch funders billing columns, CIPC data, or frontend. #81 flags (but does NOT edit) the send-notification-email footer 75→73 Marshall St as a deferred TODO — whoever next touches that template should apply it. C2.2 keeps commission_records.status NAMED `status` (retyped to commission_state enum) so useDashboard.ts keeps resolving.
+- C2.2: PR #80 MERGED + APPLIED TO LIVE + verified; hotfix PR #82 MERGED (repo↔live reconciled); docs PR #81 (SPEC S7B) MERGED. commission_records ledger live, 0 rows.
+- C2.3: PR #83 OPEN — funder-invoice state cascade (earned→outstanding→payable, void→earned+unlink), per-record transition_commission_record (advisory-locked, idempotent), COMMISSION_PAID re-pointed to status→settled, payment_received_date dropped, settle/unsettle stubs (raise P0002 for C4), COMMISSION_MISMATCH_ON_INVOICE_VOID activity_log. Validated in rollback; NOT applied to live yet (awaiting Macroscope + owner merge).
+- Files touched: supabase/migrations/20260722190000_c2_2_*.sql (#80/#82, merged); SPEC.md (#81, merged); supabase/migrations/20260727120000_c2_3_commission_state_triggers.sql (#83)
+- Tables/RPCs affected (C2.3): funder_invoices (cascade trigger), commission_records (transition/notify triggers, dropped payment_received_date), transition_commission_record + stub_settle/unsettle (NEW)
+- Blocked on: owner merge of #83. Then I apply to live + report.
+- Cross-lane note for NEW CC 1/2: I do NOT touch funders billing columns, CIPC data, or frontend. C2.3 defers the COMMISSION_MISMATCH owner push-notification (would need a new notification_event_type enum + frontend mapping — NEW CC 2's lane). #81's 75→73 Marshall St email-template fix is still a deferred TODO for whoever next touches that template.
 - Do NOT touch (from other agents): reserved for their protected files
-- Last update: 2026-07-23 01:48 SAST
+- Last update: 2026-07-27 (Mon) — C2.3 PR #83 opened
 
 ## NEW CC 1 — Funder Billing Details Prep
 - Session: not yet started
