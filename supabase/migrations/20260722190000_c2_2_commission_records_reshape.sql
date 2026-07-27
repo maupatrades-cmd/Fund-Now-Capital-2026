@@ -322,8 +322,13 @@ $function$;
 comment on function public.write_commission_record(uuid) is
   'C2.2 — the single commission-ledger writer. For every funded submission on the deal, computes FNC gross via fnc_gross_commission() (G2) and inserts an earned commission_record (split filled by the partner-aware recompute trigger). Advisory-locked per deal, idempotent (one non-void commission per submission). Owner-only. Returns {commission_records_created, commission_records_existing, was_created}.';
 
--- Belt-and-braces grants: authenticated only (the is_owner() body guard does the rest).
+-- Belt-and-braces grants — match the house convention for owner-only money RPCs
+-- (generate_funder_invoice, void_funder_invoice, qualify_lead, …): authenticated +
+-- service_role + owner, with anon revoked. Supabase default privileges grant EXECUTE to
+-- anon/authenticated/service_role, so `revoke ... from public` alone leaves anon behind —
+-- revoke it explicitly. The is_owner() body guard is the real gate regardless.
 revoke all on function public.write_commission_record(uuid) from public;
+revoke all on function public.write_commission_record(uuid) from anon;
 grant execute on function public.write_commission_record(uuid) to authenticated;
 
 -- 4. Funded-transition trigger on deals --------------------------------------
@@ -459,7 +464,11 @@ begin
     from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname='public' and p.proname='write_commission_record';
   if v_prosecdef is not true then raise exception 'assert failed: write_commission_record not SECURITY DEFINER'; end if;
-  if not (v_proconfig @> array['search_path='] ) then raise exception 'assert failed: search_path not empty on write_commission_record'; end if;
+  -- proconfig stores `SET search_path TO ''` as the element `search_path=""` (quoted empty),
+  -- so match the prefix rather than a bare literal.
+  if not exists (select 1 from unnest(v_proconfig) e where e like 'search_path=%') then
+    raise exception 'assert failed: search_path not set on write_commission_record (proconfig=%)', v_proconfig;
+  end if;
   if v_args <> 'p_deal_id uuid' then raise exception 'assert failed: write_commission_record args = %', v_args; end if;
   if v_ret <> 'jsonb' then raise exception 'assert failed: write_commission_record returns % (expected jsonb)', v_ret; end if;
   select string_agg(grantee||':'||privilege_type, ',') into v_grants
