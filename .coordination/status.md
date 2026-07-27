@@ -56,6 +56,27 @@ guard. Owner fills real values; NEW CC 1 executes after review.
     live DB via apply_migration + repo file committed; Merchant Capital phone populated
     (RETURNING-verified). Not part of the INVOICE TO block — general funder contact only.
 
-**Still blocked on:** owner values for the remaining 7 funders (Bridgement, Sourcefin,
-GenFin, Better Banc, Brighton Capital, Flow48, Business Partners) + Merchant Capital
-VAT confirmation.
+**Still blocked on:** owner values for the remaining contracted funders (Bridgement,
+Sourcefin, GenFin, Better Banc, Bright On Capital, Flow48, Business Partners, + the two
+new ones below) + Merchant Capital VAT confirmation. These come from funder
+invoices/letterheads, not the rate emails the owner has been forwarding.
+
+**Funder-record changes (owner-directed, 2026-07-27):**
+- ✏️ **"Brighton Capital" → "Bright On Capital"** (owner confirmed real name; rep writes
+  "BoC"). `name` + `legal_name` set to "Bright On Capital" (legal form/"(Pty) Ltd" to
+  verify vs invoice). short_code stays `BRIGHTON`.
+- ➕ **Two new SIGNED/CONTRACTED funders added** (SPEC S1 deliberate-add): **Spartan**
+  (`display_name_for_partner=Naledi`, short_code `SPARTAN`) + **AAA Consortium**
+  (`Sizwe`, `AAA`). Both `is_contracted=true`; billing blocks + rates still to come.
+- ⚠️ **DOCS FIGURE DRIFT:** CRM funder count **21 → 23**. SPEC S1 states "The CRM database
+  contains 21 funders" (LOCKED figure) — needs a deliberate owner-approved update to 23.
+  NOT edited here (docs are owner-governed). Contracted count now **11** (was 9).
+- ⚠️ **Fictional-name pool was exhausted** (all 21 CLAUDE.md names used) — Naledi + Sizwe
+  are NEW names beyond the locked list; CLAUDE.md anonymisation list should be extended
+  to include them (owner-governed, not edited here).
+
+**Rate-structure intel captured (owner brain-dump 2026-07-27)** in
+scratchpad/funder-rate-structures-capture.md — for the C2 build, NOT applied. Covers
+Bright On (7.5% fees+interest, 12-mo recurring), Sourcefin (net-profit/assumptions),
+Business Partners (1%), Spartan (1%), AAA (3%/opt 1.6%), Centrafin (1% + 2.8% client fee,
+NOT contracted). Several need new rate_types + a client-fee concept → C2 scope proposal.
