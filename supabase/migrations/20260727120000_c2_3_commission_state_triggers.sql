@@ -51,8 +51,10 @@ create or replace function public.transition_commission_record(
  set search_path to ''
 as $function$
 declare
-  v_from public.commission_state;
-  v_id   uuid;
+  v_from    public.commission_state;
+  v_dfs     uuid;   -- the commission's submission
+  v_inv_dfs uuid;   -- the linking invoice's submission
+  v_id      uuid;
 begin
   if not public.is_owner() then
     raise exception 'Only the owner can transition commission records';
@@ -61,7 +63,8 @@ begin
   -- Decision 1: per-record advisory lock (not per-deal) so other records never block.
   perform pg_advisory_xact_lock(hashtext('commission_record:' || p_commission_record_id::text));
 
-  select status into v_from from public.commission_records where id = p_commission_record_id;
+  select status, deal_funder_submission_id into v_from, v_dfs
+    from public.commission_records where id = p_commission_record_id;
   if v_from is null then
     raise exception 'Commission record % not found', p_commission_record_id;
   end if;
@@ -78,6 +81,25 @@ begin
     or (p_to = 'earned'      and v_from = 'outstanding')  -- void revert
   ) then
     raise exception 'Illegal commission transition % -> % (record %)', v_from, p_to, p_commission_record_id;
+  end if;
+
+  -- Macroscope #83 (High): defend the invoice link on earned -> outstanding. A NULL or
+  -- wrong funder_invoice_id would strand the commission (the paid/void cascades filter by
+  -- funder_invoice_id = new.id, so a mis-linked row is never found → stuck outstanding).
+  -- The cascade always passes the correct invoice, so this only bites a bad direct call.
+  if p_to = 'outstanding' then
+    if p_funder_invoice_id is null then
+      raise exception 'transition to outstanding requires a funder_invoice_id (commission %)', p_commission_record_id;
+    end if;
+    select deal_funder_submission_id into v_inv_dfs
+      from public.funder_invoices where id = p_funder_invoice_id;
+    if v_inv_dfs is null then
+      raise exception 'funder invoice % not found', p_funder_invoice_id;
+    end if;
+    if v_inv_dfs is distinct from v_dfs then
+      raise exception 'funder invoice % is for a different submission than commission % (invoice %, commission %)',
+        p_funder_invoice_id, p_commission_record_id, v_inv_dfs, v_dfs;
+    end if;
   end if;
 
   update public.commission_records
@@ -335,6 +357,14 @@ begin
     select id, status into v_cr, v_status from public.commission_records where deal_funder_submission_id=v_sub;
     if v_status <> 'earned' then raise exception 'assert: seed commission not earned (%)', v_status; end if;
 
+    -- Macroscope #83 guard: earned -> outstanding with a NULL invoice must be rejected.
+    begin
+      perform public.transition_commission_record(v_cr, 'outstanding', null);
+      raise exception 'assert: null funder_invoice_id was not rejected';
+    exception when others then
+      if sqlerrm not ilike '%requires a funder_invoice_id%' then raise; end if;
+    end;
+
     -- synthetic invoice for the submission
     insert into public.funder_invoices (invoice_number, deal_id, deal_funder_submission_id, funder_id,
         client_reference, facility_advanced, commission_amount, total_amount, rate_snapshot,
@@ -375,6 +405,16 @@ begin
       values (v_deal2, v_funder, 'funded', 500000, jsonb_build_object('rate_type','percent_of_gross_funded','rate_fraction',0.10,'flat_amount',null,'source','test')) returning id into v_sub2;
     perform public.write_commission_record(v_deal2);
     select id into v_cr2 from public.commission_records where deal_funder_submission_id=v_sub2;
+
+    -- Macroscope #83 guard: linking v_cr2 (submission v_sub2) via v_inv (submission v_sub)
+    -- must be rejected — the invoice belongs to a different submission.
+    begin
+      perform public.transition_commission_record(v_cr2, 'outstanding', v_inv);
+      raise exception 'assert: mismatched-submission invoice was not rejected';
+    exception when others then
+      if sqlerrm not ilike '%different submission%' then raise; end if;
+    end;
+
     insert into public.funder_invoices (invoice_number, deal_id, deal_funder_submission_id, funder_id,
         client_reference, facility_advanced, commission_amount, total_amount, rate_snapshot,
         commission_description, payment_reference_expected, issued_date, payment_terms, due_date, state)
