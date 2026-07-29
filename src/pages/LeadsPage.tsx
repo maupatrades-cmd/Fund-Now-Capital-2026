@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Users, SearchX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatZAR } from "@/lib/format";
 import {
   QUALIFICATION_STAGES,
@@ -23,6 +24,10 @@ export default function LeadsPage() {
   const { data: names } = useProfileNames();
 
   const set = (patch: Partial<LeadFilters>) => setFilters((f) => ({ ...f, ...patch }));
+
+  const hasFilters = Boolean(
+    filters.qualificationStage || filters.referredBy || filters.from || filters.to,
+  );
 
   return (
     <div className="max-w-6xl space-y-5">
@@ -103,9 +108,36 @@ export default function LeadsPage() {
           Couldn't load leads. Please retry.
         </div>
       ) : !leads?.length ? (
-        <div className="rounded-xl border border-border bg-white p-8 text-center text-sm text-muted-foreground shadow-sm">
-          No leads yet. <Link to="/leads/new" className="text-brand-teal hover:underline">Add the first one.</Link>
-        </div>
+        hasFilters ? (
+          <EmptyState
+            icon={SearchX}
+            title="No leads match these filters"
+            description="Try widening the stage, source, or date range."
+            action={
+              <button
+                type="button"
+                onClick={() => setFilters({})}
+                className="inline-flex items-center rounded-lg border border-border px-4 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50"
+              >
+                Clear filters
+              </button>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={Users}
+            title="No leads yet"
+            description="Leads you enter here move through qualification and become deals."
+            action={
+              <Link
+                to="/leads/new"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal/90"
+              >
+                <Plus className="h-4 w-4" /> Add your first lead
+              </Link>
+            }
+          />
+        )
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
           <table className="w-full text-sm">
