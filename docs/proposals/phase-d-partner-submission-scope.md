@@ -180,6 +180,7 @@ Per the task brief, **not** in D1–D4:
 - **Monthly statements** (C5).
 - Rich 11-milestone Deal Success Timeline (S11 F3) — D4 ships a basic stage indicator; the full visual timeline can be a later PR.
 - Partner *edit* of their own profile/branding (D1 is read-only + "request update"; owner-controlled per Open Decision C).
+- **AI features — deferred to Phase E6 (confirmed by owner, 2026-07-29).** The **Claude Story Refiner** (SPEC S17b) and **Document Intelligence** (SPEC S18 — AI-assisted cross-document verification, mismatch/red-flag/consistency signals) are **not** part of D1–D4. They belong to Phase E6 per ROADMAP and the E6 data-handling controls (approved commercial/API processor, client consent, redaction — never a consumer AI account). D1–D4 is a **pure partner-unlock** phase: auth, submission, document upload, and referral/earnings visibility only — no AI-assisted analysis of partner-submitted material. Any AI touch on partner documents or stories waits for E6.
 
 ---
 
