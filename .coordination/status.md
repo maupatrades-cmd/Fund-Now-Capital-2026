@@ -65,3 +65,31 @@
 - Task: CIPC correction drafts + Brighton/Flow48 audit + sequence check + test residue scan
 - Blocked on: owner CIPC portal lookup + Brighton/Flow48 review decision
 - Last update: N/A
+
+## VERIFY/CLEANUP — verification + drift catching lane
+- Session: 2026-07-29 (Wed) ~21:15 SAST. Read-only verification only.
+
+### ✅ C2.4 (PR #86) apply verification — ALL PASS (live DB `hvxruwkgmhjoypepffgv`)
+- `bonus_records` table live: all 17 columns present, nullability matches migration. RLS enabled + both policies (`bonus_records_owner_all`, `bonus_records_partner_read_own`). Dedup unique index `bonus_records_dedup_uq` matches spec (coalesced-submission sentinel, `WHERE state<>'void'`). **0 rows.**
+- `BONUS_PAID` present in BOTH enums (`notification_event_type` + `activity_event_type`).
+- 3 RPCs present, all SECURITY DEFINER + `search_path` set + return jsonb + grants = `authenticated:EXECUTE` only (no anon/PUBLIC): `add_bonus(uuid,uuid,uuid,numeric,text)`, `void_bonus(uuid,text,text)`, `transition_bonus_record(uuid,commission_state,uuid)`. Signatures match PR spec.
+- C4 stubs `settle_/unsettle_bonus_from_partner_invoice(uuid,uuid)` — DEFINER, authenticated-only, **raise P0002 at runtime** (live-tested).
+- Triggers all ENABLED: `bonus_cascade_on_invoice_state` (lockstep cascade on funder_invoices), `bonus_records_immutable_when_settled`, `notify_bonus_paid`, `log_activity_bonus_records`, `set_updated_at`. (Note: `bonus_records_immutable_when_settled()` is SECURITY INVOKER — as-written in the migration, comparison-only trigger fn; not a defect.)
+
+### ✅ Production-data truth — MATCHES briefing
+- 3 real clients: `fepa sechaba`, `Mama Mabase JV`, `NRL BAKWENA MINE`. 3 real deals: DEAL-001 (stage `funded`), DEAL-002 (`qualifying`), DEAL-004 (`qualifying`). 0 submissions carry `amount_funded` → DEAL-001 not genuinely funded (confirmed).
+- Money layer correctly empty: 0 commission_records, 0 funder_invoices, 0 bonus_records. 23 funders / 11 contracted.
+- `funder_invoices_seq` starts at 32, never advanced (`last_value` null) → first invoice will be **INV-0032**. `deals_reference_seq`=12 (deleted DEAL-011/012 test deals advanced it; real deals 001/002/004).
+
+### ⚠️ DRIFT FOUND — orphaned qualified lead "reginald maupa" (test residue, NOT cleaned)
+- Board finding #1 was marked DONE ("owner cleaned DEAL-011/012 reginald maupa") but only the DEALS + client were removed. The **source lead survived**: `leads.id=b7f40b31-d6ac-4b50-944e-5296ef0a634b`, `qualification_stage=qualified`, created 2026-07-22, `linked_deals=null`, no matching client. Carries **real PII** (contact `reginald` / richmaupa@gmail.com / cell 0812191851 / ID 9003235671083 / Limpopo address), 5 activity_logs, 2 notifications, 0 documents.
+- Broader test-pattern sweep (test/demo/sample/c24/dummy/delete/etc.) across leads/clients/deals/funder_invoices otherwise **clean** — this is the only residue.
+- **Proposal (awaiting owner approval — read-only lane):** delete the orphan lead + its activity_logs + notifications in one txn. Owner to confirm before any DELETE.
+
+### ⚠️ Edge Functions dashboard-delete follow-up (3 parked)
+- `bulk-storage-cleanup` — **DELETED** (no longer present) ✓
+- `pdflibtest` — **still ACTIVE** (needs dashboard delete)
+- `ops-storage-remove` — **still ACTIVE** (needs dashboard delete)
+- Legit functions live + correct: `send-notification-email` v12, `generate-invoice-pdf` v6, `sign-invoice-url` v2.
+
+- IDLE, awaiting owner assignment. Last update: 2026-07-29 (Wed) ~21:15 SAST.
