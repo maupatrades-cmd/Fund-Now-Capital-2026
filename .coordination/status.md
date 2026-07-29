@@ -30,11 +30,26 @@
 - Standing rule reminder for the applier: OLD CC 1 does NOT touch funder billing columns, CIPC data, or frontend.
 - Last update: 2026-07-27 (Mon) — HANDOVER; OLD CC 1 stood down for rate-limit pause. Fresh session applies #86 post-merge.
 
-## NEW CC 1 — Funder Billing Details Prep
-- Session: not yet started
-- Task: populate legal_name/billing_address/company_registration/vat_registration/accounts_email on funders rows for contracted funders
-- Blocked on: owner providing real details per funder
-- Last update: N/A
+## NEW CC 1 — Funder Billing + email footer + docs (STANDING DOWN — rate-limit pause)
+- Last update: 2026-07-28 (Tue) — handover before strategic pause.
+
+### ✅ Edge Function redeploy (DONE + verified)
+- `send-notification-email` redeployed **v11 → v12** from merged `main` (after PRs #84 + #85 merged).
+- Verified: footer address now **73 Marshall Street** (HTML + plain-text), no `75` anywhere; `verify_jwt=false` preserved (webhook-secret auth). Also brought the function current with `main` — the previously-undeployed C1.1 invoice email routing (FUNDER_INVOICE_ISSUED / INVOICE_MARKED_PAID / INVOICE_OVERDUE) is now live. This closes OLD CC 1's deferred "75→73 email-template TODO".
+
+### ✅ SPEC S1 docs PR — ALREADY OPENED as **PR #88** (awaiting Macroscope + owner merge)
+- NOT "planned/unopened" — it is open. A fresh session only needs to MERGE it, not create it.
+- Content: SPEC.md S1 funder count `21 → 23` (+ derived appetite line 12 scored / 9→11 unscored, against 23; no invented scores); CLAUDE.md adds `Naledi` (Spartan) + `Sizwe` (AAA Consortium) to the fictional name pool.
+
+### Funder billing block progress (funders INVOICE TO fields)
+- **Pollen Finance** — full (pre-existing reference).
+- **Merchant Capital** — DONE except **VAT** (owner to confirm number, or "not registered" → NULL). legal_name/address/CIPC/accounts_email/phone all set.
+- **Bright On Capital** — name+legal_name set (renamed from "Brighton Capital"), short_code `BRIGHTON`. Address/CIPC/VAT/accounts_email still pending.
+- **7 more contracted funders PENDING owner registered data** (address/CIPC/VAT/accounts_email): Bridgement, Sourcefin, GenFin, Better Banc, Flow48, Business Partners, + the 2 new (Spartan, AAA Consortium). ⚠️ Better Banc + Business Partners also lack a short_code.
+- These details come from funder invoices/letterheads, not rate emails. Reconcile migration for all applied funder data = merged PR #85.
+- Also captured (NOT applied): funder RATE-structure intel for C2 in scratchpad/funder-rate-structures-capture.md (Bright On 7.5% fees+interest, Sourcefin net-profit, Business Partners 1%, Spartan 1%, AAA 3%/opt1.6%, Centrafin 1%+2.8% client fee [NOT contracted]). Needs new rate_types → a C2 scope proposal.
+
+- STANDING DOWN. No new work this session.
 
 ## NEW CC 2 — Data Hygiene
 - Session: not yet started
