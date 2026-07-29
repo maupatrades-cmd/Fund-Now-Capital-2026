@@ -438,7 +438,7 @@ export function renderEmail(m: EmailModel): { subject: string; html: string; tex
 <div style="display:inline-block;vertical-align:top;width:250px;max-width:250px;">
   <p style="margin:0 0 4px;font-family:${FONT};font-size:13px;font-weight:700;line-height:1.6;color:#ffffff;">${LEGAL_NAME}</p>
   <p style="margin:0 0 10px;font-family:${FONT};font-size:13px;font-weight:400;line-height:1.6;color:rgba(255,255,255,0.6);">Cedarwood House<br>128 Ballyclare Drive<br>Bryanston 2191, Sandton</p>
-  <p style="margin:0;font-family:${FONT};font-size:13px;font-weight:400;line-height:1.6;color:rgba(255,255,255,0.6);">75 Marshall Street<br>Polokwane 0699</p>
+  <p style="margin:0;font-family:${FONT};font-size:13px;font-weight:400;line-height:1.6;color:rgba(255,255,255,0.6);">73 Marshall Street<br>Polokwane 0699</p>
 </div>
 <!--[if mso]></td><td width="170" valign="top"><![endif]-->
 <div style="display:inline-block;vertical-align:top;width:170px;max-width:170px;">
@@ -521,7 +521,7 @@ export function renderEmail(m: EmailModel): { subject: string; html: string; tex
     "",
     `© 2026 ${LEGAL_NAME} · CIPC ${CIPC}`,
     "Cedarwood House, 128 Ballyclare Drive, Bryanston 2191, Sandton",
-    "75 Marshall Street, Polokwane 0699",
+    "73 Marshall Street, Polokwane 0699",
     `${PHONE} · ${CONTACT_EMAIL} · ${WEBSITE_LABEL}`,
   ];
 
