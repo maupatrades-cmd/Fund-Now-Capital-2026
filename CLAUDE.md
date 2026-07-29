@@ -24,7 +24,7 @@ React + TypeScript + Vite · Tailwind + shadcn/ui · Supabase (Postgres/Auth/Sto
 Gross X → 40% company retention → 60% partner pool. Partner tier % of pool: PO deals flat 40%. Non-PO by gross band: R0–80,000 → 29% · R80,001–150,000 → 30% · R150,001–500,000 → 33% · R500,001+ → 25%. Owner share = pool − partner share. Three outputs always sum to X. Contract range 20–45%; all tiers comply. Single source of truth: the DB function, called via RPC everywhere (calculator screen, deal submissions, doctor earnings).
 
 ## Funder anonymisation (live in schema)
-`funders.name` (owner-only) + `display_name_for_partner` (Rachel, Marcus, Ethan, Nadia, Palesa, Themba, Chloe, Amara, Ryan, Sophie, Sipho, Elizabeth, Thomas, Grace, Nicholas, Isabelle, Benjamin, Lerato, William, Zanele, Alexander). Partner-facing surfaces show the fictional name only — screens, notifications, PDFs, AI outputs, everywhere.
+`funders.name` (owner-only) + `display_name_for_partner` (Rachel, Marcus, Ethan, Nadia, Palesa, Themba, Chloe, Amara, Ryan, Sophie, Sipho, Elizabeth, Thomas, Grace, Nicholas, Isabelle, Benjamin, Lerato, William, Zanele, Alexander, Naledi, Sizwe). Partner-facing surfaces show the fictional name only — screens, notifications, PDFs, AI outputs, everywhere.
 
 ## Brand
 Navy `#1a3a52` · Teal `#2da8b8` · Green `#5dba5d` · Tagline "Many funders. More approvals." · Inter · clean modern SaaS · shared AppLayout (navy sidebar + top bar) on every owner screen · PriorityGlow is the single sanctioned glow effect (priority deals + celebrations only).
