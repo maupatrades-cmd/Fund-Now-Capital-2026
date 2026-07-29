@@ -56,3 +56,33 @@
 - Task: CIPC correction drafts + Brighton/Flow48 audit + sequence check + test residue scan
 - Blocked on: owner CIPC portal lookup + Brighton/Flow48 review decision
 - Last update: N/A
+
+## VERIFY — verification + cleanup + drift catching (branch claude/verification-cleanup-prep-dyps2t)
+- Session start: 2026-07-29 (Wed) ~21:15 SAST. Read-only verification pass. NOT touching BACK/DATA/SCOPE lanes.
+
+### ✅ ITEM 1 — C2.4 apply verification: PASS (already applied — migrations recorded 2026-07-29 19:06 + 19:08 UTC, in order)
+- `bonus_records` table LIVE — all 17 cols per PR #86 (bonus_amount numeric(14,2) CHECK>0; state `commission_state` default 'earned'; earned/outstanding/payable/settled_at; funder_invoice_id FK; partner_invoice_id NO-FK; dedup unique index + 5 indexes).
+- `BONUS_PAID` in BOTH enums: activity_event_type (order 20) + notification_event_type (order 30).
+- 3 RPCs present, all SECURITY DEFINER / owner=postgres / search_path='' / return jsonb, signatures match spec, EXECUTE→authenticated only (revoked public+anon): `add_bonus(deal,sub,partner,amount,reason)`, `void_bonus(bonus,override,reason)`, `transition_bonus_record(bonus,to,funder_invoice)`.
+- Lockstep cascade LIVE: `bonus_cascade_on_invoice_state` trigger enabled on **funder_invoices** (Decision D — separate trigger, NOT on commission_records; that's why the C2.3 commission cascade is untouched).
+- Immutability LIVE: `bonus_records_immutable_when_settled` (BEFORE UPDATE) enabled; plus notify_bonus_paid, log_activity, set_updated_at.
+- C4 stubs raise P0002: `settle_bonus_from_partner_invoice` + `unsettle_bonus_from_partner_invoice` (alongside commission `stub_settle/stub_unsettle_from_partner_invoice`).
+- RLS: `bonus_records_owner_all` (is_owner) + `bonus_records_partner_read_own` (referral_partner_id=current_partner_id).
+- **0 rows in bonus_records.** commission_state enum = earned/outstanding/payable/settled/void (5). **C2.4 fully verified clean.**
+
+### ✅ ITEM 2 — Production data truth: clean except ONE residue finding
+- 3 clients: Mama Mabase JV · fepa sechaba · NRL BAKWENA MINE. ✅
+- 3 deals: DEAL-001 (stage `funded`, 3 submissions, **0 funded_subs** — confirms "Funded stage but NOT genuinely funded", matches CLAUDE.md) · DEAL-002 (qualifying) · DEAL-004 (qualifying). ✅
+- 0 commission_records · 0 funder_invoices · 0 bonus_records. ✅
+- `funder_invoices_seq`: last_value=32, is_called=false → next issue = **INV-0032, unused.** ✅
+- ⚠️ **TEST RESIDUE — triage finding #1 was INCOMPLETE.** Lead **"reginald maupa"** (id `b7f40b31-d6ac-4b50-944e-5296ef0a634b`) still live: qualified 2026-07-22, self-referred, contact richmaupa@gmail.com / 0812191851 / CIPC 2025/985234/07. The deals (DEAL-011/012) were cleaned but the **source lead was left behind** in an orphaned `qualified`-with-0-deals state. Footprint: 0 deals/docs/stories/stakeholders/matching-clients; **5 activity_logs rows + 2 notifications**. Awaiting owner authorization to DELETE (read-only lane — no delete performed).
+
+### ITEM 3 — Parked Edge Functions (dashboard-delete follow-up) — live status via management API
+- `bulk-storage-cleanup` — ✅ already DELETED (absent from function list).
+- `pdflibtest` — ⚠️ still **ACTIVE** (v6). Needs manual dashboard delete.
+- `ops-storage-remove` — ⚠️ still **ACTIVE** (v2). Needs manual dashboard delete.
+
+### Drift observation (OUTSIDE my assigned items — flagging only, not my lane)
+- Migrations `stakeholders_b6_1` (20260720093535) + `qualify_lead_stakeholder_repointer` are in the applied-migration log, but ROADMAP marks **B6 as ⬜ not started**. Confirm whether B6.1 schema was applied ahead of documented order, or the docs need updating. Not investigated further.
+
+- Last update: 2026-07-29 (Wed) ~21:15 SAST — VERIFY read-only pass complete; awaiting owner assignment / cleanup authorization.
