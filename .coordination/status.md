@@ -1,5 +1,28 @@
 # Agent Coordination Status
 
+## BACK — Phase C Completion (C2.4 apply → C3–C7) — ACTIVE (2026-07-29)
+- **Session:** 2026-07-29 (Wed). Took over OLD CC 1's deferred C2.4 apply. Owns Phase C completion (C3 Doctor's Earnings owner view → C4 Doctor Invoicing → C5 Monthly Statements → C6 Reports v1 → C7 Owner Home v1) going forward.
+
+### ✅ C2.4 APPLIED TO LIVE + VERIFIED — **PHASE C2 CLOSED** (2026-07-29)
+Applied both PR #86 migrations to live (project `hvxruwkgmhjoypepffgv`) strictly in order per OLD CC 1's handover:
+1. `20260729190620_c2_4_bonus_paid_enums` — BONUS_PAID added to `activity_event_type` + `notification_event_type` (own txn; committed before file 2).
+2. `20260729190827_c2_4_bonus_records` — table + RPCs + triggers + assertions. **All embedded behavioural assertions passed** (full lifecycle in rolled-back subtxn: add_bonus idempotency + Decision-C guard, lockstep earned→outstanding→payable cascade with commission, settle→BONUS_PAID emitted exactly once, immutability block on settled money fields, void_bonus OVERRIDE, void-cascade revert to earned).
+
+Post-apply verification (all PASS):
+- `bonus_records` table live, all 17 columns present.
+- BONUS_PAID live in BOTH `activity_event_type` + `notification_event_type`.
+- `add_bonus` / `void_bonus` / `transition_bonus_record` RPCs live — belt-and-braces confirmed (DEFINER + empty search_path + correct signatures + authenticated-only grants; **no anon/PUBLIC**).
+- Lockstep cascade trigger `bonus_cascade_on_invoice_state` on `funder_invoices` present + enabled ('O').
+- Immutability trigger `bonus_records_immutable_when_settled` + `notify_bonus_paid` triggers present.
+- C4 stubs `settle_/unsettle_bonus_from_partner_invoice` raise **P0002** as designed.
+- `bonus_records` = **0 rows**; no C2_4 test residue (all synthetic data rolled back).
+- Pre-apply state was clean (bonus_records absent, BONUS_PAID absent from both enums, commission_state = 5 values, commission_records 0 rows, commission cascade + write_commission_record present, 1 referral_partner).
+
+### NEXT (BACK lane)
+- Awaiting owner sign-off before drafting **C3** scope (Doctor's Earnings Lifecycle owner view, `/partner-earnings` owner-only route). Same rhythm: schema-verify → scope proposal → owner OK → build → PR → owner merges → apply.
+- Respect SPEC S7C presentation policy (Doctor sees only his Rands, 50/50 framing) + S8 on every partner-facing surface built C3→C7.
+- Do NOT touch DATA / AUDIT / SCOPE lanes, nor SPEC.md/CLAUDE.md/ROADMAP.md outside explicit build scope.
+
 ## OLD CC 1 — C2 Backend — 🛑 HANDOVER / STOOD DOWN (2026-07-27, rate-limit pause)
 - Session: 2026-07-22 → 2026-07-27. C2.1/C2.2/C2.3 MERGED + APPLIED + verified live. C2.4 built + in review (NOT applied). Standing down; a FRESH SESSION takes over.
 
