@@ -100,3 +100,27 @@ under double-submit / retry — the two clauses always travel together.
 ```
 
 NEW CC 2 will NOT edit CLAUDE.md itself (standing rule: SPEC/CLAUDE/ROADMAP are owner/other-lane edits).
+
+---
+
+## 🛑 NEW CC 2 — STAND-DOWN HANDOVER (2026-07-28, strategic pause for rate limits)
+
+1. **Test residue cleanup — DONE + verified live.** Client "reginald maupa" + DEAL-011 (funded) +
+   DEAL-012 (invoiced) deleted atomically (owner-approved). Counts: 6 notification_deliveries, 3
+   notifications, 2 deals, 1 client. Cascades removed 2 submissions / 9 stage-history / 1 contact /
+   1 stakeholder / 1 story(+notes). 22 activity_logs preserved (immutable audit, +2 new DELETE rows).
+   Live now = the 3 real deals + 3 real clients. `funder_invoices_seq` still 32 (INV-0032 never consumed).
+2. **C2.4 readiness spot-check — GREEN, ready to build when scheduled.** `bonus_records` does not
+   exist yet (greenfield, no conflict). Prereq ledger is live + clean: `commission_records` (0 rows),
+   `write_commission_record` (C2.2) + `transition_commission_record` (C2.3) present, `commission_state`
+   enum = earned/outstanding/payable/settled/void, `partner_invoice_id` C4 hook reserved. C2.4 (bonus
+   records + lifecycle + immutability) can attach cleanly — no blockers found.
+3. **Edge Functions pending OWNER manual delete** (not app-referenced; safe to remove):
+   - `pdflibtest` — still **ACTIVE v6**. Delete: `supabase functions delete pdflibtest --project-ref hvxruwkgmhjoypepffgv` (or dashboard).
+   - `ops-storage-remove` — pending owner delete decision.
+   - `bulk-storage-cleanup` — pending owner delete decision *(NOTE: not present in NEW CC 2's last Edge
+     Function enumeration — only `ops-storage-remove` was; owner to confirm the exact name before deleting).*
+
+**NEW CC 2 status: STOOD DOWN. No active work. No new work will be started.** Branch
+`claude/data-hygiene-sweep-g054g8` carries: data-hygiene findings, doc-fix drafts (above), the
+smoke-test protocol (`docs/testing/`), the F5+F6 scope proposal (`docs/proposals/`), and this handover.
