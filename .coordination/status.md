@@ -92,4 +92,22 @@
 - `ops-storage-remove` — **still ACTIVE** (needs dashboard delete)
 - Legit functions live + correct: `send-notification-email` v12, `generate-invoice-pdf` v6, `sign-invoice-url` v2.
 
-- IDLE, awaiting owner assignment. Last update: 2026-07-29 (Wed) ~21:15 SAST.
+### ✅ C3 readiness verification (before BACK builds /partner-earnings) — read-only
+Data model is query-ready; RLS + JOINs clean. Missing indexes are BACK's C3 build task (owner-directed), listed below.
+
+**Indexes vs owner-side query patterns:**
+- `commission_records`: ✅ partner filter (`idx_commission_records_referral_partner`). ❌ NO index on `status` (⚠️ note: commission uses **`status`**, not `state`). ❌ NO index on any date col (`earned_at`/`outstanding_at`/`payable_at`/`settled_at`). (Also has: deal_id, submission partial-unique, funder_invoice_id, partner_invoice_id.)
+- `bonus_records`: ✅ partner filter (`idx_bonus_records_partner`). ✅ state filter (`idx_bonus_records_state`, col is **`state`**). ❌ NO index on any date col. (Also has: deal_id, submission, funder_invoice_id, dedup_uq.)
+- Recommendation for BACK (not urgent at 0 rows): a composite partial `(referral_partner_id, status)` on commission + `(referral_partner_id, state)` on bonus serves the dominant "this partner's earnings by state" query; date-col indexes only if statements do date-range scans.
+
+**RLS matrix — owner full visibility CONFIRMED:** both tables RLS-enabled. `*_owner_all` = cmd ALL, `USING is_owner()` / `WITH CHECK is_owner()`, role authenticated → owner can `SELECT *`. Partner path = `*_partner_read_own` SELECT `referral_partner_id = current_partner_id()`. Correct for /partner-earnings (owner-only).
+
+**JOIN patterns — both execute cleanly, 0 rows, empty set handled (no error):**
+- `commission_records cr JOIN deal_funder_submissions dfs ON cr.deal_funder_submission_id = dfs.id` → 0 rows ✓
+- `bonus_records br JOIN deal_funder_submissions dfs ...` → 0 rows ✓
+
+**⚠️ Two data-model correctness notes for BACK's C3 build (not perf):**
+1. **Column-name asymmetry** — commission filters on `status`, bonus filters on `state`. Same enum (`commission_state`), different column name. The /partner-earnings query must use the right one per table.
+2. **Nullable FK on bonus_records** — `bonus_records.deal_funder_submission_id` is **NULLABLE** (per-deal bonuses = NULL); `commission_records.deal_funder_submission_id` is **NOT NULL**. So an **INNER** JOIN of bonuses→submissions (the tested task-4 pattern) **silently drops per-deal bonuses**. BACK must **LEFT JOIN** bonuses→submissions (or join on `deal_id`), per the CLAUDE.md `!inner`/`!left` rule. Both tables carry `deal_id` natively, so the JOIN is only needed for submission-level fields — fetching `deal_id` needs no JOIN at all.
+
+- IDLE, awaiting owner assignment. Last update: 2026-07-29 (Wed) ~21:30 SAST.
