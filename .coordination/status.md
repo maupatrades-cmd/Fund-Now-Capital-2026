@@ -54,10 +54,11 @@
 ## DESIGN — UI polish + brand consistency (F5/F6 lane)
 - Session: 2026-07-29 (Wed) ~21:25 SAST.
 - Scope: empty states + loading states polish only. No partner/* routes, no C3–C7, no backend, no SPEC/CLAUDE/ROADMAP.
-- **PR #89 — OPEN (awaiting Macroscope + owner merge).** Branded empty state for `/leads` + new reusable `EmptyState` component (`src/components/ui/empty-state.tsx`). Distinguishes filtered-empty ("Clear filters") from first-run ("Add your first lead") — the old one-liner conflated them. Visual-only, 2 files, tsc+build+oxlint green.
-- Note for other lanes: `EmptyState` is the canonical empty-state primitive going forward — reuse it, don't hand-roll "No X yet" text.
+- **PR #89 — ✅ MERGED.** Branded empty state for `/leads` + new reusable `EmptyState` component (`src/components/ui/empty-state.tsx`). Filtered-empty vs first-run split.
+- **PR #90 — OPEN (awaiting Macroscope + owner merge).** Branded empty state for `/clients` — reuses `EmptyState`, search-empty ("Clear search") vs first-run ("Add your first client"), lifted out of the table cell. Loading/error rows untouched. Visual-only, 1 code file, tsc+build+oxlint green.
+- Note for other lanes: `EmptyState` (`src/components/ui/empty-state.tsx`) is the canonical empty-state primitive — reuse it, don't hand-roll "No X yet" text.
 - Discrepancy flagged to owner: the briefing's `docs/proposals/f5-f6-ui-polish-scope-proposal.md` (Codex banked proposal) and `src/assets/fintech-spinner/` assets do NOT exist in this branch or origin/main. DESIGN lane is proceeding on the real live-code baseline instead.
-- Next: 3 more empty-state proposals drafted for owner pick (clients / invoices / pipeline empty column). Owner chooses next build after #89 lands.
+- Queue: `/invoices` empty state APPROVED next (global CTA → `/pipeline?filter=funded`, verify param support first — else guidance-text-only). `/pipeline` empty column ON HOLD until BACK lands C3.
 - Last update: 2026-07-29 (Wed).
 
 ## NEW CC 2 — Data Hygiene

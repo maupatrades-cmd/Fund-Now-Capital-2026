@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Plus, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Search, Plus, ArrowUpDown, ArrowUp, ArrowDown, Building2, SearchX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useClients, one, type ClientListRow } from "@/hooks/useClients";
 import { referredByMeta } from "@/lib/clients";
 
@@ -98,6 +99,40 @@ export default function ClientsPage() {
         </button>
       </div>
 
+      {!isLoading && !isError && rows.length === 0 ? (
+        search ? (
+          <EmptyState
+            icon={SearchX}
+            title={`No clients match "${search}"`}
+            description="Try a different name, sector, or contact."
+            action={
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="inline-flex items-center rounded-lg border border-border px-4 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50"
+              >
+                Clear search
+              </button>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={Building2}
+            title="No clients yet"
+            description="Add a client to start tracking their deals, documents and story."
+            action={
+              <button
+                type="button"
+                onClick={() => navigate("/clients/new")}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal/90"
+              >
+                <Plus className="h-4 w-4" /> Add your first client
+              </button>
+            }
+          />
+        )
+      ) : (
+        <>
       <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
         <table className="w-full text-sm">
           <thead>
@@ -125,13 +160,6 @@ export default function ClientsPage() {
                 </td>
               </tr>
             )}
-            {!isLoading && !isError && rows.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
-                  {search ? `No clients match "${search}".` : "No clients yet — add your first."}
-                </td>
-              </tr>
-            )}
             {rows.map((c) => {
               const meta = referredByMeta(partnerName(c));
               return (
@@ -156,6 +184,8 @@ export default function ClientsPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">{rows.length} client{rows.length === 1 ? "" : "s"}</p>
+        </>
+      )}
     </div>
   );
 }
