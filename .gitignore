@@ -30,3 +30,6 @@ lerna-debug.log*
 *.sln
 *.sw?
 *.local
+
+# Claude Code local dir (agent worktrees, session scaffolding — never tracked)
+.claude/
