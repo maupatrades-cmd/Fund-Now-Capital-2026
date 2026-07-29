@@ -56,3 +56,15 @@
 - Task: CIPC correction drafts + Brighton/Flow48 audit + sequence check + test residue scan
 - Blocked on: owner CIPC portal lookup + Brighton/Flow48 review decision
 - Last update: N/A
+
+## FUNDER-BILLING CC (this lane) — 2026-07-29 (Wed ~21:15 SAST)
+- Standing lane: funder billing data + docs + email polish. IDLE pending owner-provided real contract data.
+- **Prep audit run (read-only, no writes).** Live DB `hvxruwkgmhjoypepffgv`. 23 funders, 11 contracted.
+- **Billing-block worklist (contracted funders, 6 INVOICE-TO fields: legal_name / billing_address / company_registration / vat_registration / accounts_email / phone):**
+  - Pollen Finance — COMPLETE except `phone` (reference funder).
+  - Merchant Capital — COMPLETE except `vat_registration` (owner to confirm number or "not registered" → NULL).
+  - Bright On Capital — only `legal_name` set; needs address/CIPC/VAT/accounts_email/phone.
+  - Bridgement, Sourcefin, GenFin, Flow48, Spartan, AAA Consortium — ALL 6 fields NULL (awaiting owner registered data).
+  - Better Banc, Business Partners — ALL 6 fields NULL **AND** `short_code` MISSING.
+- **short_code integrity:** 9/11 contracted OK (present, uppercase, alphanumeric). **Missing: Better Banc, Business Partners.** No duplicate short_codes across all 23 funders; no non-contracted funder carries a short_code. (POLLEN, MERCHANT, BRIDGEMENT, BRIGHTON, FLOW48, GENFIN, SOURCEFIN, SPARTAN, AAA all valid.)
+- **Awaiting owner:** per-funder contract data (legal_name, billing_address, CIPC, VAT, accounts_email, phone) for the 9 incomplete funders + short_codes for Better Banc + Business Partners. Will apply via idempotent UPDATE w/ RETURNING id + row-count check on assignment. No writes without owner approval.
