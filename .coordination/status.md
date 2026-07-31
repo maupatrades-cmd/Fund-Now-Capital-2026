@@ -1,9 +1,16 @@
 # Agent Coordination Status
 
+## AUDIT-FIX LANE — full system audit (2026-07-31)
+- **Task 1 (audit) ✅ COMPLETE — `AUDIT.md` at repo root** (branch `claude/fnc-crm-audit-fix-n48rvm`). Read-only inventory of live `hvxruwkgmhjoypepffgv`: 29 tables/RLS/triggers/row counts, DEFINER RPC matrix (locks/idempotency/state guards/grants), 5 Edge Functions, 3 pg_cron jobs (all green), 26 routes, action-button inventory, 30 notification events, commission-logic sites, advisor lints.
+- **Headline: NO blockers.** Findings: F1 anon/PUBLIC EXECUTE grant hygiene (+F2 one unpinned search_path) → 1 migration PR; F4 frontend notifications.ts missing 13 live event types (prefs matrix can't manage invoice/bonus/lead-lifecycle/expiry emails) → 1 frontend PR; docs drift D1/D2/D4/D5 (live is AHEAD of docs: B4.1, B5.2, B6, C0–C3 all built + applied; status.md was stale on FIX #2/C2.4 — both are MERGED + APPLIED) → 1 docs PR; owner actions: leaked-password toggle, short_codes for Business Partners + Better Banc, D3 commission-tier ruling (PO scope / R1M+), DEAL-001 stage judgment; F5 definer-view pattern re-affirm at Phase D.
+- **Task 2 (fixes): WAITING FOR OWNER APPROVAL.** Proposed order: FIX-A (grants+search_path migration) → FIX-B (notification frontend) → FIX-C (docs reconcile). One PR each, fresh main, Macroscope, owner merges.
+- Note: the FIX-lane source file `.coordination/full-system-audit-2026-08-01.md` cited below was never committed — `AUDIT.md` supersedes it.
+- Last update: 2026-07-31 — audit landed, read-only, no fixes started.
+
 ## FIX LANE — audit follow-up (2026-07-31, from `.coordination/full-system-audit-2026-08-01.md`)
 Sequenced fixes of 5 audit findings, ONE PR at a time; owner merges each before the next. Do NOT merge — owner merges. Wait for Macroscope.
 - **FIX #1 — Docs drift — ✅ MERGED (PR #92, 2026-07-31).** Docs-only. Reconciled funder count `21→23` (CLAUDE.md build-state, ROADMAP A1 annotation, SPEC S1 C0.3 `43+/21→43+/23`) and Polokwane address `75→73` (SPEC S16.3 + S7B.4 footer notes reflect the deployed v12 fix, docs/email-templates.md locked footer block). No code/DB changes.
-- **FIX #2 — Lula + RM Capital rate cleanup — ✅ PR #93 OPEN (awaiting Macroscope + owner merge).** One migration `20260731120000_fix2_remove_noncontracted_funder_rate_structures.sql`. Removes `funder_commission_structures` rows for non-contracted funders per SPEC S1 C0.3 (Lula non_po 1%, RM Capital po R5,000 — both is_contracted=false; verified live = exactly 2 rows). Atomic DO block: delete-by-invariant (is_contracted=false) + RETURNING + full before-image audit (log_activity omits before-image on DELETE) + over-deletion guard (>2 halts) + idempotent (0-row re-run no-ops) + post-condition assert. **NOT applied to live yet — applies after merge** per schema workflow. No RPC surface changed.
+- **FIX #2 — Lula + RM Capital rate cleanup — ✅ MERGED (PR #93) + APPLIED + VERIFIED LIVE (2026-07-31, AUDIT-FIX lane spot-check):** `funder_commission_structures` = exactly 4 rows, all `is_contracted=true` (Business Partners / Flow48 / Merchant Capital / Pollen). *(This entry previously said "OPEN / NOT applied" — corrected to live truth.)*
 - FIX #3–#5 — NOT STARTED (paused for owner approval to continue after each merge).
 
 ## OLD CC 1 — C2 Backend — 🛑 HANDOVER / STOOD DOWN (2026-07-27, rate-limit pause)
