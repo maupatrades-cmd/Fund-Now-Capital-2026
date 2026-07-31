@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Percent,
   Receipt,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -28,6 +29,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/documents", label: "Documents", icon: FolderOpen },
   { to: "/funders", label: "Funders", icon: Landmark },
   { to: "/invoices", label: "Invoices", icon: Receipt },
+  { to: "/partner-earnings", label: "Partner Earnings", icon: Wallet },
   { to: "/calculator", label: "Calculator", icon: Calculator },
   { to: "/activity", label: "Activity", icon: Activity },
   { to: "/settings/industries", label: "Industries", icon: Factory },
