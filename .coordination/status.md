@@ -2,8 +2,9 @@
 
 ## FIX LANE — audit follow-up (2026-07-31, from `.coordination/full-system-audit-2026-08-01.md`)
 Sequenced fixes of 5 audit findings, ONE PR at a time; owner merges each before the next. Do NOT merge — owner merges. Wait for Macroscope.
-- **FIX #1 — Docs drift — ✅ PR #92 OPEN (awaiting Macroscope + owner merge).** Docs-only, from fresh main. Reconciles funder count `21→23` (CLAUDE.md build-state, ROADMAP A1 annotation, SPEC S1 C0.3 `43+/21→43+/23`) and Polokwane address `75→73` (SPEC S16.3 + S7B.4 footer notes now reflect the deployed v12 fix, docs/email-templates.md locked footer block). No code/DB changes. 4 files (+ this board entry). Verified: no stale current-state `21-funder`/`75 Marshall` claims remain.
-- FIX #2–#5 — NOT STARTED (paused for owner approval to continue after each merge).
+- **FIX #1 — Docs drift — ✅ MERGED (PR #92, 2026-07-31).** Docs-only. Reconciled funder count `21→23` (CLAUDE.md build-state, ROADMAP A1 annotation, SPEC S1 C0.3 `43+/21→43+/23`) and Polokwane address `75→73` (SPEC S16.3 + S7B.4 footer notes reflect the deployed v12 fix, docs/email-templates.md locked footer block). No code/DB changes.
+- **FIX #2 — Lula + RM Capital rate cleanup — ✅ PR #93 OPEN (awaiting Macroscope + owner merge).** One migration `20260731120000_fix2_remove_noncontracted_funder_rate_structures.sql`. Removes `funder_commission_structures` rows for non-contracted funders per SPEC S1 C0.3 (Lula non_po 1%, RM Capital po R5,000 — both is_contracted=false; verified live = exactly 2 rows). Atomic DO block: delete-by-invariant (is_contracted=false) + RETURNING + full before-image audit (log_activity omits before-image on DELETE) + over-deletion guard (>2 halts) + idempotent (0-row re-run no-ops) + post-condition assert. **NOT applied to live yet — applies after merge** per schema workflow. No RPC surface changed.
+- FIX #3–#5 — NOT STARTED (paused for owner approval to continue after each merge).
 
 ## OLD CC 1 — C2 Backend — 🛑 HANDOVER / STOOD DOWN (2026-07-27, rate-limit pause)
 - Session: 2026-07-22 → 2026-07-27. C2.1/C2.2/C2.3 MERGED + APPLIED + verified live. C2.4 built + in review (NOT applied). Standing down; a FRESH SESSION takes over.
