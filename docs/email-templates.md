@@ -117,7 +117,7 @@ and render when invoked with a matching `eventType` or explicit `variant`.
 Fund Now Capital (Pty) Ltd · CIPC 2026/066284/07 · 010 102 0534 ·
 hello@fundnowcapital.africa · www.fundnowcapital.africa ·
 Cedarwood House, 128 Ballyclare Drive, Bryanston 2191, Sandton ·
-75 Marshall Street, Polokwane 0699 · "Many funders. More approvals."
+73 Marshall Street, Polokwane 0699 · "Many funders. More approvals."
 
 **Never** put a personal email (e.g. `thapelol@…`) in the notification footer —
 `hello@` is the shared inbox for all replies.

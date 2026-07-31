@@ -9,7 +9,7 @@ This is the single source of truth for build order. It supersedes the per-part p
 ## PHASE A — Core Spine (CURRENT — finish before anything new)
 Goal: the original 5-screen CRM works end-to-end with a real deal, plus the two foundations every later module writes into.
 
-- ✅ A1. Schema: 11 tables, RLS, commission engine, 21 funders seeded
+- ✅ A1. Schema: 11 tables, RLS, commission engine, 21 funders seeded (23 live now — Spartan + AAA Consortium added post-A1)
 - ✅ A2. Auth + login (owner + test partner accounts, signup disabled)
 - ✅ A3. Owner Dashboard (KPIs, pipeline snapshot, actions needed)
 - ✅ A4. Funder Panel (list, detail, editable partner display name)
