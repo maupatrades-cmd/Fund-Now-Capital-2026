@@ -158,6 +158,23 @@ create policy documents_bucket_submitter_insert on storage.objects
     and public.caller_owns_lead(((storage.foldername(name))[2])::uuid)
   );
 
+-- Tight-scoped DELETE so the upload's best-effort rollback actually removes the
+-- orphaned object when the documents-row insert fails (otherwise the object
+-- leaks — real storage cost + possible client PII persisting past intent). A
+-- submitter may delete ONLY a file they uploaded (owner = auth.uid()) under a
+-- lead they submitted. Storage policies are permissive (OR-ed), so this composes
+-- cleanly with documents_bucket_owner_delete — the owner can still delete
+-- anything; the submitter is confined to their own uploads under their own leads.
+drop policy if exists documents_bucket_submitter_delete on storage.objects;
+create policy documents_bucket_submitter_delete on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'documents'
+    and owner = (select auth.uid())
+    and (storage.foldername(name))[1] = 'leads'
+    and public.caller_owns_lead(((storage.foldername(name))[2])::uuid)
+  );
+
 -- ---------------------------------------------------------------------------
 -- 6. Assertions
 -- ---------------------------------------------------------------------------
@@ -190,12 +207,10 @@ begin
         and policyname in ('documents_lead_submitter_read', 'documents_lead_submitter_insert')) <> 2 then
     raise exception 'documents submitter policies missing';
   end if;
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'storage' and tablename = 'objects'
-      and policyname = 'documents_bucket_submitter_insert'
-  ) then
-    raise exception 'storage submitter INSERT policy missing';
+  if (select count(*) from pg_policies
+      where schemaname = 'storage' and tablename = 'objects'
+        and policyname in ('documents_bucket_submitter_insert', 'documents_bucket_submitter_delete')) <> 2 then
+    raise exception 'storage submitter INSERT/DELETE policies missing';
   end if;
 
   -- helper grants: authenticated yes, anon no

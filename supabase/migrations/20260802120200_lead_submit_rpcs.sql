@@ -31,6 +31,7 @@ as $$
 declare
   v_uid          uuid := (select auth.uid());
   v_role         text;
+  v_active       boolean;
   v_partner_id   uuid;
   v_partner_name text;
   v_partner_slug text;
@@ -42,11 +43,24 @@ begin
     raise exception 'Not authenticated' using errcode = '28000';
   end if;
 
-  select p.role, p.referral_partner_id into v_role, v_partner_id
+  select p.role, p.is_active, p.referral_partner_id into v_role, v_active, v_partner_id
   from public.profiles p where p.id = v_uid;
 
   if v_role is distinct from 'partner' then
     raise exception 'Only referral partners can submit partner leads' using errcode = '42501';
+  end if;
+
+  -- Deactivated/suspended accounts cannot submit even with a live session
+  -- (ONBOARDING.md deactivation semantics).
+  if not coalesce(v_active, false) then
+    raise exception 'Your account is not active' using errcode = '42501';
+  end if;
+
+  -- A partner must resolve to a referral_partners row — otherwise the lead saves
+  -- with referral_partner_id NULL and downstream qualification/deal/commission
+  -- logic silently misattributes it.
+  if v_partner_id is null then
+    raise exception 'Partner profile is not linked to a referral partner' using errcode = '42501';
   end if;
 
   -- Required fields (server-side, independent of the form's zod validation).
@@ -131,6 +145,7 @@ as $$
 declare
   v_uid             uuid := (select auth.uid());
   v_role            text;
+  v_active          boolean;
   v_contractor_name text;
   v_contractor_mail text;
   v_lead_id         uuid;
@@ -140,11 +155,18 @@ begin
     raise exception 'Not authenticated' using errcode = '28000';
   end if;
 
-  select p.role, p.full_name, p.email into v_role, v_contractor_name, v_contractor_mail
+  select p.role, p.is_active, p.full_name, p.email
+    into v_role, v_active, v_contractor_name, v_contractor_mail
   from public.profiles p where p.id = v_uid;
 
   if v_role is distinct from 'contractor' then
     raise exception 'Only contractors can submit contractor leads' using errcode = '42501';
+  end if;
+
+  -- Deactivated/suspended contractors cannot submit even with a live session
+  -- (ONBOARDING.md: suspended/deactivated contractors cannot log in / act).
+  if not coalesce(v_active, false) then
+    raise exception 'Your account is not active' using errcode = '42501';
   end if;
 
   if coalesce(btrim(p_business_name), '') = '' then

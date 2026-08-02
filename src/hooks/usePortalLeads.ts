@@ -34,8 +34,10 @@ function safeName(name: string): string {
 
 // Attach one file to a freshly-created lead. Storage upload first, then the
 // documents row (RETURNING id + row-count check per the standing rule so a
-// silent RLS block surfaces loudly). On a failed insert we best-effort remove
-// the orphaned object, logging only a NON-PII trace (never the path/filename).
+// silent RLS block surfaces loudly). On a failed insert we remove the orphaned
+// object — the submitter DELETE storage policy (own uploads under own leads)
+// makes this rollback effective, not a silent no-op — logging only a NON-PII
+// trace (never the path/filename).
 async function attachFile(leadId: string, file: File, source: PortalKind): Promise<void> {
   const documentId = crypto.randomUUID();
   const path = `leads/${leadId}/${documentId}/${safeName(file.name)}`;
@@ -71,10 +73,14 @@ async function attachFile(leadId: string, file: File, source: PortalKind): Promi
   }
 }
 
+export type SubmitLeadResult = { leadId: string; failedCount: number };
+
 export function useSubmitLead(portal: PortalKind) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: SubmitLeadInput): Promise<string> => {
+    mutationFn: async (input: SubmitLeadInput): Promise<SubmitLeadResult> => {
+      // Lead creation is the ONLY step that can reject the mutation. If the RPC
+      // fails, no lead was created — a retry is safe (and won't duplicate).
       const { data: leadId, error } = await supabase.rpc(RPC_FOR[portal], {
         p_business_name: input.business_name,
         p_contact_name: input.contact_name,
@@ -90,15 +96,27 @@ export function useSubmitLead(portal: PortalKind) {
         throw new Error("Submission did not return a lead id.");
       }
 
-      // Upload documents after the lead exists (the RLS + storage policies key
-      // off the lead's attribution). Sequential so a failure reports which file
-      // and never leaves half the batch racing. A doc failure surfaces to the
-      // user; the lead itself is already safely submitted.
+      // Documents are uploaded AFTER the lead exists (RLS + storage policies key
+      // off the lead's attribution). Once the lead is created the mutation is
+      // considered a success — a doc failure must NOT reject it, or the user
+      // would retry and create a duplicate lead + duplicate owner notification.
+      // We collect failures and report them separately so the form can show a
+      // partial-success warning. (Attaching docs to an existing lead is a
+      // planned follow-up flow — see PR body.)
+      let failedCount = 0;
       for (const file of input.files) {
-        await attachFile(leadId, file, portal);
+        try {
+          await attachFile(leadId, file, portal);
+        } catch (e) {
+          failedCount += 1;
+          console.warn(
+            `Lead document attach failed (lead=${leadId} at=${new Date().toISOString()}):`,
+            (e as Error).message,
+          );
+        }
       }
 
-      return leadId;
+      return { leadId, failedCount };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["portal-leads", portal] });

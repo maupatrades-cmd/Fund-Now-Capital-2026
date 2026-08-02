@@ -108,10 +108,21 @@ export default function LeadSubmitForm({ portal }: { portal: PortalKind }) {
       files,
     };
     try {
-      await submit.mutateAsync(input);
+      const { failedCount } = await submit.mutateAsync(input);
+      // The lead is submitted regardless of document outcome — always advance,
+      // so the user never retries and creates a duplicate lead.
       toast.success("Lead submitted for review");
+      if (failedCount > 0) {
+        toast.warning(
+          failedCount === 1
+            ? "1 document didn't attach; you can add it later."
+            : `${failedCount} documents didn't attach; you can add them later.`,
+        );
+      }
       navigate(`/${portal}/leads`);
     } catch (e) {
+      // Only reached when lead creation itself failed — nothing was created, so
+      // a retry is safe and won't duplicate.
       toast.error((e as Error).message || "Could not submit lead");
     }
   };
