@@ -1,5 +1,8 @@
 # Fund Now Capital CRM — CLAUDE.md (v2)
 
+## Read these files first
+Every Claude Code session MUST read these files before starting work: CLAUDE.md, SPEC.md, ROADMAP.md, AUDIT.md, CONTRACTOR.md, ONBOARDING.md, TIERS.md, PICKER.md, TRAINING.md.
+
 ## What this is
 Internal CRM for **Fund Now Capital**, a South African SME funding brokerage owned by Thapelo Maupa (she/her). Owner-first tool now; referral-partner portal for **Doctor (Bright Destiny)** launches in **Phase D**. Client-facing portal deliberately deferred (Part 7).
 Build order lives in **ROADMAP.md** — always consult it before starting work. Feature details live in `SPEC.md`.
