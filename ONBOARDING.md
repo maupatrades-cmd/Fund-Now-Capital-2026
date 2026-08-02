@@ -68,9 +68,13 @@ The onboarding process must:
 ### Stage 6: Training + Certification
 
 - Contractor completes Product Knowledge Training modules (see `TRAINING.md`)
-- Passes certification assessment (minimum 80% score)
-- Certification badge added to contractor profile
-- Status transitions: `training_pending` → `active`
+- Activation gate: Modules 1-3 complete — early lead submission is intentional,
+  letting contractors start earning while completing training (per `TRAINING.md`)
+- Full certification (all 6 modules + final combined assessment, minimum 80% score)
+  is tracked as a later milestone: required to progress beyond Level 1 reimbursement,
+  not for activation
+- Certification badge added to contractor profile on full certification
+- Status transitions: `training_pending` → `active` (once Modules 1-3 complete)
 - Contractor is now activated: can log in, submit leads, earn commission
 
 ## 17 Required Forms & Documents
@@ -126,7 +130,8 @@ The mini HR module lives on the owner dashboard and tracks:
 - Service Agreement version + signed date
 - Document verification status (all 17)
 - Current progression level (Base, 1, 2, 3)
-- Current status (applicant, screening, agreement_pending, active, deactivated)
+- Current status (applicant, screening, interview_scheduled, agreement_pending,
+  document_collection, training_pending, active, deactivated; rejected as terminal)
 - Activation date
 - Deactivation date (if applicable)
 - Deactivation reason (if applicable)

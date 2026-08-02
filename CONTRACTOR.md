@@ -143,7 +143,10 @@ See `ONBOARDING.md` for the full 17-form list. Highlights:
 
 ## Standing Rules
 
-- Only owner (Thapelo) can create, modify, or delete contractors
+- Only owner (Thapelo) can create, modify, or delete contractors — with one
+  explicit exception: the public `/apply` form creates the initial `contractors`
+  record with status `applicant` (see ONBOARDING.md Stage 1); every other
+  create/modify/delete is owner-only
 - Every contractor status transition writes to audit_log
 - Every payment (reimbursement, commission, bonus) written to audit_log
 - Contractor commission calculation is idempotent + lock-protected at DB layer
