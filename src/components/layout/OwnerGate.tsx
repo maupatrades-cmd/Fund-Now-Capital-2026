@@ -11,9 +11,9 @@ import { supabase } from "@/lib/supabase";
 // still gets the access-restricted card. RLS is the real backstop; this
 // keeps the UI honest too.
 export default function OwnerGate() {
-  const { data: role, isLoading, isError } = useProfileRole();
+  const { data: role, isPending, isError } = useProfileRole();
 
-  if (isLoading) {
+  if (isPending) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-muted-foreground">
         Loading…

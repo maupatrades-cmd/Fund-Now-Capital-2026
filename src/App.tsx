@@ -37,9 +37,9 @@ import { queryClient } from "@/lib/queryClient";
 // /partner, contractor → /contractor. Role errors fall through to /dashboard,
 // where OwnerGate handles non-owners exactly as before.
 function RoleLanding() {
-  const { data: role, isLoading } = useProfileRole();
+  const { data: role, isPending } = useProfileRole();
 
-  if (isLoading) {
+  if (isPending) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-muted-foreground">
         Loading…

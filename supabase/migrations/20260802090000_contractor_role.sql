@@ -30,9 +30,33 @@ comment on type public.user_role is
   'Application role on profiles.role: owner (Thapelo — full CRM), partner (referral partner, e.g. Bright Destiny — Phase D portal), contractor (FNC direct contractor — contractor portal).';
 
 -- ---------------------------------------------------------------------------
+-- Harden current_partner_id(): only a 'partner' role may resolve a partner id
+-- (Macroscope PR #101 finding, owner-approved). Without the role guard, a
+-- partner converted to contractor who kept a stale referral_partner_id would
+-- still satisfy every partner-scoped RLS policy/view. The guard makes
+-- "contractor = zero data access" structural instead of relying on the
+-- column being NULL. Zero behaviour change for the three live profiles
+-- (owner + test contractor have NULL partner ids; Doctor is role 'partner'),
+-- and it matches partner_profile_id(), which already filters role = 'partner'.
+-- CREATE OR REPLACE preserves the FIX-A grant matrix (authenticated-only);
+-- signature, STABLE SECURITY DEFINER, and the pinned empty search_path are
+-- kept verbatim from the live definition.
+create or replace function public.current_partner_id()
+returns uuid
+language sql
+stable security definer
+set search_path = ''
+as $$
+  select p.referral_partner_id
+    from public.profiles p
+   where p.id = (select auth.uid())
+     and p.role = 'partner';
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Assertions (belt-and-braces): fail loudly if the enum is not exactly the
--- three expected labels, or if the contractor label somehow carries data
--- access it should not have yet.
+-- three expected labels, if the contractor label somehow carries data
+-- access it should not have yet, or if the role guard didn't land.
 -- ---------------------------------------------------------------------------
 do $$
 declare
@@ -59,6 +83,12 @@ begin
         or with_check ilike '%contractor%'
   ) then
     raise exception 'unexpected RLS policy referencing contractor role';
+  end if;
+
+  -- The partner-id resolver must carry the role guard.
+  if position('role = ''partner''' in
+       pg_get_functiondef('public.current_partner_id()'::regprocedure)) = 0 then
+    raise exception 'current_partner_id() is missing the role = partner guard';
   end if;
 end;
 $$;

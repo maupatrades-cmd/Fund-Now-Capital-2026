@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useProfileRole } from "@/hooks/useProfileRole";
 import { roleHome } from "@/lib/roles";
+import { useSession } from "@/lib/useSession";
 import ContractorHomePage from "./ContractorHomePage";
 
 // Session + role guard for everything under /contractor/*. The contractor
@@ -9,9 +10,17 @@ import ContractorHomePage from "./ContractorHomePage";
 // same treatment OwnerGate gives the owner routes). RLS remains the real
 // backstop; this keeps the UI honest.
 export default function ContractorGate() {
-  const { data: role, isLoading, isError } = useProfileRole();
+  const session = useSession();
+  const { data: role, isPending, isError } = useProfileRole();
 
-  if (isLoading) {
+  // Watch the live session directly (not just the cached role) so signing
+  // out while on /contractor bounces to login immediately — mirrors the
+  // session wrapper App.tsx puts around the owner block.
+  if (session === null) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (session === undefined || isPending) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-muted-foreground">
         Loading…
@@ -19,7 +28,7 @@ export default function ContractorGate() {
     );
   }
 
-  // Signed out (role resolves to null) or lookup failure → login screen.
+  // Role missing (no profiles row) or lookup failure → login screen.
   if (isError || role == null) {
     return <Navigate to="/" replace />;
   }
