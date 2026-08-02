@@ -1,6 +1,6 @@
 import { useLocation } from "react-router-dom";
 import { LogOut, Menu } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { NAV_ITEMS } from "./navItems";
@@ -41,7 +41,7 @@ export function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
         </div>
         <button
           type="button"
-          onClick={() => supabase.auth.signOut()}
+          onClick={() => void signOutAndRedirect()}
           className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50"
         >
           <LogOut className="h-4 w-4" />

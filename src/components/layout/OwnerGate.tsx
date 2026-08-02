@@ -3,7 +3,7 @@ import { ShieldAlert } from "lucide-react";
 import AppLayout from "./AppLayout";
 import { useProfileRole } from "@/hooks/useProfileRole";
 import { roleHome } from "@/lib/roles";
-import { supabase } from "@/lib/supabase";
+import { signOutAndRedirect } from "@/lib/signOut";
 
 // Every owner screen sits behind this gate, so a signed-in non-owner can't
 // reach the owner UI or its edit controls. Partners and contractors are
@@ -39,7 +39,7 @@ export default function OwnerGate() {
           </p>
           <button
             type="button"
-            onClick={() => supabase.auth.signOut()}
+            onClick={() => void signOutAndRedirect()}
             className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white"
           >
             Sign out

@@ -1,6 +1,6 @@
 import { FileText, LogOut, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
+import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
 
 // Contractor portal shell — intentionally minimal (CONTRACTOR.md Phase 1
@@ -24,7 +24,7 @@ export default function ContractorHomePage() {
           </div>
           <button
             type="button"
-            onClick={() => supabase.auth.signOut()}
+            onClick={() => void signOutAndRedirect()}
             className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50"
           >
             <LogOut className="h-4 w-4" />
