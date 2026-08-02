@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Handshake, LogOut, PlusCircle } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { supabase } from "@/lib/supabase";
+import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
 
 /*
@@ -72,7 +73,7 @@ export default function PartnerHomePage() {
           </div>
           <button
             type="button"
-            onClick={() => supabase.auth.signOut()}
+            onClick={() => void signOutAndRedirect()}
             className="ml-auto flex items-center gap-1.5 rounded-lg border border-white/20 px-3 py-2 text-sm font-medium text-white hover:bg-white/10"
           >
             <LogOut className="h-4 w-4" />
