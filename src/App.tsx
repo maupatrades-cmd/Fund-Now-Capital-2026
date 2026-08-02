@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import AuthPage from "@/pages/AuthPage";
 import OwnerGate from "@/components/layout/OwnerGate";
 import PartnerGate from "@/pages/PartnerGate";
+import PartnerHomePage from "@/pages/PartnerHomePage";
 import ContractorGate from "@/pages/ContractorGate";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
@@ -70,13 +71,21 @@ function AppRoutes() {
       />
 
       {/*
-        Role portals. Each gate owns its whole subtree (session + role check
-        inside), so new portal screens land in the gate, not here. PartnerGate
-        is the DOCTOR-BUILD lane's file (Phase D partner portal) — the route
-        entry lives here because App.tsx owns routing; its PR must merge
-        before or with this one.
+        Role portals — the route entries live here because App.tsx owns
+        routing; the gate components are each lane's own file.
+
+        PartnerGate (DOCTOR-BUILD lane) is a role-guard LAYOUT route: it runs
+        the partner-role check, then renders its children through <Outlet />,
+        so PartnerHomePage is mounted as the index child here. Any deeper
+        /partner/* path redirects back to /partner until real sub-screens land.
+
+        ContractorGate (this lane) instead owns its own internal <Routes>, so
+        it mounts under the /contractor/* splat and adds its own sub-screens.
       */}
-      <Route path="/partner/*" element={<PartnerGate />} />
+      <Route path="/partner" element={<PartnerGate />}>
+        <Route index element={<PartnerHomePage />} />
+        <Route path="*" element={<Navigate to="/partner" replace />} />
+      </Route>
       <Route path="/contractor/*" element={<ContractorGate />} />
 
       {/*
