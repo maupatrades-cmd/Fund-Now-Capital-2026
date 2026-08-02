@@ -11,6 +11,7 @@ import {
   Percent,
   Receipt,
   Wallet,
+  UserCog,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,6 +33,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/partner-earnings", label: "Partner Earnings", icon: Wallet },
   { to: "/calculator", label: "Calculator", icon: Calculator },
   { to: "/activity", label: "Activity", icon: Activity },
+  { to: "/team", label: "Team", icon: UserCog },
   { to: "/settings/industries", label: "Industries", icon: Factory },
   { to: "/settings/funders", label: "Funder rates", icon: Percent },
 ];

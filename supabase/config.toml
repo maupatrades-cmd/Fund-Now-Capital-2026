@@ -5,3 +5,14 @@ project_id = "fund-now-capital-2026"
 # instead of a JWT. Keep verify_jwt = false.
 [functions.send-notification-email]
 verify_jwt = false
+
+# admin-invite-user / admin-deactivate-user are invoked from the owner's browser.
+# They authenticate the CALLER: read the Bearer JWT, verify is_owner() against the
+# DB, then use the service-role key for admin work. verify_jwt = false (not true)
+# so the function can answer the CORS preflight and return clean JSON errors
+# itself — the in-code is_owner() gate is the real authorization backstop.
+[functions.admin-invite-user]
+verify_jwt = false
+
+[functions.admin-deactivate-user]
+verify_jwt = false
