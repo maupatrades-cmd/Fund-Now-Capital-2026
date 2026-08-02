@@ -105,7 +105,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // ---- 3. audit (POPIA) ----------------------------------------------------
-  await service.from("activity_logs").insert({
+  // The ban + flag already succeeded, so a failed audit write must not report
+  // the deactivation as failed. Instead: console.error + persist an
+  // audit_log_failures row for backfill, and return audit_logged:false so the
+  // owner UI can show a warning banner.
+  let auditLogged = true;
+  const { error: auditErr } = await service.from("activity_logs").insert({
     user_id: caller.id,
     user_email: caller.email ?? null,
     user_role: "owner",
@@ -117,6 +122,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
     before_values: { is_active: true },
     after_values: { is_active: false },
   });
+  if (auditErr) {
+    auditLogged = false;
+    console.error("activity_logs insert failed:", auditErr.message);
+    const { error: fallbackErr } = await service.from("audit_log_failures").insert({
+      edge_function: "admin-deactivate-user",
+      target_user_id: userId,
+      action: "deactivate",
+      error_message: auditErr.message ?? String(auditErr),
+    });
+    if (fallbackErr) console.error("audit_log_failures insert also failed:", fallbackErr.message);
+  }
 
-  return json({ ok: true, status: "deactivated", user_id: userId });
+  return json({ ok: true, status: "deactivated", user_id: userId, audit_logged: auditLogged });
 });

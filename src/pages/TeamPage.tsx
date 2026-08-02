@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,6 +13,9 @@ import {
   Copy,
   Check,
   ShieldAlert,
+  Eye,
+  EyeOff,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +48,11 @@ const btnPrimary =
 const btnNeutral =
   "inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-brand-navy hover:bg-slate-50";
 
+// Consistent copy for the POPIA audit-fallback banner (audit_logged:false).
+function auditWarnMsg(what: string): string {
+  return `${what} succeeded, but the audit-log entry could not be written. It has been flagged for backfill (audit_log_failures) — no action needed now, but let the admin know.`;
+}
+
 const FILTER_TABS: { value: TeamFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "owner", label: "Owners" },
@@ -59,6 +68,9 @@ export default function TeamPage() {
   const [editing, setEditing] = useState<TeamMember | null>(null);
   const [deactivating, setDeactivating] = useState<TeamMember | null>(null);
   const [tempPassword, setTempPassword] = useState<{ name: string; password: string } | null>(null);
+  // Shown when an action returned audit_logged:false (the POPIA row was persisted
+  // to audit_log_failures for backfill instead of activity_logs).
+  const [auditWarning, setAuditWarning] = useState<string | null>(null);
 
   const counts = useMemo(() => {
     const list = members ?? [];
@@ -101,6 +113,21 @@ export default function TeamPage() {
         </button>
       </div>
 
+      {auditWarning && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{auditWarning}</span>
+          <button
+            type="button"
+            onClick={() => setAuditWarning(null)}
+            className="shrink-0 rounded p-0.5 text-amber-700 hover:bg-amber-100"
+            aria-label="Dismiss"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Filter tabs */}
       <div className="flex flex-wrap gap-1 border-b border-border">
         {FILTER_TABS.map((t) => {
@@ -135,6 +162,7 @@ export default function TeamPage() {
           members={filtered}
           onEdit={(m) => setEditing(m)}
           onDeactivate={(m) => setDeactivating(m)}
+          onAuditWarning={setAuditWarning}
         />
       )}
 
@@ -142,10 +170,17 @@ export default function TeamPage() {
         <InviteDialog
           onClose={() => setInviteOpen(false)}
           onTempPassword={(name, password) => setTempPassword({ name, password })}
+          onAuditWarning={setAuditWarning}
         />
       )}
       {editing && <EditRoleDialog member={editing} onClose={() => setEditing(null)} />}
-      {deactivating && <DeactivateDialog member={deactivating} onClose={() => setDeactivating(null)} />}
+      {deactivating && (
+        <DeactivateDialog
+          member={deactivating}
+          onClose={() => setDeactivating(null)}
+          onAuditWarning={setAuditWarning}
+        />
+      )}
       {tempPassword && (
         <TempPasswordModal
           name={tempPassword.name}
@@ -163,10 +198,12 @@ function TeamTable({
   members,
   onEdit,
   onDeactivate,
+  onAuditWarning,
 }: {
   members: TeamMember[];
   onEdit: (m: TeamMember) => void;
   onDeactivate: (m: TeamMember) => void;
+  onAuditWarning: (msg: string) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
@@ -201,7 +238,12 @@ function TeamTable({
               </td>
               <td className="px-4 py-3 text-muted-foreground">{formatJoined(m.created_at)}</td>
               <td className="px-4 py-3 text-right">
-                <RowActions member={m} onEdit={() => onEdit(m)} onDeactivate={() => onDeactivate(m)} />
+                <RowActions
+                  member={m}
+                  onEdit={() => onEdit(m)}
+                  onDeactivate={() => onDeactivate(m)}
+                  onAuditWarning={onAuditWarning}
+                />
               </td>
             </tr>
           ))}
@@ -217,29 +259,50 @@ function RowActions({
   member,
   onEdit,
   onDeactivate,
+  onAuditWarning,
 }: {
   member: TeamMember;
   onEdit: () => void;
   onDeactivate: () => void;
+  onAuditWarning: (msg: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  // Fixed-position anchor so the menu renders through a portal (document.body)
+  // and is never clipped by the table's overflow-x-auto container, even on the
+  // last rows.
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const invite = useInviteUser();
 
   useEffect(() => {
     if (!open) return;
+    const close = () => setOpen(false);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Any scroll/resize would drift the fixed menu off the button — just close.
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
   }, [open]);
 
   // The owner account and deactivated users have no actions.
-  if (member.role === "owner") {
+  if (member.role === "owner" || !member.is_active) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
-  if (!member.is_active) {
-    return <span className="text-xs text-muted-foreground">—</span>;
-  }
+
+  const toggle = () => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) });
+    setOpen(true);
+  };
 
   const onResend = async () => {
     setOpen(false);
@@ -251,17 +314,23 @@ function RowActions({
         role: member.role as Exclude<UserRole, "owner">,
         invite_method: "magic_link",
       })) as InviteResult;
-      toast.success(res.email_sent ? `Login link re-sent to ${member.email}` : `Invite processed for ${member.email}`);
+      if (res.email_sent === false) {
+        toast.error(`Could not send the login email to ${member.email}. Please try again shortly.`);
+      } else {
+        toast.success(`Login link re-sent to ${member.email}`);
+      }
+      if (res.audit_logged === false) onAuditWarning(auditWarnMsg("Resending the invite"));
     } catch (e) {
       toast.error((e as Error).message || "Could not resend the invite.");
     }
   };
 
   return (
-    <div className="relative inline-block text-left">
+    <>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen((s) => !s)}
+        onClick={toggle}
         className="rounded-lg p-1.5 text-muted-foreground hover:bg-slate-100 hover:text-brand-navy"
         aria-label="Row actions"
         aria-haspopup="menu"
@@ -269,43 +338,46 @@ function RowActions({
       >
         <MoreVertical className="h-4 w-4" />
       </button>
-      {open && (
-        <>
-          {/* click-outside catcher */}
-          <button
-            type="button"
-            className="fixed inset-0 z-10 cursor-default"
-            aria-hidden="true"
-            tabIndex={-1}
-            onClick={() => setOpen(false)}
-          />
-          <div
-            ref={menuRef}
-            role="menu"
-            className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-lg border border-border bg-white py-1 text-left shadow-lg"
-          >
-            <MenuItem
-              icon={Pencil}
-              label="Edit role"
-              onClick={() => {
-                setOpen(false);
-                onEdit();
-              }}
+      {open &&
+        pos &&
+        createPortal(
+          <>
+            {/* click-outside catcher */}
+            <button
+              type="button"
+              className="fixed inset-0 z-40 cursor-default"
+              aria-hidden="true"
+              tabIndex={-1}
+              onClick={() => setOpen(false)}
             />
-            <MenuItem icon={Send} label="Resend invite" disabled={invite.isPending} onClick={onResend} />
-            <MenuItem
-              icon={Ban}
-              label="Deactivate"
-              danger
-              onClick={() => {
-                setOpen(false);
-                onDeactivate();
-              }}
-            />
-          </div>
-        </>
-      )}
-    </div>
+            <div
+              role="menu"
+              style={{ position: "fixed", top: pos.top, right: pos.right }}
+              className="z-50 w-44 overflow-hidden rounded-lg border border-border bg-white py-1 text-left shadow-lg"
+            >
+              <MenuItem
+                icon={Pencil}
+                label="Edit role"
+                onClick={() => {
+                  setOpen(false);
+                  onEdit();
+                }}
+              />
+              <MenuItem icon={Send} label="Resend invite" disabled={invite.isPending} onClick={onResend} />
+              <MenuItem
+                icon={Ban}
+                label="Deactivate"
+                danger
+                onClick={() => {
+                  setOpen(false);
+                  onDeactivate();
+                }}
+              />
+            </div>
+          </>,
+          document.body,
+        )}
+    </>
   );
 }
 
@@ -364,12 +436,15 @@ type InviteFormValues = z.infer<typeof inviteSchema>;
 function InviteDialog({
   onClose,
   onTempPassword,
+  onAuditWarning,
 }: {
   onClose: () => void;
   onTempPassword: (name: string, password: string) => void;
+  onAuditWarning: (msg: string) => void;
 }) {
   const invite = useInviteUser();
   const [serverErr, setServerErr] = useState<string | null>(null);
+  const [showTemp, setShowTemp] = useState(false);
   const {
     register,
     handleSubmit,
@@ -414,7 +489,21 @@ function InviteDialog({
         return;
       }
 
+      // Account created but the magic-link email failed to send — keep the
+      // dialog open so the owner can retry (a re-submit hits the idempotent
+      // existing path and resends) instead of a false success.
+      if (v.invite_method === "magic_link" && res.email_sent === false) {
+        const msg =
+          `${v.full_name.trim()}'s account was created, but the login email to ${v.email.trim()} could not be sent. ` +
+          `Click "Send Invite" again to retry, or use "Resend invite" from the table.`;
+        setServerErr(msg);
+        toast.warning(msg);
+        if (res.audit_logged === false) onAuditWarning(auditWarnMsg("Creating the account"));
+        return;
+      }
+
       toast.success(`${v.full_name.trim()} invited as ${roleLabel(v.role)}`);
+      if (res.audit_logged === false) onAuditWarning(auditWarnMsg("Inviting the person"));
       if (v.invite_method === "temp_password" && res.temp_password) {
         onClose();
         onTempPassword(v.full_name.trim(), res.temp_password);
@@ -487,14 +576,28 @@ function InviteDialog({
         {method === "temp_password" && (
           <div>
             <label className={labelCls} htmlFor="inv-temp">Temporary password</label>
-            <input
-              id="inv-temp"
-              className={fieldCls}
-              placeholder="At least 8 characters"
-              autoComplete="new-password"
-              {...register("temp_password")}
-            />
+            <div className="relative">
+              <input
+                id="inv-temp"
+                type={showTemp ? "text" : "password"}
+                className={fieldCls + " pr-10"}
+                placeholder="At least 8 characters"
+                autoComplete="new-password"
+                {...register("temp_password")}
+              />
+              <button
+                type="button"
+                onClick={() => setShowTemp((s) => !s)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-brand-navy"
+                aria-label={showTemp ? "Hide password" : "Show password"}
+              >
+                {showTemp ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             {errors.temp_password && <p className={errCls}>{errors.temp_password.message}</p>}
+            <p className="mt-1 text-xs text-muted-foreground">
+              Hidden by default — use the eye to check it before sharing verbally.
+            </p>
           </div>
         )}
 
@@ -608,7 +711,15 @@ function EditRoleDialog({ member, onClose }: { member: TeamMember; onClose: () =
 
 // ---- deactivate dialog ------------------------------------------------------
 
-function DeactivateDialog({ member, onClose }: { member: TeamMember; onClose: () => void }) {
+function DeactivateDialog({
+  member,
+  onClose,
+  onAuditWarning,
+}: {
+  member: TeamMember;
+  onClose: () => void;
+  onAuditWarning: (msg: string) => void;
+}) {
   const deactivate = useDeactivateUser();
   const [confirmText, setConfirmText] = useState("");
   const [serverErr, setServerErr] = useState<string | null>(null);
@@ -622,8 +733,9 @@ function DeactivateDialog({ member, onClose }: { member: TeamMember; onClose: ()
   const onConfirm = async () => {
     setServerErr(null);
     try {
-      await deactivate.mutateAsync(member.id);
+      const res = await deactivate.mutateAsync(member.id);
       toast.success(`${member.full_name || member.email} deactivated`);
+      if (res.audit_logged === false) onAuditWarning(auditWarnMsg("Deactivating the person"));
       onClose();
     } catch (e) {
       const msg = (e as Error).message || "Could not deactivate the user.";

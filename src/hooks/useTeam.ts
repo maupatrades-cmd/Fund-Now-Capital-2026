@@ -96,6 +96,16 @@ export type InviteResult = {
   email_sent?: boolean;
   temp_password?: string | null;
   message?: string;
+  // false when the POPIA audit row could not be written (persisted to
+  // audit_log_failures for backfill) — the UI surfaces a warning banner.
+  audit_logged?: boolean;
+};
+
+export type DeactivateResult = {
+  ok: boolean;
+  status: string;
+  user_id: string;
+  audit_logged?: boolean;
 };
 
 // Create (or idempotently resolve) a user via the admin-invite-user Edge
@@ -149,7 +159,7 @@ export function useDeactivateUser() {
         body: { user_id: userId },
       });
       if (error) throw new Error(await functionErrorMessage(error, "Could not deactivate the user."));
-      return data as { ok: boolean; status: string; user_id: string };
+      return data as DeactivateResult;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: TEAM_KEY });

@@ -129,32 +129,49 @@ async function sendMagicLinkEmail(to: string, fullName: string, role: string, li
     `Log in using this single-use link (it expires after a short time):\n\n${link}\n\n` +
     `If it has expired, ask Thapelo to resend your invite.\n\n— Fund Now Capital`;
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from: FROM,
-      to: [to],
-      reply_to: REPLY_TO,
-      subject: "You've been invited to the Fund Now Capital CRM",
-      html,
-      text,
-    }),
-  });
-  return res.ok;
+  // Wrap the network call: a DNS/TLS/connection reject must NOT escape the
+  // handler after the Auth user + profile were already created — it returns
+  // false so the caller reports a delivery failure (account created, email not
+  // sent) instead of an unhandled 500 with no audit row.
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: FROM,
+        to: [to],
+        reply_to: REPLY_TO,
+        subject: "You've been invited to the Fund Now Capital CRM",
+        html,
+        text,
+      }),
+    });
+    if (!res.ok) console.error("Resend returned non-2xx:", res.status);
+    return res.ok;
+  } catch (e) {
+    console.error("Resend request failed:", (e as Error).message);
+    return false;
+  }
 }
 
 // Write a Team-Management audit row (POPIA: every user action is logged).
 // service-role bypasses RLS exactly like the DEFINER triggers that own this table.
+//
+// Returns true when the activity_logs row was written. On failure it does NOT
+// throw (the primary, irreversible operation already succeeded) — instead it
+// console.errors AND persists a durable audit_log_failures row so the missing
+// POPIA entry can be backfilled, then returns false so the response can carry
+// audit_logged:false for the owner-facing warning banner.
 async function audit(
   service: SupabaseClient,
   caller: { id: string; email: string | null },
   eventType: "CREATE" | "UPDATE",
   targetUserId: string,
+  action: string,
   description: string,
   after: Record<string, unknown>,
-): Promise<void> {
-  await service.from("activity_logs").insert({
+): Promise<boolean> {
+  const { error } = await service.from("activity_logs").insert({
     user_id: caller.id,
     user_email: caller.email,
     user_role: "owner",
@@ -164,6 +181,17 @@ async function audit(
     description,
     after_values: after,
   });
+  if (!error) return true;
+
+  console.error("activity_logs insert failed:", error.message);
+  const { error: fallbackErr } = await service.from("audit_log_failures").insert({
+    edge_function: "admin-invite-user",
+    target_user_id: targetUserId,
+    action,
+    error_message: error.message ?? String(error),
+  });
+  if (fallbackErr) console.error("audit_log_failures insert also failed:", fallbackErr.message);
+  return false;
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -253,12 +281,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const link = linkData?.properties?.action_link;
       if (linkErr || !link) return json({ error: "Could not generate a login link" }, 500);
       const sent = await sendMagicLinkEmail(email, fullName, role, link);
-      await audit(service, callerInfo, "UPDATE", existing.id, `Re-sent login link to ${email}`, {
-        email,
-        role,
+      const auditLogged = await audit(
+        service,
+        callerInfo,
+        "UPDATE",
+        existing.id,
+        "invite_resent",
+        `Re-sent login link to ${email}`,
+        { email, role, invite_method: "magic_link" },
+      );
+      return json({
+        ok: true,
+        status: "existing",
+        user_id: existing.id,
         invite_method: "magic_link",
+        email_sent: sent,
+        audit_logged: auditLogged,
       });
-      return json({ ok: true, status: "existing", user_id: existing.id, invite_method: "magic_link", email_sent: sent });
     }
     // temp_password on an existing user: don't silently reset their password.
     return json({
@@ -333,13 +372,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     emailSent = await sendMagicLinkEmail(email, fullName, role, link);
   }
 
-  await audit(service, callerInfo, "CREATE", userId, `Invited ${fullName} as ${ROLE_LABEL[role]} (${inviteMethod})`, {
-    email,
-    full_name: fullName,
-    role,
-    phone_number: phone,
-    invite_method: inviteMethod,
-  });
+  const auditLogged = await audit(
+    service,
+    callerInfo,
+    "CREATE",
+    userId,
+    "invite_created",
+    `Invited ${fullName} as ${ROLE_LABEL[role]} (${inviteMethod})`,
+    { email, full_name: fullName, role, phone_number: phone, invite_method: inviteMethod },
+  );
 
   return json({
     ok: true,
@@ -348,5 +389,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
     invite_method: inviteMethod,
     email_sent: inviteMethod === "magic_link" ? emailSent : undefined,
     temp_password: inviteMethod === "temp_password" ? tempPassword : undefined,
+    audit_logged: auditLogged,
   });
 });
