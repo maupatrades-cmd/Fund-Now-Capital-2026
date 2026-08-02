@@ -77,6 +77,13 @@ export default function LeadSubmitForm({ portal }: { portal: PortalKind }) {
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Synchronous in-flight guard. `submit.isPending` (and the disabled button)
+  // only reflect after a React re-render, so a fast double-click can fire
+  // onSubmit twice before the button disables — creating a duplicate lead +
+  // owner notification. This ref is set synchronously, before the first await,
+  // so the second click returns immediately (FIX #4 hardening pattern).
+  const submittingRef = useRef(false);
+
   const addFiles = (incoming: FileList | null) => {
     if (!incoming) return;
     setFileError(null);
@@ -96,6 +103,8 @@ export default function LeadSubmitForm({ portal }: { portal: PortalKind }) {
   const removeFile = (idx: number) => setFiles((prev) => prev.filter((_, i) => i !== idx));
 
   const onSubmit = async (v: FormValues) => {
+    if (submittingRef.current) return; // ignore a second click already in flight
+    submittingRef.current = true;
     const input: SubmitLeadInput = {
       business_name: v.business_name!.trim(),
       contact_name: v.contact_name!.trim(),
@@ -124,6 +133,9 @@ export default function LeadSubmitForm({ portal }: { portal: PortalKind }) {
       // Only reached when lead creation itself failed — nothing was created, so
       // a retry is safe and won't duplicate.
       toast.error((e as Error).message || "Could not submit lead");
+    } finally {
+      // Release the guard so a genuine retry (after an error) is allowed.
+      submittingRef.current = false;
     }
   };
 

@@ -67,7 +67,11 @@ create index if not exists leads_attributed_to_contractor_id_idx
 -- ---------------------------------------------------------------------------
 -- SECURITY DEFINER so it can read leads regardless of the caller's own RLS.
 -- Used by the documents + storage policies to answer "did the current
--- partner/contractor submit this lead?". Belt-and-braces grants: authenticated
+-- partner/contractor submit this lead?". The caller's CURRENT profiles.role is
+-- part of the check (mirroring current_partner_id()'s `role = 'partner'` guard),
+-- so if the owner revokes a submitter's role — even while their auth account
+-- stays enabled — their document read/insert/delete + storage access is revoked
+-- immediately, not just their portal UI. Belt-and-braces grants: authenticated
 -- only, never anon/public (audit FIX-A posture).
 create or replace function public.caller_owns_lead(p_lead_id uuid)
 returns boolean
@@ -79,10 +83,11 @@ as $$
   select exists (
     select 1
     from public.leads l
+    join public.profiles p on p.id = (select auth.uid())
     where l.id = p_lead_id
       and (
-        l.attributed_to_partner_id = (select auth.uid())
-        or l.attributed_to_contractor_id = (select auth.uid())
+        (p.role = 'partner' and l.attributed_to_partner_id = p.id)
+        or (p.role = 'contractor' and l.attributed_to_contractor_id = p.id)
       )
   );
 $$;
@@ -96,16 +101,26 @@ grant execute on function public.caller_owns_lead(uuid) to authenticated;
 -- Additive SELECT policies. Owner keeps full access via leads_owner_all.
 -- Cross-role isolation is structural: a partner's leads carry
 -- attributed_to_partner_id (never the contractor column), so the partner policy
--- can only ever match the partner's own submissions.
+-- can only ever match the partner's own submissions. Each policy also requires
+-- the caller's CURRENT profiles.role — so revoking a submitter's role (while
+-- their auth account stays enabled) revokes their lead visibility immediately,
+-- mirroring current_partner_id()'s role guard. The profiles subquery reads the
+-- caller's own row (profiles_select_own RLS permits it).
 drop policy if exists leads_partner_read_own on public.leads;
 create policy leads_partner_read_own on public.leads
   for select to authenticated
-  using (attributed_to_partner_id = (select auth.uid()));
+  using (
+    attributed_to_partner_id = (select auth.uid())
+    and (select p.role from public.profiles p where p.id = (select auth.uid())) = 'partner'
+  );
 
 drop policy if exists leads_contractor_read_own on public.leads;
 create policy leads_contractor_read_own on public.leads
   for select to authenticated
-  using (attributed_to_contractor_id = (select auth.uid()));
+  using (
+    attributed_to_contractor_id = (select auth.uid())
+    and (select p.role from public.profiles p where p.id = (select auth.uid())) = 'contractor'
+  );
 
 -- ---------------------------------------------------------------------------
 -- 4. documents RLS — submitter reads + inserts docs for own leads
@@ -131,6 +146,9 @@ create policy documents_lead_submitter_read on public.documents
 -- INSERT: a submitter attaches a document to a lead they submitted. uploaded_by
 -- is pinned to the caller (audit-truth), and lead_id must be the only owning
 -- entity (matches documents_owner_entity_ck + documents_lead_deal_orthogonal).
+-- storage_path is bound to the lead's own folder (`leads/{lead_id}/…`, the
+-- useUploadDocument convention) so a row can never point at an arbitrary or
+-- foreign bucket object and surface as a false/broken supporting document.
 drop policy if exists documents_lead_submitter_insert on public.documents;
 create policy documents_lead_submitter_insert on public.documents
   for insert to authenticated
@@ -140,6 +158,7 @@ create policy documents_lead_submitter_insert on public.documents
     and client_id is null
     and deal_id is null
     and public.caller_owns_lead(lead_id)
+    and storage_path like 'leads/' || lead_id::text || '/%'
   );
 
 -- ---------------------------------------------------------------------------
