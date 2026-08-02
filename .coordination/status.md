@@ -1,5 +1,14 @@
 # Agent Coordination Status
 
+## DOCTOR-BUILD — Partner portal welcome screen (2026-08-02)
+- Branch: `claude/partner-portal-welcome-fbd8kz` (fresh main, d62c581). One PR; Macroscope reviews; **owner merges — agent does NOT merge**.
+- Lane (this agent ONLY): `src/pages/PartnerGate.tsx` + `src/pages/PartnerHomePage.tsx`. Does NOT touch LoginPage/AuthPage, App.tsx, migrations, or anything in the CONTRACTOR-BUILD lane (`contractor` role migration, post-login redirect, App.tsx `/partner/*` + `/contractor/*` route entries, `src/pages/Contractor*`, `src/pages/contractor/*`, `src/components/contractor/*`).
+- **Schema verified live before coding:** the referral-partner role is stored as `profiles.role = 'partner'` (`user_role` enum = `owner | partner` — there is NO `referral_partner` enum value). Partner identity: `profiles.referral_partner_id` → `referral_partners` (columns: id, name, contact_email, contact_phone, is_active, notes, slug — **no logo/branding columns**, so the header uses FNC branding; partner logos are C4/S11.2 territory). RLS confirmed: `profiles_select_own` + `referral_partners_partner_read_own` let a partner read exactly their own two rows.
+- **Note for CONTRACTOR-BUILD:** `PartnerGate` checks `role === 'partner'` and works as a layout route (`<Outlet />`) or a children wrapper — mount `/partner/*` however suits App.tsx. Non-partners are redirected to `/login` per the brief (today `/login` falls through the `*` catch-all to `/` = AuthPage; harmless either way).
+- Built: PartnerGate (role guard) + PartnerHomePage (FNC-branded header + sign-out, welcome using `referral_partners.name` — test partner renders "Bright Destiny", EmptyState "referred deals" placeholder, disabled "Submit a new lead" placeholder). No schema changes. `tsc && vite build` + oxlint clean (no new warnings).
+- Acceptance test after BOTH PRs merge + Vercel deploy: queenasdice@gmail.com logs in → contractor-lane redirect → `/partner` → gate passes → welcome screen with partner name.
+- Status: PR OPEN, awaiting Macroscope + owner merge.
+
 ## AUDIT-FIX LANE — full system audit + sequenced fixes (2026-07-31)
 - **Audit ✅ COMPLETE — `AUDIT.md`** (on branch `claude/fnc-crm-audit-fix-n48rvm`, awaiting owner merge). Read-only inventory of live `hvxruwkgmhjoypepffgv`: 29 tables/RLS/triggers/row counts, DEFINER RPC matrix (locks/idempotency/state guards/grants), Edge Functions, pg_cron (all green), routes, action buttons, notification events, commission-logic sites, advisors. **No blockers.** It supersedes the never-committed `.coordination/full-system-audit-2026-08-01.md` this file previously cited.
 - **Owner-approved fix order: FIX-C (docs) → FIX-A (grants migration) → FIX-B (notification prefs matrix).** One PR each, fresh main, Macroscope, owner merges.
