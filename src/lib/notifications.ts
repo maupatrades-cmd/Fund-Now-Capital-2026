@@ -1,6 +1,7 @@
 // Notification presentation helpers (A11 / SPEC S4).
-// Labels + icons cover the full `notification_event_type` enum (30 values,
-// verified against the live enum 2026-07-31). Any unknown/future value still
+// Labels + icons cover the full `notification_event_type` enum (31 values —
+// 30 verified 2026-07-31 + LEAD_SUBMITTED_BY_CONTRACTOR added by the LEAD-SUBMIT
+// lane 2026-08-02). Any unknown/future value still
 // degrades gracefully: eventLabel() falls back to the raw enum string and
 // eventIcon() falls back to the Bell icon.
 import {
@@ -52,11 +53,12 @@ export type Notification = {
   read_at: string | null;
 };
 
-// Full S4 event list — all 30 `notification_event_type` enum values, in enum
+// Full S4 event list — all 31 `notification_event_type` enum values, in enum
 // order. The filter and preferences matrix cover them all.
 export const NOTIFICATION_EVENT_TYPES = [
   { value: "LEAD_CREATED_FOR_YOU", label: "Lead created for you" },
   { value: "LEAD_SUBMITTED_BY_PARTNER", label: "Lead submitted by partner" },
+  { value: "LEAD_SUBMITTED_BY_CONTRACTOR", label: "Lead submitted by contractor" },
   { value: "LEAD_QUALIFICATION_UPDATED", label: "Lead qualification updated" },
   { value: "DEAL_SUBMITTED_TO_FUNDER", label: "Deal submitted to funder" },
   { value: "DEAL_APPROVED", label: "Deal approved" },
@@ -100,6 +102,7 @@ const EVENT_ICON: Record<string, LucideIcon> = {
   // Leads
   LEAD_CREATED_FOR_YOU: UserPlus,
   LEAD_SUBMITTED_BY_PARTNER: Handshake,
+  LEAD_SUBMITTED_BY_CONTRACTOR: Handshake,
   LEAD_QUALIFICATION_UPDATED: UserCog,
   LEAD_STARTED_QUALIFICATION: UserSearch,
   LEAD_QUALIFIED: UserCheck,

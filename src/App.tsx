@@ -5,6 +5,8 @@ import AuthPage from "@/pages/AuthPage";
 import OwnerGate from "@/components/layout/OwnerGate";
 import PartnerGate from "@/pages/PartnerGate";
 import PartnerHomePage from "@/pages/PartnerHomePage";
+import PartnerSubmitLeadPage from "@/pages/partner/SubmitLeadPage";
+import PartnerMyLeadsPage from "@/pages/partner/MyLeadsPage";
 import ContractorGate from "@/pages/ContractorGate";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
@@ -84,6 +86,8 @@ function AppRoutes() {
       */}
       <Route path="/partner" element={<PartnerGate />}>
         <Route index element={<PartnerHomePage />} />
+        <Route path="submit-lead" element={<PartnerSubmitLeadPage />} />
+        <Route path="leads" element={<PartnerMyLeadsPage />} />
         <Route path="*" element={<Navigate to="/partner" replace />} />
       </Route>
       <Route path="/contractor/*" element={<ContractorGate />} />

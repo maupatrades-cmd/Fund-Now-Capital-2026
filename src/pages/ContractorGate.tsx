@@ -3,6 +3,8 @@ import { useProfileRole } from "@/hooks/useProfileRole";
 import { roleHome } from "@/lib/roles";
 import { useSession } from "@/lib/useSession";
 import ContractorHomePage from "./ContractorHomePage";
+import ContractorSubmitLeadPage from "./contractor/SubmitLeadPage";
+import ContractorMyLeadsPage from "./contractor/MyLeadsPage";
 
 // Session + role guard for everything under /contractor/*. The contractor
 // portal is its own world: contractors never see the owner CRM, and
@@ -44,6 +46,8 @@ export default function ContractorGate() {
   return (
     <Routes>
       <Route index element={<ContractorHomePage />} />
+      <Route path="submit-lead" element={<ContractorSubmitLeadPage />} />
+      <Route path="leads" element={<ContractorMyLeadsPage />} />
       <Route path="*" element={<Navigate to="/contractor" replace />} />
     </Routes>
   );
