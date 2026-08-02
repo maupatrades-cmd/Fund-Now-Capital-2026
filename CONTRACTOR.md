@@ -23,10 +23,13 @@ FNC's direct contractors are independent contractors — not employees. They:
 - New table: `contractors` (id, legal_name, id_number, contact_email, contact_phone,
   physical_address, bank_details, sars_tax_number, bee_status, service_agreement_url,
   service_agreement_signed_at, service_agreement_version, current_level, current_status,
-  created_at, activated_at, deactivated_at)
+  created_at, activated_at, suspended_at, suspension_reason, deactivated_at)
 - Application workflow: applicant fills form → screening → interview → agreement
   signing → onboarding → activation
-- Status stages (aligned with the full ONBOARDING.md workflow): `applicant`, `screening`, `interview_scheduled`, `agreement_pending`, `document_collection`, `training_pending`, `active`, `deactivated`, plus `rejected` as a terminal state
+- Status stages (aligned with the full ONBOARDING.md workflow): `applicant`, `screening`, `interview_scheduled`, `agreement_pending`, `document_collection`, `training_pending`, `active`, `suspended`, `deactivated`, plus `rejected` as a terminal state
+- `suspended` is temporary and reversible: `active` → `suspended` → back to `active`
+  (owner reinstates) or → `deactivated`. Suspended contractors cannot log in.
+  Suspension and reinstatement require a reason and write to audit_log
 - Only owner (Thapelo) can transition status
 - Every transition writes to audit_log
 
