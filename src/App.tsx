@@ -3,6 +3,9 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import AuthPage from "@/pages/AuthPage";
 import OwnerGate from "@/components/layout/OwnerGate";
+import PartnerGate from "@/pages/PartnerGate";
+import PartnerHomePage from "@/pages/PartnerHomePage";
+import ContractorGate from "@/pages/ContractorGate";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
 import DealDetailPage from "@/pages/DealDetailPage";
@@ -26,8 +29,27 @@ import NotificationPreferencesPage from "@/pages/NotificationPreferencesPage";
 import IndustriesPage from "@/pages/IndustriesPage";
 import FundersSettingsPage from "@/pages/FundersSettingsPage";
 import { ConfettiProvider } from "@/lib/celebration/ConfettiProvider";
+import { useProfileRole } from "@/hooks/useProfileRole";
+import { roleHome } from "@/lib/roles";
 import { useSession } from "@/lib/useSession";
 import { queryClient } from "@/lib/queryClient";
+
+// Signed-in landing for `/`: owner → /dashboard (unchanged), partner →
+// /partner, contractor → /contractor. Role errors fall through to /dashboard,
+// where OwnerGate handles non-owners exactly as before.
+function RoleLanding() {
+  const { data: role, isPending } = useProfileRole();
+
+  if (isPending) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-muted-foreground">
+        Loading…
+      </div>
+    );
+  }
+
+  return <Navigate to={roleHome(role)} replace />;
+}
 
 function AppRoutes() {
   const session = useSession();
@@ -45,8 +67,26 @@ function AppRoutes() {
     <Routes>
       <Route
         path="/"
-        element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />}
+        element={session ? <RoleLanding /> : <AuthPage />}
       />
+
+      {/*
+        Role portals — the route entries live here because App.tsx owns
+        routing; the gate components are each lane's own file.
+
+        PartnerGate (DOCTOR-BUILD lane) is a role-guard LAYOUT route: it runs
+        the partner-role check, then renders its children through <Outlet />,
+        so PartnerHomePage is mounted as the index child here. Any deeper
+        /partner/* path redirects back to /partner until real sub-screens land.
+
+        ContractorGate (this lane) instead owns its own internal <Routes>, so
+        it mounts under the /contractor/* splat and adds its own sub-screens.
+      */}
+      <Route path="/partner" element={<PartnerGate />}>
+        <Route index element={<PartnerHomePage />} />
+        <Route path="*" element={<Navigate to="/partner" replace />} />
+      </Route>
+      <Route path="/contractor/*" element={<ContractorGate />} />
 
       {/*
         Authenticated app — owner-only, shared sidebar/top-bar layout.

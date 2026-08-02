@@ -1,20 +1,28 @@
+import { Navigate } from "react-router-dom";
 import { ShieldAlert } from "lucide-react";
 import AppLayout from "./AppLayout";
 import { useProfileRole } from "@/hooks/useProfileRole";
+import { roleHome } from "@/lib/roles";
 import { supabase } from "@/lib/supabase";
 
-// Phase 1 is owner-only. Every authenticated screen sits behind this gate, so a
-// signed-in non-owner (e.g. a referral partner) can't reach the owner UI or its
-// edit controls. RLS is the real backstop; this keeps the UI honest too.
+// Every owner screen sits behind this gate, so a signed-in non-owner can't
+// reach the owner UI or its edit controls. Partners and contractors are
+// bounced to their own portals (POPIA cross-role isolation); an unknown role
+// still gets the access-restricted card. RLS is the real backstop; this
+// keeps the UI honest too.
 export default function OwnerGate() {
-  const { data: role, isLoading, isError } = useProfileRole();
+  const { data: role, isPending, isError } = useProfileRole();
 
-  if (isLoading) {
+  if (isPending) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-muted-foreground">
         Loading…
       </div>
     );
+  }
+
+  if (!isError && (role === "partner" || role === "contractor")) {
+    return <Navigate to={roleHome(role)} replace />;
   }
 
   if (isError || role !== "owner") {
