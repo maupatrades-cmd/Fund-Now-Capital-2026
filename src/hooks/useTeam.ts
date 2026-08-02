@@ -96,9 +96,13 @@ export type InviteResult = {
   email_sent?: boolean;
   temp_password?: string | null;
   message?: string;
-  // false when the POPIA audit row could not be written (persisted to
-  // audit_log_failures for backfill) — the UI surfaces a warning banner.
+  // false when the account was created but phone_number couldn't be saved.
+  phone_saved?: boolean;
+  // false when the POPIA audit row could not be written; audit_failure_recorded
+  // tells whether the fallback audit_log_failures row persisted (false = the
+  // double-failure case, nothing queued → escalate).
   audit_logged?: boolean;
+  audit_failure_recorded?: boolean;
 };
 
 export type DeactivateResult = {
@@ -106,6 +110,7 @@ export type DeactivateResult = {
   status: string;
   user_id: string;
   audit_logged?: boolean;
+  audit_failure_recorded?: boolean;
 };
 
 // Create (or idempotently resolve) a user via the admin-invite-user Edge

@@ -48,9 +48,22 @@ const btnPrimary =
 const btnNeutral =
   "inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-brand-navy hover:bg-slate-50";
 
-// Consistent copy for the POPIA audit-fallback banner (audit_logged:false).
-function auditWarnMsg(what: string): string {
-  return `${what} succeeded, but the audit-log entry could not be written. It has been flagged for backfill (audit_log_failures) — no action needed now, but let the admin know.`;
+type AuditWarning = { msg: string; severe: boolean };
+
+// Copy for the POPIA audit-fallback banner. `recorded` distinguishes "queued
+// for backfill" (amber, informational) from the double-failure case where the
+// fallback row ALSO failed and nothing is queued (red, escalate).
+function auditWarn(what: string, recorded: boolean): AuditWarning {
+  if (recorded) {
+    return {
+      msg: `${what} succeeded, but the audit-log entry could not be written. It has been flagged for backfill (audit_log_failures) — no action needed now, but let the admin know.`,
+      severe: false,
+    };
+  }
+  return {
+    msg: `${what} succeeded, but the audit-log entry could not be written AND the backfill record also failed — nothing is queued. Please escalate to the admin now so the POPIA record can be recovered.`,
+    severe: true,
+  };
 }
 
 const FILTER_TABS: { value: TeamFilter; label: string }[] = [
@@ -68,9 +81,9 @@ export default function TeamPage() {
   const [editing, setEditing] = useState<TeamMember | null>(null);
   const [deactivating, setDeactivating] = useState<TeamMember | null>(null);
   const [tempPassword, setTempPassword] = useState<{ name: string; password: string } | null>(null);
-  // Shown when an action returned audit_logged:false (the POPIA row was persisted
-  // to audit_log_failures for backfill instead of activity_logs).
-  const [auditWarning, setAuditWarning] = useState<string | null>(null);
+  // Shown when an action returned audit_logged:false (the POPIA row went to the
+  // audit_log_failures fallback — or, when severe, couldn't be queued at all).
+  const [auditWarning, setAuditWarning] = useState<AuditWarning | null>(null);
 
   const counts = useMemo(() => {
     const list = members ?? [];
@@ -114,13 +127,23 @@ export default function TeamPage() {
       </div>
 
       {auditWarning && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+        <div
+          className={
+            "flex items-start gap-2 rounded-lg border p-3 text-sm " +
+            (auditWarning.severe
+              ? "border-red-300 bg-red-50 text-red-800"
+              : "border-amber-300 bg-amber-50 text-amber-800")
+          }
+        >
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          <span className="flex-1">{auditWarning}</span>
+          <span className="flex-1">{auditWarning.msg}</span>
           <button
             type="button"
             onClick={() => setAuditWarning(null)}
-            className="shrink-0 rounded p-0.5 text-amber-700 hover:bg-amber-100"
+            className={
+              "shrink-0 rounded p-0.5 " +
+              (auditWarning.severe ? "text-red-700 hover:bg-red-100" : "text-amber-700 hover:bg-amber-100")
+            }
             aria-label="Dismiss"
           >
             <X className="h-4 w-4" />
@@ -203,7 +226,7 @@ function TeamTable({
   members: TeamMember[];
   onEdit: (m: TeamMember) => void;
   onDeactivate: (m: TeamMember) => void;
-  onAuditWarning: (msg: string) => void;
+  onAuditWarning: (w: AuditWarning) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
@@ -264,7 +287,7 @@ function RowActions({
   member: TeamMember;
   onEdit: () => void;
   onDeactivate: () => void;
-  onAuditWarning: (msg: string) => void;
+  onAuditWarning: (w: AuditWarning) => void;
 }) {
   const [open, setOpen] = useState(false);
   // Fixed-position anchor so the menu renders through a portal (document.body)
@@ -319,7 +342,7 @@ function RowActions({
       } else {
         toast.success(`Login link re-sent to ${member.email}`);
       }
-      if (res.audit_logged === false) onAuditWarning(auditWarnMsg("Resending the invite"));
+      if (res.audit_logged === false) onAuditWarning(auditWarn("Resending the invite", res.audit_failure_recorded === true));
     } catch (e) {
       toast.error((e as Error).message || "Could not resend the invite.");
     }
@@ -440,7 +463,7 @@ function InviteDialog({
 }: {
   onClose: () => void;
   onTempPassword: (name: string, password: string) => void;
-  onAuditWarning: (msg: string) => void;
+  onAuditWarning: (w: AuditWarning) => void;
 }) {
   const invite = useInviteUser();
   const [serverErr, setServerErr] = useState<string | null>(null);
@@ -498,12 +521,17 @@ function InviteDialog({
           `Click "Send Invite" again to retry, or use "Resend invite" from the table.`;
         setServerErr(msg);
         toast.warning(msg);
-        if (res.audit_logged === false) onAuditWarning(auditWarnMsg("Creating the account"));
+        if (res.audit_logged === false) onAuditWarning(auditWarn("Creating the account", res.audit_failure_recorded === true));
         return;
       }
 
       toast.success(`${v.full_name.trim()} invited as ${roleLabel(v.role)}`);
-      if (res.audit_logged === false) onAuditWarning(auditWarnMsg("Inviting the person"));
+      if (res.phone_saved === false) {
+        toast.warning(
+          `${v.full_name.trim()}'s account was created, but the phone number couldn't be saved. Edit the person to add it.`,
+        );
+      }
+      if (res.audit_logged === false) onAuditWarning(auditWarn("Inviting the person", res.audit_failure_recorded === true));
       if (v.invite_method === "temp_password" && res.temp_password) {
         onClose();
         onTempPassword(v.full_name.trim(), res.temp_password);
@@ -718,7 +746,7 @@ function DeactivateDialog({
 }: {
   member: TeamMember;
   onClose: () => void;
-  onAuditWarning: (msg: string) => void;
+  onAuditWarning: (w: AuditWarning) => void;
 }) {
   const deactivate = useDeactivateUser();
   const [confirmText, setConfirmText] = useState("");
@@ -735,7 +763,7 @@ function DeactivateDialog({
     try {
       const res = await deactivate.mutateAsync(member.id);
       toast.success(`${member.full_name || member.email} deactivated`);
-      if (res.audit_logged === false) onAuditWarning(auditWarnMsg("Deactivating the person"));
+      if (res.audit_logged === false) onAuditWarning(auditWarn("Deactivating the person", res.audit_failure_recorded === true));
       onClose();
     } catch (e) {
       const msg = (e as Error).message || "Could not deactivate the user.";

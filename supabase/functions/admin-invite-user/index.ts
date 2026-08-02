@@ -154,14 +154,19 @@ async function sendMagicLinkEmail(to: string, fullName: string, role: string, li
   }
 }
 
+// Result of an audit attempt: `ok` = the activity_logs row was written;
+// `recorded` = (only when !ok) the fallback audit_log_failures row persisted.
+// The double-failure case (!ok && !recorded) means the POPIA gap is NOT queued
+// anywhere — the UI escalates hard on that.
+type AuditResult = { ok: boolean; recorded: boolean };
+
 // Write a Team-Management audit row (POPIA: every user action is logged).
 // service-role bypasses RLS exactly like the DEFINER triggers that own this table.
 //
-// Returns true when the activity_logs row was written. On failure it does NOT
-// throw (the primary, irreversible operation already succeeded) — instead it
-// console.errors AND persists a durable audit_log_failures row so the missing
-// POPIA entry can be backfilled, then returns false so the response can carry
-// audit_logged:false for the owner-facing warning banner.
+// Never throws (the primary, irreversible operation already succeeded). On an
+// activity_logs failure it console.errors AND persists the FULL intended row to
+// audit_log_failures (payload + queryable columns) so the missing POPIA entry
+// can be reconstructed verbatim by a backfill sweep.
 async function audit(
   service: SupabaseClient,
   caller: { id: string; email: string | null },
@@ -170,8 +175,9 @@ async function audit(
   action: string,
   description: string,
   after: Record<string, unknown>,
-): Promise<boolean> {
-  const { error } = await service.from("activity_logs").insert({
+): Promise<AuditResult> {
+  // Build the intended activity_logs row once — reused as the fallback payload.
+  const row = {
     user_id: caller.id,
     user_email: caller.email,
     user_role: "owner",
@@ -180,18 +186,27 @@ async function audit(
     entity_id: targetUserId,
     description,
     after_values: after,
-  });
-  if (!error) return true;
+  };
+  const { error } = await service.from("activity_logs").insert(row);
+  if (!error) return { ok: true, recorded: false };
 
   console.error("activity_logs insert failed:", error.message);
   const { error: fallbackErr } = await service.from("audit_log_failures").insert({
     edge_function: "admin-invite-user",
-    target_user_id: targetUserId,
     action,
+    actor_user_id: caller.id,
+    actor_email: caller.email,
+    target_user_id: targetUserId,
+    event_type: eventType,
+    description,
+    payload: row,
     error_message: error.message ?? String(error),
   });
-  if (fallbackErr) console.error("audit_log_failures insert also failed:", fallbackErr.message);
-  return false;
+  if (fallbackErr) {
+    console.error("audit_log_failures insert also failed:", fallbackErr.message);
+    return { ok: false, recorded: false };
+  }
+  return { ok: false, recorded: true };
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -281,7 +296,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const link = linkData?.properties?.action_link;
       if (linkErr || !link) return json({ error: "Could not generate a login link" }, 500);
       const sent = await sendMagicLinkEmail(email, fullName, role, link);
-      const auditLogged = await audit(
+      const auditRes = await audit(
         service,
         callerInfo,
         "UPDATE",
@@ -296,7 +311,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         user_id: existing.id,
         invite_method: "magic_link",
         email_sent: sent,
-        audit_logged: auditLogged,
+        audit_logged: auditRes.ok,
+        audit_failure_recorded: auditRes.recorded,
       });
     }
     // temp_password on an existing user: don't silently reset their password.
@@ -348,6 +364,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // handle_new_user() creates the profile row from user_metadata (full_name,
   // role) but not phone_number — upsert to fill phone and guarantee the row
   // even if the trigger timing ever changed. onConflict=id.
+  let phoneSaved = true;
   const { data: upserted, error: profileErr } = await service
     .from("profiles")
     .upsert(
@@ -356,7 +373,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
     )
     .select("id");
   if (profileErr || !upserted || upserted.length !== 1) {
-    return json({ error: "User created but profile could not be saved" }, 500);
+    console.error("profile upsert failed:", profileErr?.message);
+    // handle_new_user should have created the base row at createUser; only
+    // phone_number is missing here. Confirm the row exists before deciding.
+    const { data: baseRow } = await service.from("profiles").select("id").eq("id", userId).maybeSingle();
+    if (!baseRow) {
+      // No profile at all — delete the orphaned Auth user so a retry is clean
+      // (rather than stranding an account with no profile).
+      await service.auth.admin.deleteUser(userId);
+      return json({ error: "Could not create the user profile. Please try again." }, 500);
+    }
+    // Account is usable (login + role intact); only phone didn't save. Continue
+    // so a temp password is still returned and access is delivered — the owner
+    // is told to add the phone number later via phone_saved:false.
+    phoneSaved = false;
   }
 
   // ---- deliver access ------------------------------------------------------
@@ -372,7 +402,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     emailSent = await sendMagicLinkEmail(email, fullName, role, link);
   }
 
-  const auditLogged = await audit(
+  const auditRes = await audit(
     service,
     callerInfo,
     "CREATE",
@@ -389,6 +419,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     invite_method: inviteMethod,
     email_sent: inviteMethod === "magic_link" ? emailSent : undefined,
     temp_password: inviteMethod === "temp_password" ? tempPassword : undefined,
-    audit_logged: auditLogged,
+    phone_saved: phoneSaved,
+    audit_logged: auditRes.ok,
+    audit_failure_recorded: auditRes.recorded,
   });
 });

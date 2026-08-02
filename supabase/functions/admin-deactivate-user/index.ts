@@ -101,16 +101,31 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .eq("id", userId)
     .select("id");
   if (updErr || !updated || updated.length !== 1) {
-    return json({ error: "Sessions revoked but the profile flag could not be saved" }, 500);
+    // Roll back the ban so we don't leave an inconsistent state (banned in Auth
+    // but is_active=true in the UI). Ban-first is deliberate — killing access
+    // before flipping the flag — so the rollback here is UNBAN, not "flip first"
+    // (which could leave a UI-deactivated user still able to log in).
+    console.error("profile update failed after ban; rolling back ban:", updErr?.message);
+    const { error: unbanErr } = await service.auth.admin.updateUserById(userId, { ban_duration: "none" });
+    if (unbanErr) {
+      console.error("ban rollback failed:", unbanErr.message);
+      return json(
+        { error: "Could not save the deactivation and the session rollback also failed — please retry." },
+        500,
+      );
+    }
+    return json({ error: "Could not save the deactivation. No change was made — please retry." }, 500);
   }
 
   // ---- 3. audit (POPIA) ----------------------------------------------------
   // The ban + flag already succeeded, so a failed audit write must not report
-  // the deactivation as failed. Instead: console.error + persist an
-  // audit_log_failures row for backfill, and return audit_logged:false so the
-  // owner UI can show a warning banner.
+  // the deactivation as failed. Instead: console.error + persist the FULL
+  // intended row to audit_log_failures (payload + queryable columns) for
+  // backfill. audit_logged:false + audit_failure_recorded let the owner UI
+  // distinguish "queued for backfill" from the double-failure "nothing queued".
   let auditLogged = true;
-  const { error: auditErr } = await service.from("activity_logs").insert({
+  let auditFailureRecorded = false;
+  const auditRow = {
     user_id: caller.id,
     user_email: caller.email ?? null,
     user_role: "owner",
@@ -121,18 +136,31 @@ Deno.serve(async (req: Request): Promise<Response> => {
     changed_fields: ["is_active"],
     before_values: { is_active: true },
     after_values: { is_active: false },
-  });
+  };
+  const { error: auditErr } = await service.from("activity_logs").insert(auditRow);
   if (auditErr) {
     auditLogged = false;
     console.error("activity_logs insert failed:", auditErr.message);
     const { error: fallbackErr } = await service.from("audit_log_failures").insert({
       edge_function: "admin-deactivate-user",
-      target_user_id: userId,
       action: "deactivate",
+      actor_user_id: caller.id,
+      actor_email: caller.email ?? null,
+      target_user_id: userId,
+      event_type: "UPDATE",
+      description: auditRow.description,
+      payload: auditRow,
       error_message: auditErr.message ?? String(auditErr),
     });
     if (fallbackErr) console.error("audit_log_failures insert also failed:", fallbackErr.message);
+    else auditFailureRecorded = true;
   }
 
-  return json({ ok: true, status: "deactivated", user_id: userId, audit_logged: auditLogged });
+  return json({
+    ok: true,
+    status: "deactivated",
+    user_id: userId,
+    audit_logged: auditLogged,
+    audit_failure_recorded: auditFailureRecorded,
+  });
 });

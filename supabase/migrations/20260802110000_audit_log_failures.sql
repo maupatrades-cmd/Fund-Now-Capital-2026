@@ -17,12 +17,22 @@
 -- by an API role — hence owner-read RLS with no INSERT/UPDATE/DELETE policy,
 -- exactly like activity_logs.
 
+-- Columns capture BOTH queryable metadata AND the full intended activity_logs
+-- payload, so a later backfill sweep can reconstruct the missing POPIA row
+-- verbatim (actor, event_type, description, and before/after values live in
+-- `payload`). Without the payload the table could only say "a row is missing",
+-- not what it should have contained.
 create table if not exists public.audit_log_failures (
   id             uuid primary key default gen_random_uuid(),
   attempted_at   timestamptz not null default now(),
   edge_function  text not null,
-  target_user_id uuid,
   action         text not null,
+  actor_user_id  uuid,
+  actor_email    text,
+  target_user_id uuid,
+  event_type     text,
+  description    text,
+  payload        jsonb,          -- the complete intended activity_logs insert
   error_message  text,
   backfilled     boolean not null default false
 );
