@@ -69,3 +69,37 @@ begin
   return new;
 end;
 $function$;
+
+-- ---------------------------------------------------------------------------
+-- Unique-index carve-out (completes the 'other' change above)
+-- ---------------------------------------------------------------------------
+-- The versioning trigger now leaves every 'other' row is_current_version=true.
+-- But documents_current_nonperiod_uq enforces ONE current non-period doc per
+-- (owning_entity_id, document_type) — and 'other' is non-period — so a second
+-- 'other' doc on the same entity would raise a unique violation. Exclude 'other'
+-- from that index so multiple current 'other' docs coexist.
+--
+-- Plain DROP + CREATE (not CONCURRENTLY) is deliberate and owner-approved: the
+-- documents table is tiny (single-digit rows) and not yet exercised by this
+-- feature, so the write-blocking-lock concern behind the CONCURRENTLY rule does
+-- not apply; doing the swap inside this one migration transaction keeps the
+-- whole 'other' carve-out atomic (clean rollback on any failure) and avoids the
+-- brief two-index window a CONCURRENTLY split would open.
+drop index if exists public.documents_current_nonperiod_uq;
+create unique index documents_current_nonperiod_uq
+  on public.documents (owning_entity_id, document_type)
+  where (is_current_version and not is_period_scoped and document_type <> 'other'::public.document_type);
+
+-- ---------------------------------------------------------------------------
+-- Self-check: the carve-out is present in both the trigger body and the index.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if pg_get_functiondef('public.documents_apply_versioning'::regproc) not like '%''other''%' then
+    raise exception 'documents_apply_versioning: other-type carve-out missing';
+  end if;
+  if (select pg_get_indexdef('public.documents_current_nonperiod_uq'::regclass)) not like '%<> ''other''%' then
+    raise exception 'documents_current_nonperiod_uq: other-type exclusion missing';
+  end if;
+end;
+$$;

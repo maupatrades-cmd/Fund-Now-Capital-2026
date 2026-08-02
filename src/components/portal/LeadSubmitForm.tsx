@@ -93,8 +93,12 @@ export default function LeadSubmitForm({ portal }: { portal: PortalKind }) {
         setFileError(`"${f.name}" is larger than 10MB and was not added.`);
         continue;
       }
-      // De-dupe by name+size so re-picking the same file doesn't double it.
-      if (!next.some((e) => e.name === f.name && e.size === f.size)) next.push(f);
+      // De-dupe by name+size+lastModified so re-picking the exact same file
+      // doesn't double it, while two genuinely different files that happen to
+      // share a name and byte length are both kept (not silently dropped).
+      if (!next.some((e) => e.name === f.name && e.size === f.size && e.lastModified === f.lastModified)) {
+        next.push(f);
+      }
     }
     setFiles(next);
     if (fileInputRef.current) fileInputRef.current.value = "";
