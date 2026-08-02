@@ -1,0 +1,41 @@
+import { Navigate, Route, Routes } from "react-router-dom";
+import { useProfileRole } from "@/hooks/useProfileRole";
+import { roleHome } from "@/lib/roles";
+import ContractorHomePage from "./ContractorHomePage";
+
+// Session + role guard for everything under /contractor/*. The contractor
+// portal is its own world: contractors never see the owner CRM, and
+// non-contractors never see this portal (POPIA cross-role isolation — the
+// same treatment OwnerGate gives the owner routes). RLS remains the real
+// backstop; this keeps the UI honest.
+export default function ContractorGate() {
+  const { data: role, isLoading, isError } = useProfileRole();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-muted-foreground">
+        Loading…
+      </div>
+    );
+  }
+
+  // Signed out (role resolves to null) or lookup failure → login screen.
+  if (isError || role == null) {
+    return <Navigate to="/" replace />;
+  }
+
+  // Signed in as someone else → their own home (owner → /dashboard,
+  // partner → /partner).
+  if (role !== "contractor") {
+    return <Navigate to={roleHome(role)} replace />;
+  }
+
+  // The gate owns its subtree (App.tsx mounts it at /contractor/*), so nested
+  // contractor screens are added here in later PRs without touching App.tsx.
+  return (
+    <Routes>
+      <Route index element={<ContractorHomePage />} />
+      <Route path="*" element={<Navigate to="/contractor" replace />} />
+    </Routes>
+  );
+}

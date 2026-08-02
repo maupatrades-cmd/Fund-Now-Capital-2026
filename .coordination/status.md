@@ -1,5 +1,21 @@
 # Agent Coordination Status
 
+## CONTRACTOR-BUILD LANE — contractor role + portal foundation (2026-08-02)
+- Branch: `claude/contractor-role-portal-routing-urj72p` (fresh main @ d62c581). One PR. DO NOT merge — owner merges after Macroscope.
+- **Scope shipped in this PR:**
+  - Migration `20260802090000_contractor_role.sql` — adds `contractor` to the live `public.user_role` enum (verified live 2026-08-02: role lives on `profiles.role`, bootstrapped by `handle_new_user` from `raw_user_meta_data->>'role'`; NOT a JWT claim, NOT a separate table). No new tables/RPCs → no grant-matrix change; DO-block assertions (exact 3 labels; zero RLS policies referencing contractor). **Apply to live AFTER merge.** Contractor gets zero data access by default: partner surfaces scope via `current_partner_id()` (NULL for contractors), everything else `is_owner()`.
+  - `src/lib/roles.ts` — `roleHome()` single source of truth: owner → `/dashboard`, partner → `/partner`, contractor → `/contractor`.
+  - Three-way post-login redirect (AuthPage) + role-aware `/` landing (App.tsx `RoleLanding`).
+  - App.tsx routes: `/partner/*` → `PartnerGate` (DOCTOR-BUILD's file) · `/contractor/*` → `ContractorGate` (mine).
+  - `src/pages/ContractorGate.tsx` (session+role guard, owns its subtree) + `src/pages/ContractorHomePage.tsx` (minimal shell: header/logo/logout, welcome, two placeholder cards).
+  - OwnerGate: partner/contractor hitting any owner route now bounce to their own portal (was: static "Owner access only" card); unknown-role card retained.
+- **⚠️ MERGE ORDER (owner):** DOCTOR-BUILD's PR (creates `src/pages/PartnerGate.tsx`) must merge **before or together with** this PR — App.tsx imports it, so main won't build (Vercel deploy fails) if this merges alone. Verified: with PartnerGate present, tsc+vite build+oxlint all green; without it, the missing import is the only error.
+- **Contract for DOCTOR-BUILD:** App.tsx mounts `<Route path="/partner/*" element={<PartnerGate />} />` — PartnerGate must default-export a component that owns the whole `/partner` subtree (session + partner-role check inside; render PartnerHomePage itself or via descendant `<Routes>` with relative paths). Mirror ContractorGate.tsx if useful. Note: the live role enum value is **`'partner'`** (not `referral_partner`); `roleHome()` in `src/lib/roles.ts` is the shared redirect map — use it, don't hand-roll.
+- Files NOT touched (DOCTOR-BUILD lane): `src/pages/PartnerHomePage.tsx`, `src/pages/PartnerGate.tsx`, `src/pages/partner/*`, `src/components/partner/*`, `src/lib/notifications.ts`.
+- **Post-merge steps:** 1) apply migration to live; 2) owner creates a test contractor auth user (dashboard → Add user, metadata `{"role": "contractor"}` — public signup stays OFF); 3) acceptance: owner login → /dashboard · Doctor → /partner · contractor → /contractor welcome shell · contractor hits /dashboard → bounced to /contractor · owner hits /contractor → bounced to /dashboard.
+- Out of scope (later PRs): lead submission form, `/apply` application form, onboarding wizard, training, commission display, `contractors` table.
+- Last update: 2026-08-02.
+
 ## AUDIT-FIX LANE — full system audit + sequenced fixes (2026-07-31)
 - **Audit ✅ COMPLETE — `AUDIT.md`** (on branch `claude/fnc-crm-audit-fix-n48rvm`, awaiting owner merge). Read-only inventory of live `hvxruwkgmhjoypepffgv`: 29 tables/RLS/triggers/row counts, DEFINER RPC matrix (locks/idempotency/state guards/grants), Edge Functions, pg_cron (all green), routes, action buttons, notification events, commission-logic sites, advisors. **No blockers.** It supersedes the never-committed `.coordination/full-system-audit-2026-08-01.md` this file previously cited.
 - **Owner-approved fix order: FIX-C (docs) → FIX-A (grants migration) → FIX-B (notification prefs matrix).** One PR each, fresh main, Macroscope, owner merges.

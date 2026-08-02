@@ -3,6 +3,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import AuthPage from "@/pages/AuthPage";
 import OwnerGate from "@/components/layout/OwnerGate";
+import PartnerGate from "@/pages/PartnerGate";
+import ContractorGate from "@/pages/ContractorGate";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
 import DealDetailPage from "@/pages/DealDetailPage";
@@ -26,8 +28,27 @@ import NotificationPreferencesPage from "@/pages/NotificationPreferencesPage";
 import IndustriesPage from "@/pages/IndustriesPage";
 import FundersSettingsPage from "@/pages/FundersSettingsPage";
 import { ConfettiProvider } from "@/lib/celebration/ConfettiProvider";
+import { useProfileRole } from "@/hooks/useProfileRole";
+import { roleHome } from "@/lib/roles";
 import { useSession } from "@/lib/useSession";
 import { queryClient } from "@/lib/queryClient";
+
+// Signed-in landing for `/`: owner → /dashboard (unchanged), partner →
+// /partner, contractor → /contractor. Role errors fall through to /dashboard,
+// where OwnerGate handles non-owners exactly as before.
+function RoleLanding() {
+  const { data: role, isLoading } = useProfileRole();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-muted-foreground">
+        Loading…
+      </div>
+    );
+  }
+
+  return <Navigate to={roleHome(role)} replace />;
+}
 
 function AppRoutes() {
   const session = useSession();
@@ -45,8 +66,18 @@ function AppRoutes() {
     <Routes>
       <Route
         path="/"
-        element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />}
+        element={session ? <RoleLanding /> : <AuthPage />}
       />
+
+      {/*
+        Role portals. Each gate owns its whole subtree (session + role check
+        inside), so new portal screens land in the gate, not here. PartnerGate
+        is the DOCTOR-BUILD lane's file (Phase D partner portal) — the route
+        entry lives here because App.tsx owns routing; its PR must merge
+        before or with this one.
+      */}
+      <Route path="/partner/*" element={<PartnerGate />} />
+      <Route path="/contractor/*" element={<ContractorGate />} />
 
       {/*
         Authenticated app — owner-only, shared sidebar/top-bar layout.

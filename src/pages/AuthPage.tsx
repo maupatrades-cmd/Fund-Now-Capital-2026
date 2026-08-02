@@ -10,6 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { roleHome } from "@/lib/roles";
 import { supabase } from "@/lib/supabase";
 import "./AuthPage.css";
 
@@ -256,7 +257,7 @@ export default function AuthPage() {
 
   const onSubmit = async (values: LoginValues) => {
     setAuthError(null);
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: values.email,
       password: values.password,
     });
@@ -265,7 +266,21 @@ export default function AuthPage() {
       setAuthError(error.message);
       return;
     }
-    navigate("/dashboard", { replace: true });
+
+    // Role-based landing: owner → /dashboard (unchanged), partner → /partner,
+    // contractor → /contractor. A failed role lookup falls back to /dashboard,
+    // where OwnerGate re-checks and routes/blocks non-owners.
+    let role: string | null = null;
+    const uid = data.user?.id;
+    if (uid) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", uid)
+        .maybeSingle();
+      role = (profile?.role as string | undefined) ?? null;
+    }
+    navigate(roleHome(role), { replace: true });
   };
 
   return (

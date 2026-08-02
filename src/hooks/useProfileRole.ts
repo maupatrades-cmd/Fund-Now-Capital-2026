@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 
-// The signed-in user's role from their profiles row ('owner' | 'partner' | null).
+// The signed-in user's role from their profiles row
+// ('owner' | 'partner' | 'contractor' | null).
 export function useProfileRole() {
   return useQuery({
     queryKey: ["profile-role"],
