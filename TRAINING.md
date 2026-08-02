@@ -145,6 +145,10 @@ and legal protection.
 Training gates contractor progression through their operational stages:
 
 - **Modules 1-3 required** before first lead submission (Stage 1 entry to `active` status)
+- Contractors may submit leads after completing Modules 1-3, but must achieve full
+  certification (all 6 modules + final assessment) to progress beyond Level 1
+  reimbursement — early submission is intentional, letting contractors start earning
+  while completing training
 - **Modules 4-6 required** before progressing from Base to Level 1 reimbursement
 - **Full certification (final assessment passed)** required before Level 2
 - **Annual refresher** required to maintain active status (contractor deactivated

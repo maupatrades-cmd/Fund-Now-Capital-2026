@@ -60,7 +60,10 @@ The onboarding process must:
 - Contractor uploads the 17 required forms/documents (see list below)
 - Each document verified by Thapelo (approved / rejected / needs re-upload)
 - Real: contractor cannot progress until all required documents are approved
-- Status transitions: `document_collection` → `training_pending` (once all docs approved)
+- The gate means "all applicable documents": conditional documents (VAT registration,
+  CIPC company registration, shareholding certificate) can be marked Not Applicable
+  by the owner and do not block progression
+- Status transitions: `document_collection` → `training_pending` (once all applicable docs approved)
 
 ### Stage 6: Training + Certification
 

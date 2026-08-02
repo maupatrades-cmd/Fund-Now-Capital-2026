@@ -26,7 +26,7 @@ FNC's direct contractors are independent contractors — not employees. They:
   created_at, activated_at, deactivated_at)
 - Application workflow: applicant fills form → screening → interview → agreement
   signing → onboarding → activation
-- 4 status stages: `applicant`, `screening`, `agreement_pending`, `active`, `deactivated`
+- Status stages (aligned with the full ONBOARDING.md workflow): `applicant`, `screening`, `interview_scheduled`, `agreement_pending`, `document_collection`, `training_pending`, `active`, `deactivated`, plus `rejected` as a terminal state
 - Only owner (Thapelo) can transition status
 - Every transition writes to audit_log
 
