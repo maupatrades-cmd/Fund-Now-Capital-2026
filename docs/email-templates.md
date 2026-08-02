@@ -77,6 +77,7 @@ role-aware funder, formatted amount, client name. It does **not** pass a
 | `deal_funded` | check-in-circle | `{funderDisplay} has funded {dealReference} for {amount}. The advance to {clientName} is complete.` + "record the funded date and start the commission process" closing |
 | `weekly_summary` | bar chart | fixed digest copy (no deal fields) |
 | `commission_paid` | rand-in-circle | `A commission payment of {amount} has been recorded for {dealReference} ({clientName}).` + closing |
+| `bonus_paid` | rand-in-circle | `A bonus payment of {amount} has been recorded for {dealReference} ({clientName}).` + "see the bonus detail" closing — bonus amounts aren't hydrated (no `bonus_record_id` path), so the DB-composed `bodyText` fallback is the normal path today |
 | `generic` | info | fallback: renders `bodyText` (safety net; production events should map to one of the above) |
 
 Each variant also carries a locked **subject**, **H1**, and **CTA label** (see

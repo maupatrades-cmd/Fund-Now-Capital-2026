@@ -5,7 +5,8 @@
 // deep-navy 3-column footer) wrapping four variants that differ only by a 40px
 // accent icon + locked copy: welcome · deal_approved · weekly_summary ·
 // commission_paid. (DEAL_FUNDED reuses the deal_approved layout with funded
-// copy — the brief is silent on it; documented decision.)
+// copy — the brief is silent on it; documented decision. BONUS_PAID reuses the
+// commission_paid layout with bonus copy — same reuse pattern, audit FIX-B.)
 //
 // The Edge Function hydrates display data (role-aware funder name, deal
 // reference, formatted amount, client name) and passes it in; the template only
@@ -55,6 +56,7 @@ export type EmailVariant =
   | "deal_funded"
   | "weekly_summary"
   | "commission_paid"
+  | "bonus_paid"
   | "generic";
 
 export type EmailModel = {
@@ -78,6 +80,9 @@ export function eventCategory(eventType: string): string {
   if (eventType.startsWith("LEAD_")) return "lead";
   if (eventType.startsWith("DEAL_")) return "deal";
   if (eventType.startsWith("COMMISSION_")) return "commission";
+  // A partner bonus is a commission-adjacent money event (C2.4) — same footer
+  // subscription category as commission notifications.
+  if (eventType === "BONUS_PAID") return "commission";
   if (eventType.startsWith("FUNDER_")) return "funder";
   if (eventType.startsWith("CLIENT_")) return "client";
   if (eventType.startsWith("DOCUMENT_")) return "document";
@@ -95,6 +100,11 @@ export function resolveVariant(eventType: string): EmailVariant {
       return "deal_funded";
     case "COMMISSION_PAID":
       return "commission_paid";
+    // A settled bonus (C2.4) is money received — bonus_paid reuses the
+    // commission_paid layout with bonus copy (S16.4 tone map; audit FIX-B,
+    // closing the generic-fallback gap Macroscope flagged on PR #95).
+    case "BONUS_PAID":
+      return "bonus_paid";
     // Lead milestones REUSE an existing visual layout (accent icon + shell);
     // their copy is lead-specific, set in variantContent() by eventType. A
     // qualified / not-qualified lead borrows the deal_approved layout (positive
@@ -181,10 +191,11 @@ function accentIcon(variant: EmailVariant): { svg: string; label: string } {
         svg: `${open} aria-label="Weekly summary"><path d="M4 20h16" ${s}/><rect x="6" y="12" width="3" height="6" rx="1" ${s}/><rect x="11" y="8" width="3" height="10" rx="1" ${s}/><rect x="16" y="4" width="3" height="14" rx="1" ${s}/></svg>`,
       };
     case "commission_paid":
-      // Rand in circle
+    case "bonus_paid":
+      // Rand in circle (shared money icon — bonus_paid reuses the layout)
       return {
         label: "Commission",
-        svg: `${open} aria-label="Commission paid"><circle cx="12" cy="12" r="9" ${s}/><text x="12" y="16" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="${ICON}">R</text></svg>`,
+        svg: `${open} aria-label="Payment received"><circle cx="12" cy="12" r="9" ${s}/><text x="12" y="16" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="${ICON}">R</text></svg>`,
       };
     default:
       return {
@@ -393,6 +404,22 @@ function variantContent(m: EmailModel, variant: EmailVariant): VariantContent {
             ? `A commission payment of ${amt} has been recorded for ${ref} (${client}).`
             : (fallback || "A commission payment has been recorded."),
           "Open the deal to see the payment breakdown and confirm the split.",
+        ],
+      };
+    case "bonus_paid":
+      // Bonus amounts are not hydrated (no bonus_record_id path) — the
+      // DB-composed body_text carries the figures, so the fallback is the
+      // normal path here; the hydrated branch covers a future hydrator.
+      return {
+        subject: "Bonus paid",
+        h1: "Bonus paid",
+        ctaLabel: "View deal in CRM",
+        category: "commission",
+        paras: [
+          amt && ref && client
+            ? `A bonus payment of ${amt} has been recorded for ${ref} (${client}).`
+            : (fallback || "A bonus payment has been recorded."),
+          "Open the deal to see the bonus detail.",
         ],
       };
     default:
