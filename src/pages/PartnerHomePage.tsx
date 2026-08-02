@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Handshake, LogOut, PlusCircle } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/lib/useSession";
 
 /*
  * Partner Portal welcome screen — the first partner-facing surface (Phase D
@@ -17,20 +18,22 @@ import { supabase } from "@/lib/supabase";
 
 // The signed-in partner's display name: referral_partners.name via the
 // profiles.referral_partner_id link (verified live schema), falling back to
-// the profile's full_name, then the email's local part.
-function usePartnerName() {
+// the profile's full_name, then the email's local part. The query key carries
+// the user id so a different account signing in on the same tab can never be
+// served the previous partner's cached name (Macroscope PR #100 finding).
+function usePartnerName(user: { id: string; email?: string } | undefined) {
+  const uid = user?.id;
   return useQuery({
-    queryKey: ["partner-name"],
+    queryKey: ["partner-name", uid],
+    enabled: !!uid,
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<string | null> => {
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData.user;
-      if (!user) return null;
+      if (!uid) return null;
 
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("full_name, referral_partner_id")
-        .eq("id", user.id)
+        .eq("id", uid)
         .maybeSingle();
       if (profileError) throw profileError;
 
@@ -44,13 +47,16 @@ function usePartnerName() {
         if (partner?.name) return partner.name;
       }
 
-      return profile?.full_name ?? user.email?.split("@")[0] ?? null;
+      return profile?.full_name ?? user?.email?.split("@")[0] ?? null;
     },
   });
 }
 
 export default function PartnerHomePage() {
-  const { data: partnerName, isLoading } = usePartnerName();
+  const session = useSession();
+  // isPending (not isLoading) so the name placeholder also covers the brief
+  // window where the session is still resolving and the query is disabled.
+  const { data: partnerName, isPending } = usePartnerName(session?.user);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -79,7 +85,7 @@ export default function PartnerHomePage() {
         {/* Welcome */}
         <div className="space-y-1">
           <h1 className="text-2xl font-bold text-brand-navy">
-            {isLoading ? "Welcome" : `Welcome, ${partnerName ?? "Partner"}`}
+            {isPending ? "Welcome" : `Welcome, ${partnerName ?? "Partner"}`}
           </h1>
           <p className="text-sm text-muted-foreground">
             Many funders. More approvals. Your partner portal is taking shape — here's where
