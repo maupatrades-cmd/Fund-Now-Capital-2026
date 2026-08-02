@@ -16,6 +16,7 @@ import {
   Eye,
   EyeOff,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -75,7 +76,7 @@ const FILTER_TABS: { value: TeamFilter; label: string }[] = [
 ];
 
 export default function TeamPage() {
-  const { data: members, isLoading } = useTeamMembers();
+  const { data: members, isLoading, isError, refetch } = useTeamMembers();
   const [filter, setFilter] = useState<TeamFilter>("all");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editing, setEditing] = useState<TeamMember | null>(null);
@@ -107,6 +108,28 @@ export default function TeamPage() {
     return (
       <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading team…
+      </div>
+    );
+  }
+
+  // A load failure must not masquerade as an empty team ("No people yet").
+  if (isError) {
+    return (
+      <div className="max-w-5xl">
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-6 py-14 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-red-600">
+            <AlertTriangle className="h-7 w-7" strokeWidth={1.75} />
+          </span>
+          <div className="space-y-1">
+            <p className="text-base font-semibold text-brand-navy">Couldn't load the team</p>
+            <p className="mx-auto max-w-sm text-sm text-muted-foreground">
+              Something went wrong fetching the list. Check your connection and try again.
+            </p>
+          </div>
+          <button type="button" onClick={() => void refetch()} className={btnNeutral + " mt-1"}>
+            <Loader2 className="h-4 w-4" /> Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -507,7 +530,27 @@ function InviteDialog({
       });
 
       if (res.status === "existing") {
-        toast.info(res.message || `${v.email} is already a member.`);
+        // magic_link existing = a resend fired, so honor delivery + audit
+        // outcomes exactly like the created path (this is the retry-after-
+        // failure landing spot). temp_password existing sends/writes nothing.
+        if (res.invite_method === "magic_link") {
+          if (res.email_sent === false) {
+            const msg =
+              `${v.email.trim()} is already a member, but the login email could not be sent. ` +
+              `Click "Send Invite" again to retry, or use "Resend invite" from the table.`;
+            setServerErr(msg);
+            toast.warning(msg);
+            if (res.audit_logged === false)
+              onAuditWarning(auditWarn("Resending the invite", res.audit_failure_recorded === true));
+            return; // keep the dialog open for a retry
+          }
+          toast.success(`Login link sent to ${v.email.trim()} (already a member)`);
+          if (res.audit_logged === false)
+            onAuditWarning(auditWarn("Resending the invite", res.audit_failure_recorded === true));
+          onClose();
+          return;
+        }
+        toast.info(res.message || `${v.email.trim()} is already a member.`);
         onClose();
         return;
       }
