@@ -1,0 +1,759 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  Loader2,
+  UserPlus,
+  MoreVertical,
+  Pencil,
+  Send,
+  Ban,
+  Copy,
+  Check,
+  ShieldAlert,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  useTeamMembers,
+  useReferralPartnerOptions,
+  useInviteUser,
+  useUpdateUserRole,
+  useDeactivateUser,
+  type InviteResult,
+} from "@/hooks/useTeam";
+import {
+  ASSIGNABLE_ROLES,
+  roleLabel,
+  roleBadgeClass,
+  statusBadgeClass,
+  formatJoined,
+  type TeamFilter,
+  type TeamMember,
+  type UserRole,
+} from "@/lib/team";
+
+const fieldCls =
+  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-brand-navy outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
+const labelCls = "block text-xs font-medium text-muted-foreground mb-1";
+const errCls = "mt-1 text-xs text-red-600";
+const btnPrimary =
+  "inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60";
+const btnNeutral =
+  "inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-brand-navy hover:bg-slate-50";
+
+const FILTER_TABS: { value: TeamFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "owner", label: "Owners" },
+  { value: "partner", label: "Partners" },
+  { value: "contractor", label: "Contractors" },
+  { value: "deactivated", label: "Deactivated" },
+];
+
+export default function TeamPage() {
+  const { data: members, isLoading } = useTeamMembers();
+  const [filter, setFilter] = useState<TeamFilter>("all");
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [editing, setEditing] = useState<TeamMember | null>(null);
+  const [deactivating, setDeactivating] = useState<TeamMember | null>(null);
+  const [tempPassword, setTempPassword] = useState<{ name: string; password: string } | null>(null);
+
+  const counts = useMemo(() => {
+    const list = members ?? [];
+    return {
+      all: list.length,
+      owner: list.filter((m) => m.is_active && m.role === "owner").length,
+      partner: list.filter((m) => m.is_active && m.role === "partner").length,
+      contractor: list.filter((m) => m.is_active && m.role === "contractor").length,
+      deactivated: list.filter((m) => !m.is_active).length,
+    };
+  }, [members]);
+
+  const filtered = useMemo(() => {
+    const list = members ?? [];
+    if (filter === "all") return list;
+    if (filter === "deactivated") return list.filter((m) => !m.is_active);
+    return list.filter((m) => m.is_active && m.role === (filter as UserRole));
+  }, [members, filter]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading team…
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-5xl space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-brand-navy">Team Management</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Invite and manage the people who use the CRM — referral partners and FNC contractors. Owner accounts are
+            created outside the app and can't be changed here.
+          </p>
+        </div>
+        <button type="button" onClick={() => setInviteOpen(true)} className={btnPrimary}>
+          <UserPlus className="h-4 w-4" /> Invite New Person
+        </button>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex flex-wrap gap-1 border-b border-border">
+        {FILTER_TABS.map((t) => {
+          const active = filter === t.value;
+          return (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => setFilter(t.value)}
+              className={
+                "relative -mb-px px-3 py-2 text-sm font-medium transition-colors " +
+                (active
+                  ? "border-b-2 border-brand-teal text-brand-navy"
+                  : "border-b-2 border-transparent text-muted-foreground hover:text-brand-navy")
+              }
+            >
+              {t.label}
+              <span className="ml-1.5 text-xs text-muted-foreground">{counts[t.value]}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {filtered.length === 0 ? (
+        <EmptyState
+          icon={UserPlus}
+          title="No people yet"
+          description="Invite your first team member to get started."
+        />
+      ) : (
+        <TeamTable
+          members={filtered}
+          onEdit={(m) => setEditing(m)}
+          onDeactivate={(m) => setDeactivating(m)}
+        />
+      )}
+
+      {inviteOpen && (
+        <InviteDialog
+          onClose={() => setInviteOpen(false)}
+          onTempPassword={(name, password) => setTempPassword({ name, password })}
+        />
+      )}
+      {editing && <EditRoleDialog member={editing} onClose={() => setEditing(null)} />}
+      {deactivating && <DeactivateDialog member={deactivating} onClose={() => setDeactivating(null)} />}
+      {tempPassword && (
+        <TempPasswordModal
+          name={tempPassword.name}
+          password={tempPassword.password}
+          onClose={() => setTempPassword(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---- table ------------------------------------------------------------------
+
+function TeamTable({
+  members,
+  onEdit,
+  onDeactivate,
+}: {
+  members: TeamMember[];
+  onEdit: (m: TeamMember) => void;
+  onDeactivate: (m: TeamMember) => void;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
+      <table className="w-full min-w-[720px] text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <th className="px-4 py-3 font-medium">Name</th>
+            <th className="px-4 py-3 font-medium">Email</th>
+            <th className="px-4 py-3 font-medium">Phone</th>
+            <th className="px-4 py-3 font-medium">Role</th>
+            <th className="px-4 py-3 font-medium">Status</th>
+            <th className="px-4 py-3 font-medium">Joined</th>
+            <th className="px-4 py-3 font-medium text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {members.map((m) => (
+            <tr key={m.id} className="border-b border-border/60 last:border-0">
+              <td className="px-4 py-3">
+                <div className="font-medium text-brand-navy">{m.full_name || "—"}</div>
+                {m.role === "partner" && m.referral_partner_name && (
+                  <div className="text-xs text-muted-foreground">{m.referral_partner_name}</div>
+                )}
+              </td>
+              <td className="px-4 py-3 text-brand-navy">{m.email || "—"}</td>
+              <td className="px-4 py-3 text-muted-foreground">{m.phone_number || "—"}</td>
+              <td className="px-4 py-3">
+                <Badge className={roleBadgeClass(m.role)}>{roleLabel(m.role)}</Badge>
+              </td>
+              <td className="px-4 py-3">
+                <Badge className={statusBadgeClass(m.is_active)}>{m.is_active ? "Active" : "Deactivated"}</Badge>
+              </td>
+              <td className="px-4 py-3 text-muted-foreground">{formatJoined(m.created_at)}</td>
+              <td className="px-4 py-3 text-right">
+                <RowActions member={m} onEdit={() => onEdit(m)} onDeactivate={() => onDeactivate(m)} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ---- per-row actions menu ---------------------------------------------------
+
+function RowActions({
+  member,
+  onEdit,
+  onDeactivate,
+}: {
+  member: TeamMember;
+  onEdit: () => void;
+  onDeactivate: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const invite = useInviteUser();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  // The owner account and deactivated users have no actions.
+  if (member.role === "owner") {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  if (!member.is_active) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  const onResend = async () => {
+    setOpen(false);
+    try {
+      const res = (await invite.mutateAsync({
+        email: member.email ?? "",
+        full_name: member.full_name ?? "",
+        phone: member.phone_number ?? "",
+        role: member.role as Exclude<UserRole, "owner">,
+        invite_method: "magic_link",
+      })) as InviteResult;
+      toast.success(res.email_sent ? `Login link re-sent to ${member.email}` : `Invite processed for ${member.email}`);
+    } catch (e) {
+      toast.error((e as Error).message || "Could not resend the invite.");
+    }
+  };
+
+  return (
+    <div className="relative inline-block text-left">
+      <button
+        type="button"
+        onClick={() => setOpen((s) => !s)}
+        className="rounded-lg p-1.5 text-muted-foreground hover:bg-slate-100 hover:text-brand-navy"
+        aria-label="Row actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <MoreVertical className="h-4 w-4" />
+      </button>
+      {open && (
+        <>
+          {/* click-outside catcher */}
+          <button
+            type="button"
+            className="fixed inset-0 z-10 cursor-default"
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={() => setOpen(false)}
+          />
+          <div
+            ref={menuRef}
+            role="menu"
+            className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-lg border border-border bg-white py-1 text-left shadow-lg"
+          >
+            <MenuItem
+              icon={Pencil}
+              label="Edit role"
+              onClick={() => {
+                setOpen(false);
+                onEdit();
+              }}
+            />
+            <MenuItem icon={Send} label="Resend invite" disabled={invite.isPending} onClick={onResend} />
+            <MenuItem
+              icon={Ban}
+              label="Deactivate"
+              danger
+              onClick={() => {
+                setOpen(false);
+                onDeactivate();
+              }}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MenuItem({
+  icon: Icon,
+  label,
+  onClick,
+  danger,
+  disabled,
+}: {
+  icon: typeof Pencil;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={disabled}
+      onClick={onClick}
+      className={
+        "flex w-full items-center gap-2 px-3 py-2 text-sm disabled:opacity-50 " +
+        (danger ? "text-red-700 hover:bg-red-50" : "text-brand-navy hover:bg-slate-50")
+      }
+    >
+      <Icon className="h-4 w-4" /> {label}
+    </button>
+  );
+}
+
+// ---- invite dialog ----------------------------------------------------------
+
+const inviteSchema = z
+  .object({
+    full_name: z.string().trim().min(1, "Full name is required."),
+    email: z.string().trim().email("Enter a valid email address."),
+    phone: z.string().trim().min(1, "Phone is required."),
+    role: z.enum(["partner", "contractor"]),
+    invite_method: z.enum(["magic_link", "temp_password"]),
+    temp_password: z.string(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.invite_method === "temp_password" && v.temp_password.trim().length < 8) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["temp_password"],
+        message: "Temporary password must be at least 8 characters.",
+      });
+    }
+  });
+
+type InviteFormValues = z.infer<typeof inviteSchema>;
+
+function InviteDialog({
+  onClose,
+  onTempPassword,
+}: {
+  onClose: () => void;
+  onTempPassword: (name: string, password: string) => void;
+}) {
+  const invite = useInviteUser();
+  const [serverErr, setServerErr] = useState<string | null>(null);
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<InviteFormValues>({
+    resolver: zodResolver(inviteSchema),
+    defaultValues: {
+      full_name: "",
+      email: "",
+      phone: "",
+      role: "partner",
+      invite_method: "magic_link",
+      temp_password: "",
+    },
+  });
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const method = watch("invite_method");
+  const role = watch("role");
+
+  const onSubmit = async (v: InviteFormValues) => {
+    setServerErr(null);
+    try {
+      const res = await invite.mutateAsync({
+        email: v.email.trim(),
+        full_name: v.full_name.trim(),
+        phone: v.phone.trim(),
+        role: v.role,
+        invite_method: v.invite_method,
+        temp_password: v.invite_method === "temp_password" ? v.temp_password.trim() : undefined,
+      });
+
+      if (res.status === "existing") {
+        toast.info(res.message || `${v.email} is already a member.`);
+        onClose();
+        return;
+      }
+
+      toast.success(`${v.full_name.trim()} invited as ${roleLabel(v.role)}`);
+      if (v.invite_method === "temp_password" && res.temp_password) {
+        onClose();
+        onTempPassword(v.full_name.trim(), res.temp_password);
+      } else {
+        onClose();
+      }
+    } catch (e) {
+      const msg = (e as Error).message || "Could not send the invite.";
+      setServerErr(msg);
+      toast.error(msg);
+    }
+  };
+
+  return (
+    <DialogShell title="Invite New Person" onClose={onClose}>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div>
+          <label className={labelCls} htmlFor="inv-name">Full name</label>
+          <input id="inv-name" className={fieldCls} placeholder="e.g. Doctor Bright" {...register("full_name")} />
+          {errors.full_name && <p className={errCls}>{errors.full_name.message}</p>}
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className={labelCls} htmlFor="inv-email">Email</label>
+            <input id="inv-email" type="email" className={fieldCls} placeholder="name@example.com" {...register("email")} />
+            {errors.email && <p className={errCls}>{errors.email.message}</p>}
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="inv-phone">Phone</label>
+            <input id="inv-phone" className={fieldCls} placeholder="e.g. 082 123 4567" {...register("phone")} />
+            {errors.phone && <p className={errCls}>{errors.phone.message}</p>}
+          </div>
+        </div>
+
+        <div>
+          <label className={labelCls} htmlFor="inv-role">Role</label>
+          <select id="inv-role" className={fieldCls} {...register("role")}>
+            {ASSIGNABLE_ROLES.map((r) => (
+              <option key={r.value} value={r.value}>{r.label}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {role === "partner"
+              ? "Referral partners refer leads and see only their own, with fictional funder names."
+              : "Contractors are FNC's direct team, with their own portal."}
+          </p>
+        </div>
+
+        <fieldset className="space-y-2">
+          <legend className={labelCls}>How to send login access?</legend>
+          <label className="flex items-start gap-2 rounded-lg border border-border p-2.5 text-sm cursor-pointer">
+            <input type="radio" value="magic_link" className="mt-0.5 accent-brand-teal" {...register("invite_method")} />
+            <span>
+              <span className="font-medium text-brand-navy">Magic link</span>
+              <span className="block text-xs text-muted-foreground">Emails a one-click, single-use login link.</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 rounded-lg border border-border p-2.5 text-sm cursor-pointer">
+            <input type="radio" value="temp_password" className="mt-0.5 accent-brand-teal" {...register("invite_method")} />
+            <span>
+              <span className="font-medium text-brand-navy">Temporary password</span>
+              <span className="block text-xs text-muted-foreground">
+                You set a password and share it verbally — no email is sent.
+              </span>
+            </span>
+          </label>
+        </fieldset>
+
+        {method === "temp_password" && (
+          <div>
+            <label className={labelCls} htmlFor="inv-temp">Temporary password</label>
+            <input
+              id="inv-temp"
+              className={fieldCls}
+              placeholder="At least 8 characters"
+              autoComplete="new-password"
+              {...register("temp_password")}
+            />
+            {errors.temp_password && <p className={errCls}>{errors.temp_password.message}</p>}
+          </div>
+        )}
+
+        {serverErr && <p className={errCls}>{serverErr}</p>}
+
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className={btnNeutral}>Cancel</button>
+          <button type="submit" disabled={invite.isPending} className={btnPrimary}>
+            {invite.isPending
+              ? "Working…"
+              : method === "temp_password"
+                ? "Create with Password"
+                : "Send Invite"}
+          </button>
+        </div>
+      </form>
+    </DialogShell>
+  );
+}
+
+// ---- edit role dialog -------------------------------------------------------
+
+function EditRoleDialog({ member, onClose }: { member: TeamMember; onClose: () => void }) {
+  const update = useUpdateUserRole();
+  const { data: partners } = useReferralPartnerOptions();
+  const [newRole, setNewRole] = useState<Exclude<UserRole, "owner">>(
+    member.role === "partner" || member.role === "contractor" ? member.role : "partner",
+  );
+  const [partnerId, setPartnerId] = useState<string>(member.referral_partner_id ?? "");
+  const [serverErr, setServerErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const unchanged =
+    newRole === member.role &&
+    (newRole !== "partner" || (partnerId || null) === (member.referral_partner_id ?? null));
+
+  const onConfirm = async () => {
+    setServerErr(null);
+    try {
+      await update.mutateAsync({
+        user_id: member.id,
+        new_role: newRole,
+        new_referral_partner_id: newRole === "partner" ? partnerId || null : null,
+      });
+      toast.success(`${member.full_name || member.email} is now a ${roleLabel(newRole)}`);
+      onClose();
+    } catch (e) {
+      const msg = (e as Error).message || "Could not update the role.";
+      setServerErr(msg);
+      toast.error(msg);
+    }
+  };
+
+  return (
+    <DialogShell title="Edit role" onClose={onClose}>
+      <div className="space-y-4">
+        <div className="text-sm">
+          <span className="text-muted-foreground">Current role: </span>
+          <Badge className={roleBadgeClass(member.role)}>{roleLabel(member.role)}</Badge>
+        </div>
+
+        <div>
+          <label className={labelCls} htmlFor="edit-role">New role</label>
+          <select
+            id="edit-role"
+            className={fieldCls}
+            value={newRole}
+            onChange={(e) => setNewRole(e.target.value as Exclude<UserRole, "owner">)}
+          >
+            {ASSIGNABLE_ROLES.map((r) => (
+              <option key={r.value} value={r.value}>{r.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {newRole === "partner" && (
+          <div>
+            <label className={labelCls} htmlFor="edit-partner">Referral partner (optional)</label>
+            <select id="edit-partner" className={fieldCls} value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
+              <option value="">— None —</option>
+              {(partners ?? []).map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <p className="flex items-start gap-2 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800">
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          Changing role will reset their referral partner link (unless they stay a partner) and requires the user to
+          re-authenticate for the new access to take effect.
+        </p>
+
+        {serverErr && <p className={errCls}>{serverErr}</p>}
+
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className={btnNeutral}>Cancel</button>
+          <button type="button" onClick={onConfirm} disabled={update.isPending || unchanged} className={btnPrimary}>
+            {update.isPending ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      </div>
+    </DialogShell>
+  );
+}
+
+// ---- deactivate dialog ------------------------------------------------------
+
+function DeactivateDialog({ member, onClose }: { member: TeamMember; onClose: () => void }) {
+  const deactivate = useDeactivateUser();
+  const [confirmText, setConfirmText] = useState("");
+  const [serverErr, setServerErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const onConfirm = async () => {
+    setServerErr(null);
+    try {
+      await deactivate.mutateAsync(member.id);
+      toast.success(`${member.full_name || member.email} deactivated`);
+      onClose();
+    } catch (e) {
+      const msg = (e as Error).message || "Could not deactivate the user.";
+      setServerErr(msg);
+      toast.error(msg);
+    }
+  };
+
+  return (
+    <DialogShell title="Deactivate person" onClose={onClose}>
+      <div className="space-y-4">
+        <p className="flex items-start gap-2 rounded-lg bg-red-50 p-2.5 text-sm text-red-800">
+          <Ban className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <strong>{member.full_name || member.email}</strong> will no longer be able to log in, and any active session
+            ends. Their history stays intact.
+          </span>
+        </p>
+        <div>
+          <label className={labelCls} htmlFor="deact-confirm">
+            Type <span className="font-mono font-semibold text-brand-navy">DEACTIVATE</span> to confirm
+          </label>
+          <input
+            id="deact-confirm"
+            className={fieldCls}
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder="DEACTIVATE"
+            autoComplete="off"
+          />
+        </div>
+
+        {serverErr && <p className={errCls}>{serverErr}</p>}
+
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className={btnNeutral}>Cancel</button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={deactivate.isPending || confirmText.trim() !== "DEACTIVATE"}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {deactivate.isPending ? "Deactivating…" : "Deactivate"}
+          </button>
+        </div>
+      </div>
+    </DialogShell>
+  );
+}
+
+// ---- temp password reveal ---------------------------------------------------
+
+function TempPasswordModal({
+  name,
+  password,
+  onClose,
+}: {
+  name: string;
+  password: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(password);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy — select and copy the password manually.");
+    }
+  };
+
+  return (
+    <DialogShell title="Temporary password" onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Share this password with <strong className="text-brand-navy">{name}</strong> verbally or through a secure
+          channel — it is shown once and won't be retrievable later.
+        </p>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 select-all break-all rounded-lg border border-border bg-slate-50 px-3 py-2 font-mono text-sm text-brand-navy">
+            {password}
+          </code>
+          <button type="button" onClick={copy} className={btnNeutral} aria-label="Copy password">
+            {copied ? <Check className="h-4 w-4 text-brand-green" /> : <Copy className="h-4 w-4" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <div className="flex justify-end">
+          <button type="button" onClick={onClose} className={btnPrimary}>Done</button>
+        </div>
+      </div>
+    </DialogShell>
+  );
+}
+
+// ---- shared dialog shell ----------------------------------------------------
+
+function DialogShell({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-xl border border-border bg-white p-6 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <h3 className="text-base font-semibold text-brand-navy">{title}</h3>
+        {children}
+      </div>
+    </div>
+  );
+}
