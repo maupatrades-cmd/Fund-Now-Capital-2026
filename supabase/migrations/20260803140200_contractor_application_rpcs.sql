@@ -69,10 +69,12 @@ begin
   if p_ip_hash is not null and btrim(p_ip_hash) <> '' then
     perform pg_advisory_xact_lock(hashtext('contractor_apply_rl:' || p_ip_hash));
     -- Record this attempt (counts blocked attempts too, so sustained spam keeps
-    -- the window hot) and prune this IP's stale rows.
+    -- the window hot) and prune ALL stale rows — not just this IP's, or rows for
+    -- one-shot IPs that never return would accumulate unboundedly. Cheap on this
+    -- tiny 1-hour-retention ledger.
     insert into public.contractor_application_attempts (ip_hash) values (p_ip_hash);
     delete from public.contractor_application_attempts
-      where ip_hash = p_ip_hash and created_at < now() - interval '1 hour';
+      where created_at < now() - interval '1 hour';
     select count(*) into v_count
       from public.contractor_application_attempts
       where ip_hash = p_ip_hash

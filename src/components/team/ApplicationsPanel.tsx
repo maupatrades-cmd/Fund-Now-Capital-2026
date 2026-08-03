@@ -216,7 +216,18 @@ function RowActions({
       return;
     }
     const r = btnRef.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) });
+    if (r) {
+      // Rendered via createPortal (below) so the table's overflow-x container
+      // can't clip it — same pattern as TeamPage's RowActions. Placement is
+      // edge-safe: open below the button normally, but flip above when there
+      // isn't room below (otherwise the scroll-to-close listener makes a
+      // bottom-row menu unreachable), and clamp to 8px so it never runs off the
+      // top edge either.
+      const MENU_H = 168; // ≈ 3 items + padding; the tallest this menu gets
+      const below = r.bottom + 4;
+      const top = below + MENU_H > window.innerHeight ? Math.max(8, r.top - 4 - MENU_H) : below;
+      setPos({ top, right: Math.max(8, window.innerWidth - r.right) });
+    }
     setOpen(true);
   };
 

@@ -37,9 +37,22 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const FROM = Deno.env.get("EMAIL_FROM") ?? "Fund Now Capital <hello@fundnowcapital.africa>";
 const REPLY_TO = Deno.env.get("EMAIL_REPLY_TO") ?? "hello@fundnowcapital.africa";
-// A static salt keeps the hashed IP from being a bare, reversible SHA-256 of a
-// small IPv4 space. It need not be secret to be useful here.
-const IP_SALT = Deno.env.get("APPLY_IP_SALT") ?? "fnc-apply-v1";
+// Salt for the IP hash. A PUBLISHED constant would make the hashes
+// dictionary-reversible over the ~4-billion IPv4 space (defeating the POPIA
+// intent), so we never fall back to a hardcoded value. Prefer an explicit
+// APPLY_IP_SALT secret; otherwise derive from SUPABASE_SERVICE_ROLE_KEY, which
+// is genuinely secret (never in source), always injected, and unique per
+// Supabase project — so a source reader cannot brute-force the raw IPs and a
+// different deployment gets a different salt automatically. No new required
+// deploy-time secret, and /apply never fails closed on a missing salt.
+//
+// CAVEAT: if SUPABASE_SERVICE_ROLE_KEY is ever rotated, the derived salt
+// changes and previously stored hashes no longer match new ones. This is
+// harmless here — the throttle window is only 1 hour and rows are pruned
+// hourly, so at most one window of hash-continuity is affected, and key
+// rotations are rare/planned. Set an explicit APPLY_IP_SALT if you ever need
+// hash-continuity across a key rotation.
+const IP_SALT = Deno.env.get("APPLY_IP_SALT") ?? SERVICE_ROLE_KEY;
 
 // Throttle: at most this many submissions per IP per window (seconds).
 const RATE_MAX = 5;
@@ -60,6 +73,20 @@ function json(body: unknown, status = 200): Response {
 
 function isEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+// Escape for safe interpolation into an HTML email body. The applicant name is
+// attacker-controllable on this public endpoint (they choose both the recipient
+// address and the name), so it must never reach HTML raw — otherwise the trusted
+// FNC sender would deliver injected markup/links. The DB record and the
+// text/plain body keep the raw value (React and plain text render it safely).
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 // SHA-256(salt + ip) -> hex. Returns null when no client IP is resolvable (we
@@ -90,7 +117,9 @@ type ApplyBody = {
 // failure never rolls back the already-captured application.
 async function sendConfirmationEmail(to: string, fullName: string): Promise<boolean> {
   if (!RESEND_API_KEY) return false;
-  const greeting = fullName ? `Hi ${fullName},` : "Hi,";
+  // HTML body: escape the name (attacker-controllable). Text body below keeps raw.
+  const htmlGreeting = fullName ? `Hi ${escapeHtml(fullName)},` : "Hi,";
+  const textGreeting = fullName ? `Hi ${fullName},` : "Hi,";
   const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f1f5f9;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 0;">
    <tr><td align="center">
@@ -100,7 +129,7 @@ async function sendConfirmationEmail(to: string, fullName: string): Promise<bool
        <div style="color:rgba(255,255,255,0.6);font-size:12px;margin-top:2px;">Many funders. More approvals.</div>
      </td></tr>
      <tr><td style="padding:32px;color:#1a3a52;font-size:15px;line-height:1.6;">
-       <p style="margin:0 0 12px;">${greeting}</p>
+       <p style="margin:0 0 12px;">${htmlGreeting}</p>
        <p style="margin:0 0 12px;">Thank you for applying to become a <strong>Fund Now Capital contractor</strong>. We've received your application and it's now with our team.</p>
        <p style="margin:0 0 12px;">We review every application carefully and will be in touch within <strong>5 business days</strong> with the next step. There's nothing you need to do in the meantime.</p>
        <p style="margin:0 0 12px;">We appreciate your interest in helping South African businesses access the funding they need to grow.</p>
@@ -111,7 +140,7 @@ async function sendConfirmationEmail(to: string, fullName: string): Promise<bool
    </td></tr>
   </table></body></html>`;
   const text =
-    `${greeting}\n\nThank you for applying to become a Fund Now Capital contractor. ` +
+    `${textGreeting}\n\nThank you for applying to become a Fund Now Capital contractor. ` +
     `We've received your application and it's now with our team.\n\n` +
     `We review every application carefully and will be in touch within 5 business days ` +
     `with the next step. There's nothing you need to do in the meantime.\n\n` +
@@ -143,12 +172,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   // ---- parse + validate ----------------------------------------------------
-  let body: ApplyBody;
+  let parsed: unknown;
   try {
-    body = (await req.json()) as ApplyBody;
+    parsed = await req.json();
   } catch {
     return json({ error: "Invalid request body" }, 400);
   }
+  // req.json() also succeeds for null / primitives / arrays; reading fields off
+  // those would throw a TypeError → 500. Require a plain object up front.
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return json({ error: "Invalid request body" }, 400);
+  }
+  const body = parsed as ApplyBody;
 
   const fullName = (body.full_name ?? "").trim();
   const email = (body.email ?? "").trim().toLowerCase();
