@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { FileText, ListChecks, PlusCircle } from "lucide-react";
 import PortalShell from "@/components/portal/PortalShell";
+import { TermsAcceptanceModal } from "@/components/terms/TermsAcceptanceModal";
+import { useTermsAcceptance } from "@/hooks/useTermsAcceptance";
 
 // Contractor portal home. Branded PortalShell chrome (shared with the partner
 // portal) with the "Submit Lead" / "My Leads" nav, a welcome, and a top-level
@@ -11,6 +13,10 @@ import PortalShell from "@/components/portal/PortalShell";
 // page. Both lanes edit this file from the same main base — keep additions in
 // the content stack below so the two merges stay independent.
 export default function ContractorHomePage() {
+  // First-login T&C gate — blocks the portal home until this contractor has
+  // accepted the current terms (or declines → sign out).
+  const terms = useTermsAcceptance("contractor");
+
   return (
     <PortalShell portal="contractor">
       <div className="space-y-1">
@@ -50,6 +56,17 @@ export default function ContractorHomePage() {
           Track every lead you submit — head to <span className="font-medium text-brand-navy">My leads</span> to see their status.
         </p>
       </div>
+
+      {terms.needsAcceptance && terms.version && (
+        <TermsAcceptanceModal
+          version={terms.version}
+          onAccept={() => terms.accept.mutate(terms.version!.id)}
+          accepting={terms.accept.isPending}
+          errorMessage={
+            terms.accept.isError ? "We couldn't record your acceptance. Please try again." : null
+          }
+        />
+      )}
     </PortalShell>
   );
 }

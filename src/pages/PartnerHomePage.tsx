@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { Handshake, ListChecks, PlusCircle } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import PortalShell from "@/components/portal/PortalShell";
+import { TermsAcceptanceModal } from "@/components/terms/TermsAcceptanceModal";
+import { useTermsAcceptance } from "@/hooks/useTermsAcceptance";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
 
@@ -60,6 +62,10 @@ export default function PartnerHomePage() {
   // window where the session is still resolving and the query is disabled.
   const { data: partnerName, isPending } = usePartnerName(session?.user);
 
+  // First-login T&C gate — blocks the portal home until this partner has
+  // accepted the current terms (or declines → sign out).
+  const terms = useTermsAcceptance("partner");
+
   return (
     <PortalShell portal="partner">
       {/* Welcome */}
@@ -96,6 +102,17 @@ export default function PartnerHomePage() {
         title="Your referred deals will appear here soon"
         description="As your referrals move through funding, you'll track their progress right here."
       />
+
+      {terms.needsAcceptance && terms.version && (
+        <TermsAcceptanceModal
+          version={terms.version}
+          onAccept={() => terms.accept.mutate(terms.version!.id)}
+          accepting={terms.accept.isPending}
+          errorMessage={
+            terms.accept.isError ? "We couldn't record your acceptance. Please try again." : null
+          }
+        />
+      )}
     </PortalShell>
   );
 }

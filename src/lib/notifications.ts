@@ -1,7 +1,8 @@
 // Notification presentation helpers (A11 / SPEC S4).
-// Labels + icons cover the full `notification_event_type` enum (32 values —
+// Labels + icons cover the full `notification_event_type` enum (33 values —
 // 30 verified 2026-07-31 + LEAD_SUBMITTED_BY_CONTRACTOR (LEAD-SUBMIT lane
-// 2026-08-02) + CONTRACTOR_APPLICATION_RECEIVED (APPLY-ROUTE lane 2026-08-03)).
+// 2026-08-02) + CONTRACTOR_APPLICATION_RECEIVED (APPLY-ROUTE lane 2026-08-03)
+// + TERMS_UPDATED (TC-FRAMEWORK lane 2026-08-03)).
 // Any unknown/future value still
 // degrades gracefully: eventLabel() falls back to the raw enum string and
 // eventIcon() falls back to the Bell icon.
@@ -33,6 +34,7 @@ import {
   Handshake,
   Inbox,
   MessageSquare,
+  ScrollText,
   Target,
   TrendingUp,
   BadgeCheck,
@@ -54,8 +56,9 @@ export type Notification = {
   read_at: string | null;
 };
 
-// Full S4 event list — all 32 `notification_event_type` enum values, in enum
-// order (CONTRACTOR_APPLICATION_RECEIVED added by the APPLY-ROUTE lane 2026-08-03).
+// Full S4 event list — all 33 `notification_event_type` enum values, in enum
+// order (CONTRACTOR_APPLICATION_RECEIVED added by the APPLY-ROUTE lane 2026-08-03;
+// TERMS_UPDATED by the TC-FRAMEWORK lane 2026-08-03).
 // The filter and preferences matrix cover them all.
 export const NOTIFICATION_EVENT_TYPES = [
   { value: "LEAD_CREATED_FOR_YOU", label: "Lead created for you" },
@@ -90,6 +93,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   { value: "INVOICE_MARKED_PAID", label: "Invoice paid" },
   { value: "BONUS_PAID", label: "Bonus paid" },
   { value: "CONTRACTOR_APPLICATION_RECEIVED", label: "New contractor application" },
+  { value: "TERMS_UPDATED", label: "Terms & Conditions updated" },
 ] as const;
 
 const EVENT_LABEL = new Map<string, string>(
@@ -132,6 +136,7 @@ const EVENT_ICON: Record<string, LucideIcon> = {
   DOCUMENT_EXPIRED: FileX,
   // Team / onboarding
   CONTRACTOR_APPLICATION_RECEIVED: UserPlus,
+  TERMS_UPDATED: ScrollText,
   // Engagement / ops
   CLIENT_MESSAGE_RECEIVED: MessageSquare,
   FOLLOW_UP_DUE: Clock,
