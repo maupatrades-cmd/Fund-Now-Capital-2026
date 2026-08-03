@@ -1,4 +1,4 @@
--- Commission Picker BACKEND (Sprint 1, Lane 1a) — part 1 of 3: activity events.
+-- Commission Picker BACKEND (Sprint 1, Lane 1a) — part 1 of 2: activity events.
 --
 -- Three new activity_event_type values the picker's state RPCs write. They live
 -- in THEIR OWN migration because a newly-added enum value cannot be *used* in the
