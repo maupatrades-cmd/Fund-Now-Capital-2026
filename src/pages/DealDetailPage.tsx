@@ -11,6 +11,7 @@ import { useToggleDealPriority } from "@/hooks/useDeals";
 import { useDeal, useUpdateDeal, useReopenDeal } from "@/hooks/useDealDetail";
 import { useCelebrate } from "@/lib/celebration/ConfettiProvider";
 import { FunderSubmissions } from "@/components/deals/FunderSubmissions";
+import { CommissionPickerWidget } from "@/components/deal/CommissionPickerWidget";
 import { DealInvoices } from "@/components/deals/DealInvoices";
 import { CommunicationsLog } from "@/components/deals/CommunicationsLog";
 import { DealDocuments } from "@/components/deals/DealDocuments";
@@ -193,6 +194,11 @@ export default function DealDetailPage() {
       {/* Funder submissions with embedded commission calculator */}
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
         <FunderSubmissions dealId={deal.id} isPurchaseOrder={deal.is_purchase_order} />
+      </section>
+
+      {/* Commission Calculation — owner-only picker (POTENTIAL → PENDING → LOCKED) */}
+      <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+        <CommissionPickerWidget dealId={deal.id} amountRequested={deal.amount_requested} />
       </section>
 
       {/* Invoices — generate/track FNC → funder invoices for this deal (C1.2) */}
