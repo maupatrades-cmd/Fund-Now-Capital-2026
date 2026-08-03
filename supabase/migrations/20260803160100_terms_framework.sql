@@ -248,26 +248,42 @@ security definer
 set search_path to ''
 as $$
 declare
-  v_uid     uuid := (select auth.uid());
-  v_salt    text;
-  v_headers text;
-  v_ip      text;
-  v_ip_hash text;
-  v_ua      text := nullif(btrim(left(coalesce(p_user_agent, ''), 1024)), '');
-  v_new_id  uuid;
-  v_email   text;
-  v_role    text;
-  v_version text;
+  v_uid        uuid := (select auth.uid());
+  v_salt       text;
+  v_headers    text;
+  v_ip         text;
+  v_ip_hash    text;
+  v_ua         text := nullif(btrim(left(coalesce(p_user_agent, ''), 1024)), '');
+  v_new_id     uuid;
+  v_email      text;
+  v_role       text;
+  v_version    text;
+  v_is_current boolean;
+  v_roles      public.user_role[];
 begin
   -- Must be a signed-in user; the acceptance is always attributed to THEM.
   if v_uid is null then
     raise exception 'You must be signed in to accept the terms';
   end if;
 
-  -- Version must exist (belt-and-braces; the UI only ever passes a current id).
-  select version_number into v_version from public.terms_versions where id = p_version_id;
+  -- The version must exist, be CURRENT, and apply to the caller's role. Without
+  -- these guards an authenticated user could call the RPC directly with any known
+  -- version id (a superseded version, or one scoped to a different role) and
+  -- write a misleading immutable ledger + audit row (Macroscope High).
+  select version_number, is_current, applies_to_roles
+    into v_version, v_is_current, v_roles
+    from public.terms_versions where id = p_version_id;
   if v_version is null then
     raise exception 'Unknown terms version %', p_version_id;
+  end if;
+  if not v_is_current then
+    raise exception 'Terms version % is not the current version', p_version_id;
+  end if;
+
+  -- Caller's role (also used in the audit row below).
+  select email, role into v_email, v_role from public.profiles where id = v_uid;
+  if v_role is null or not (v_role::public.user_role = any(v_roles)) then
+    raise exception 'These terms do not apply to your role';
   end if;
 
   -- Serialize a user's concurrent double-clicks (UI useRef guard + unique index
@@ -305,8 +321,7 @@ begin
     return jsonb_build_object('status', 'already_accepted', 'version_id', p_version_id);
   end if;
 
-  -- Audit only on a genuinely new acceptance.
-  select email, role into v_email, v_role from public.profiles where id = v_uid;
+  -- Audit only on a genuinely new acceptance (v_email/v_role fetched above).
   insert into public.activity_logs
     (occurred_at, user_id, user_email, user_role, event_type, entity_type, entity_id, description, after_values)
   values
@@ -576,6 +591,20 @@ begin
     -- now reports accepted.
     if not public.check_user_has_accepted_current(v_user, (select role from public.profiles where id=v_user)) then
       raise exception 'assert: user should now report accepted'; end if;
+
+    -- accept_terms rejects a non-current version (is_current=false → no notify
+    -- trigger fires, so this is dry-run safe).
+    declare v_old uuid;
+    begin
+      insert into public.terms_versions (version_number, effective_date, content_markdown, applies_to_roles, is_current)
+      values ('v-superseded-rollback', current_date, '# old', array['partner','contractor']::public.user_role[], false)
+      returning id into v_old;
+      begin
+        perform public.accept_terms(v_old, null, null);
+        raise exception 'assert: accepting a non-current version should raise';
+      exception when others then if sqlerrm like 'assert:%' then raise; end if;
+        if sqlerrm not ilike '%not the current version%' then raise exception 'assert: wrong non-current error: %', sqlerrm; end if; end;
+    end;
 
     -- ledger is immutable: UPDATE + DELETE both raise.
     begin

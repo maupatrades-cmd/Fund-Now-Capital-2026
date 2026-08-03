@@ -50,6 +50,11 @@ export function TermsAcceptanceModal({
     if (atBottom) setScrolledToBottom(true);
   };
   useEffect(() => {
+    // A new version must be reviewed from the top: reset the gate and scroll
+    // position so a user who'd scrolled the previous version can't accept the
+    // new one unread (Macroscope Medium).
+    setScrolledToBottom(false);
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
     checkAtBottom();
     // Re-check after layout settles (fonts/markdown height).
     const t = setTimeout(checkAtBottom, 150);

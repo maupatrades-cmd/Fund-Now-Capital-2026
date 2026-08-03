@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useProfileRole } from "@/hooks/useProfileRole";
 import { roleHome } from "@/lib/roles";
 import { useSession } from "@/lib/useSession";
+import { PortalTermsGate } from "@/components/terms/PortalTermsGate";
 import ContractorHomePage from "./ContractorHomePage";
 import ContractorSubmitLeadPage from "./contractor/SubmitLeadPage";
 import ContractorMyLeadsPage from "./contractor/MyLeadsPage";
@@ -44,13 +45,17 @@ export default function ContractorGate() {
 
   // The gate owns its subtree (App.tsx mounts it at /contractor/*), so nested
   // contractor screens are added here in later PRs without touching App.tsx.
+  // The T&C gate wraps the ENTIRE subtree so an unaccepted contractor can't
+  // deep-link past it to a sub-route.
   return (
-    <Routes>
-      <Route index element={<ContractorHomePage />} />
-      <Route path="submit-lead" element={<ContractorSubmitLeadPage />} />
-      <Route path="leads" element={<ContractorMyLeadsPage />} />
-      <Route path="deals" element={<ContractorDealsPage />} />
-      <Route path="*" element={<Navigate to="/contractor" replace />} />
-    </Routes>
+    <PortalTermsGate role="contractor">
+      <Routes>
+        <Route index element={<ContractorHomePage />} />
+        <Route path="submit-lead" element={<ContractorSubmitLeadPage />} />
+        <Route path="leads" element={<ContractorMyLeadsPage />} />
+        <Route path="deals" element={<ContractorDealsPage />} />
+        <Route path="*" element={<Navigate to="/contractor" replace />} />
+      </Routes>
+    </PortalTermsGate>
   );
 }

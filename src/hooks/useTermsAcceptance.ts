@@ -28,7 +28,9 @@ export function useTermsAcceptance(role: PortalRole) {
   const query = useQuery({
     queryKey: ["terms-acceptance", role, uid],
     enabled: !!uid,
-    staleTime: 5 * 60_000,
+    // staleTime 0: this is a mandatory compliance gate, so always revalidate on
+    // mount — a newly published version is detected without a 5-minute delay.
+    staleTime: 0,
     queryFn: async (): Promise<TermsAcceptanceState> => {
       if (!uid) return { needsAcceptance: false, version: null };
 
@@ -69,16 +71,25 @@ export function useTermsAcceptance(role: PortalRole) {
       return data as { status?: string } | null;
     },
     onSuccess: () => {
-      // Re-read acceptance state so the modal closes on success.
-      void qc.invalidateQueries({ queryKey: ["terms-acceptance", role, uid] });
+      // Re-read acceptance state so the modal closes on success. Invalidate by
+      // the key PREFIX (not the uid-specific key) so the refetch fires regardless
+      // of which uid the closure captured — robust across a session change.
+      void qc.invalidateQueries({ queryKey: ["terms-acceptance"] });
     },
   });
 
   return {
-    isLoading: query.isPending,
+    // isLoading stays true while uid is still resolving (query disabled) as well
+    // as during the first fetch, so the gate blocks (fails closed) until we have
+    // a definitive answer.
+    isLoading: !uid || query.isPending,
     isError: query.isError,
+    // Only meaningful once the query has resolved successfully; the gate checks
+    // isLoading / isError FIRST and fails closed, so this never leaks a false
+    // "no acceptance needed" during loading or error.
     needsAcceptance: query.data?.needsAcceptance ?? false,
     version: query.data?.version ?? null,
+    refetch: query.refetch,
     accept,
   };
 }
