@@ -21,7 +21,7 @@ const schema = z
       .string()
       .trim()
       .min(1, "Email is required")
-      .refine((v) => z.string().email().safeParse(v).success, "Enter a valid email"),
+      .refine((v) => z.email().safeParse(v).success, "Enter a valid email"),
     phone: z.string().trim().min(1, "Phone is required"),
     id_number: z.string().optional().default(""),
     physical_address: z.string().trim().min(1, "Your physical address is required"),

@@ -194,11 +194,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
   });
 
   if (error) {
-    // The RPC re-validates (defence-in-depth); a raised error here is almost
-    // always a bad payload that slipped past the checks above. Log the real
-    // reason, return a generic 400 (never leak internals to an anonymous caller).
-    console.error("submit_contractor_application failed:", error.message);
-    return json({ error: "We couldn't submit your application. Please check your details and try again." }, 400);
+    // The RPC re-validates (defence-in-depth) and raises validation failures with
+    // SQLSTATE 22023 — treat those as a 400 (bad payload that slipped past the
+    // checks above). Anything else is an unexpected server/DB failure: return a
+    // retryable 503 so the applicant is told to try again, not to "fix" details
+    // that are fine. Either way we log the real reason and never leak internals.
+    console.error("submit_contractor_application failed:", error.code, error.message);
+    if ((error as { code?: string }).code === "22023") {
+      return json({ error: "We couldn't submit your application. Please check your details and try again." }, 400);
+    }
+    return json({ error: "Something went wrong on our side. Please try again in a moment." }, 503);
   }
 
   const status = (data as { status?: string } | null)?.status;

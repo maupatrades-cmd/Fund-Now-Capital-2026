@@ -58,8 +58,15 @@ function RoleLanding() {
 function AppRoutes() {
   const session = useSession();
 
+  // The public /apply page has no account and must not wait on the session read
+  // — render it immediately (a cold applicant lands here on a fresh load, so
+  // reading window.location at mount is correct). Every other route stays behind
+  // the brief session-loading state below.
+  const onPublicApply =
+    typeof window !== "undefined" && window.location.pathname.replace(/\/+$/, "") === "/apply";
+
   // Brief loading state while we read the persisted session.
-  if (session === undefined) {
+  if (session === undefined && !onPublicApply) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-muted-foreground">
         Loading…

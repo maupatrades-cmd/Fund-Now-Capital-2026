@@ -129,7 +129,12 @@ export default function TeamPage() {
     return list.filter((m) => m.is_active && m.role === (filter as UserRole));
   }, [members, filter]);
 
-  if (isLoading) {
+  // The Applications tab is an independent data source (contractors, not
+  // profiles), so a team-members load/error must not block reaching it —
+  // ApplicationsPanel handles its own loading/error state.
+  const onApplications = filter === "applications";
+
+  if (isLoading && !onApplications) {
     return (
       <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading team…
@@ -138,7 +143,7 @@ export default function TeamPage() {
   }
 
   // A load failure must not masquerade as an empty team ("No people yet").
-  if (isError) {
+  if (isError && !onApplications) {
     return (
       <div className="max-w-5xl">
         <div className="flex flex-col items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-6 py-14 text-center">
