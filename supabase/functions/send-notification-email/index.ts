@@ -243,12 +243,33 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ ok: false, skipped: "no recipient email" });
   }
 
-  // Preferences for this event. No row => email on by default (owner default).
-  // A genuine lookup error must not be treated as "no row" (which would send
-  // despite the user's real preference), so fail loudly instead.
+  // Email channel gate — the single source of truth is the DB RPC
+  // check_notification_channel_enabled(user, event, 'email'), which returns
+  // ON by default when the user has no preference row (owner default). Using
+  // the RPC keeps the "is this channel on?" decision identical to the in-app
+  // path (emit_in_app_notification calls the same function). A genuine lookup
+  // error must not be treated as "on" (which would send despite the user's
+  // real preference), so fail loudly instead.
+  const { data: emailEnabled, error: chkErr } = await supabase.rpc(
+    "check_notification_channel_enabled",
+    { p_user_id: n.user_id, p_event_type: n.event_type, p_channel: "email" },
+  );
+  if (chkErr) {
+    console.error("email preference check failed", chkErr);
+    await finalize("failed", { error_message: `preference check failed: ${chkErr.message}` });
+    return json({ ok: false, error: "preference check failed" });
+  }
+  if (emailEnabled === false) {
+    await finalize("skipped", { error_message: "email disabled for this event" });
+    return json({ ok: false, skipped: "email disabled" });
+  }
+
+  // Quiet-hours + digest still read straight from the preferences row (these
+  // are delivery-timing controls, not the channel on/off switch). No row =>
+  // no quiet hours and digest off. A genuine lookup error fails loudly.
   const { data: pref, error: prefErr } = await supabase
     .from("notification_preferences")
-    .select("email_enabled, quiet_hours_start, quiet_hours_end, digest_mode")
+    .select("quiet_hours_start, quiet_hours_end, digest_mode")
     .eq("user_id", n.user_id)
     .eq("event_type", n.event_type)
     .maybeSingle();
@@ -256,11 +277,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
     console.error("preference lookup failed", prefErr);
     await finalize("failed", { error_message: `preference lookup failed: ${prefErr.message}` });
     return json({ ok: false, error: "preference lookup failed" });
-  }
-
-  if (pref && pref.email_enabled === false) {
-    await finalize("skipped", { error_message: "email disabled for this event" });
-    return json({ ok: false, skipped: "email disabled" });
   }
   if (pref?.digest_mode === true) {
     await finalize("skipped", { error_message: "digest mode — queued for daily digest" });
