@@ -115,7 +115,7 @@ Goal: Foundation + Team Management + Lead Submission live
 
 - Phase D0 foundation (PRs #100, #101, #102) — SHIPPED
 - Phase D0.5 Team Management (PR #103) — SHIPPING
-- Phase D1 Lead Submission Partner + Contractor (PR #104) — SHIPPING
+- Phase D2 Lead Submission Partner + Contractor (PR #104) — SHIPPING
 
 Real unlock: Owner invites people from CRM. Partners + contractors submit leads.
 
@@ -161,7 +161,7 @@ Goal: Doctor invoices FNC. Owner has monthly + report visibility.
 - Lane 4a: Doctor Invoicing FNC (Phase C4) — 40-60 hours, 2 PRs
 - Lane 4b: Monthly Statements (Phase C5) — 30-50 hours, 2 PRs
 - Lane 4c: Reports v1 (Phase C6) — 40-60 hours, 2 PRs
-- Lane 4d: Notifications preferences + T&C acceptance (Phase D3) — 20-30 hours, 1 PR
+- Lane 4d: Notifications preferences (Phase A11) + T&C acceptance (Phase D8) — 20-30 hours, 1 PR
 
 Real unlock: Doctor invoices FNC + gets paid. Owner has real reporting.
 
@@ -182,8 +182,8 @@ Real unlock: Contractors trained + certified per TRAINING.md. Real motivation in
 
 Goal: AI assists qualification. POPIA consent packs.
 
-- Lane 6a: AI-assisted qualification (Phase E1) — 60-100 hours, 3 PRs
-- Lane 6b: Consent Pack generation POPIA (Phase E2) — 40-60 hours, 2 PRs
+- Lane 6a: AI-assisted qualification (Phase E6) — 60-100 hours, 3 PRs
+- Lane 6b: Consent Pack generation POPIA (Phase E4, S17) — 40-60 hours, 2 PRs
 
 Real unlock: Real regulatory readiness + efficiency gains through AI.
 
