@@ -79,10 +79,13 @@ export function useTermsAcceptance(role: PortalRole) {
   });
 
   return {
-    // isLoading stays true while uid is still resolving (query disabled) as well
-    // as during the first fetch, so the gate blocks (fails closed) until we have
-    // a definitive answer.
-    isLoading: !uid || query.isPending,
+    // isLoading stays true while uid is still resolving (query disabled), during
+    // the first fetch, AND during any background refetch (isFetching). With
+    // staleTime:0 a remount serves cached data immediately while revalidating in
+    // the background; including isFetching means the gate blocks (fails closed)
+    // until that refetch completes, so a newly published version can never be
+    // transiently bypassed by a stale cached "no acceptance needed".
+    isLoading: !uid || query.isPending || query.isFetching,
     isError: query.isError,
     // Only meaningful once the query has resolved successfully; the gate checks
     // isLoading / isError FIRST and fails closed, so this never leaks a false

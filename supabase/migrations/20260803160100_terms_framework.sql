@@ -308,7 +308,17 @@ begin
   exception when others then
     v_ip_hash := null;  -- never fail acceptance over IP hashing
   end;
-  v_ip_hash := coalesce(v_ip_hash, nullif(btrim(coalesce(p_ip_hash, '')), ''));
+  -- Fall back to the client-supplied hash only when it is a well-formed SHA-256
+  -- (64 lowercase hex chars). A buggy/malicious client could otherwise pass a raw
+  -- IP or arbitrary plaintext, which would be persisted permanently and break the
+  -- ledger's POPIA guarantee that a raw IP is never stored — so reject anything
+  -- that isn't a valid digest.
+  if v_ip_hash is null then
+    v_ip_hash := nullif(btrim(coalesce(p_ip_hash, '')), '');
+    if v_ip_hash is not null and v_ip_hash !~ '^[0-9a-f]{64}$' then
+      v_ip_hash := null;
+    end if;
+  end if;
 
   -- ---- idempotent insert ---------------------------------------------------
   insert into public.terms_acceptances_ledger (user_id, terms_version_id, ip_hash, user_agent)
@@ -573,11 +583,13 @@ begin
     if public.check_user_has_accepted_current(v_user, (select role from public.profiles where id=v_user)) then
       raise exception 'assert: user should not have accepted yet'; end if;
 
-    -- accept → recorded + audited.
-    v_res := public.accept_terms(v_ver, 'client_fallback_hash', 'Mozilla/5.0 (Test)');
+    -- accept → recorded + audited. (Migrations run outside PostgREST, so
+    -- request.headers is null here → the well-formed client hash fallback is used
+    -- and stored, letting us assert the fallback path.)
+    v_res := public.accept_terms(v_ver, repeat('a', 64), 'Mozilla/5.0 (Test)');
     if (v_res->>'status') <> 'accepted' then raise exception 'assert: first accept not accepted (%)', v_res; end if;
-    if not exists (select 1 from public.terms_acceptances_ledger where user_id=v_user and terms_version_id=v_ver) then
-      raise exception 'assert: acceptance row missing'; end if;
+    if not exists (select 1 from public.terms_acceptances_ledger where user_id=v_user and terms_version_id=v_ver and ip_hash = repeat('a', 64)) then
+      raise exception 'assert: valid client ip_hash fallback not stored'; end if;
     if not exists (select 1 from public.activity_logs where entity_type='terms_acceptance' and event_type='CREATE'
         and (after_values->>'terms_version_id')=v_ver::text and user_id=v_user) then
       raise exception 'assert: acceptance audit row missing'; end if;
@@ -591,6 +603,17 @@ begin
     -- now reports accepted.
     if not public.check_user_has_accepted_current(v_user, (select role from public.profiles where id=v_user)) then
       raise exception 'assert: user should now report accepted'; end if;
+
+    -- client ip_hash fallback rejects a non-SHA-256 value (POPIA: never persist a
+    -- raw IP / arbitrary plaintext). v_other's role is in v1.0's applies_to_roles.
+    if v_other is not null then
+      perform set_config('request.jwt.claims', json_build_object('sub', v_other)::text, true);
+      v_res := public.accept_terms(v_ver, 'not-a-valid-sha256', null);
+      if (v_res->>'status') <> 'accepted' then raise exception 'assert: v_other accept (%)', v_res; end if;
+      if exists (select 1 from public.terms_acceptances_ledger where user_id=v_other and terms_version_id=v_ver and ip_hash is not null) then
+        raise exception 'assert: bogus client ip_hash should be rejected (stored null)'; end if;
+      perform set_config('request.jwt.claims', json_build_object('sub', v_user)::text, true);
+    end if;
 
     -- accept_terms rejects a non-current version (is_current=false → no notify
     -- trigger fires, so this is dry-run safe).
