@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import {
@@ -44,20 +45,37 @@ export default function NotificationPreferencesMatrix({ role }: { role: PortalRo
     return channel === "email" ? row.email_enabled : row.in_app_enabled;
   };
 
+  // Per-(event, channel) in-flight tracking. `setPref.variables` only holds the
+  // MOST RECENT mutation, so toggling a second checkbox would re-enable the
+  // first mid-flight — letting the same checkbox be re-toggled while its RPC is
+  // still running, and two writes for the same pair can then settle out of order
+  // and persist the stale value. Tracking each pair independently disables only
+  // the checkbox whose own write is in flight; distinct pairs hit different
+  // columns/rows (row-lock-serialized, no lost update) so they stay free to
+  // toggle concurrently.
+  const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set());
+  const pairKey = (eventType: string, channel: PrefChannel) => `${eventType}:${channel}`;
+
   const onToggle = (eventType: string, channel: PrefChannel, enabled: boolean) => {
+    const key = pairKey(eventType, channel);
+    setPendingKeys((prev) => new Set(prev).add(key));
     setPref.mutate(
       { eventType, channel, enabled },
       {
         onError: (e) =>
           toast.error(e instanceof Error ? e.message : "Could not save preference"),
+        onSettled: () =>
+          setPendingKeys((prev) => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
+          }),
       },
     );
   };
 
   const isPending = (eventType: string, channel: PrefChannel) =>
-    setPref.isPending &&
-    setPref.variables?.eventType === eventType &&
-    setPref.variables?.channel === channel;
+    pendingKeys.has(pairKey(eventType, channel));
 
   if (isLoading || enumLoading) {
     return (
