@@ -372,6 +372,7 @@ begin
           partner_share = 0, owner_share = 0, partner_pool = 0, tier_pct = 0,
           attribution_type = 'FNC_Contractor',
           gross_commission = v_gross,
+          is_purchase_order = v_is_po,   -- Macroscope re-review: keep PO flag in sync on the manual rewrite
           notes = 'Tier engine: FNC_Contractor MANUAL amount R' || to_char(v_amt,'FM999999999990.00') || ' — reason: ' || v_reason
       where id = v_existing_id returning id into v_new_id;
   else
