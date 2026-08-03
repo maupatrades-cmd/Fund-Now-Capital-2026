@@ -70,26 +70,32 @@ const partnerColumns: ReportColumn<PartnerPerfRow>[] = [
   ) },
   { key: "leads", header: "Leads Submitted", align: "right", sortValue: (r) => r.leadsSubmitted, render: (r) => r.leadsSubmitted },
   { key: "deals", header: "Deals Funded", align: "right", sortValue: (r) => r.dealsFunded, render: (r) => r.dealsFunded },
-  { key: "share", header: "Partner Share Earned", align: "right", sortValue: (r) => r.partnerShare, render: (r) => money(r.partnerShare) },
+  { key: "share", header: "Partner Share", align: "right", sortValue: (r) => r.partnerShare, render: (r) => money(r.partnerShare) },
+  { key: "bonus", header: "Bonus", align: "right", sortValue: (r) => r.bonusEarned, render: (r) => money(r.bonusEarned) },
+  { key: "total", header: "Total Earned", align: "right", sortValue: (r) => r.totalEarned, render: (r) => (
+    <span className="font-semibold text-brand-navy">{money(r.totalEarned)}</span>
+  ) },
 ];
 
 const partnerCsv: CsvColumn<PartnerPerfRow>[] = [
   { header: "Partner", value: (r) => r.name },
   { header: "Leads Submitted", value: (r) => r.leadsSubmitted },
   { header: "Deals Funded", value: (r) => r.dealsFunded },
-  { header: "Partner Share Earned", value: (r) => r.partnerShare },
+  { header: "Partner Share", value: (r) => r.partnerShare },
+  { header: "Bonus", value: (r) => r.bonusEarned },
+  { header: "Total Earned", value: (r) => r.totalEarned },
 ];
 
 export default function ReportsPage() {
-  const { commissions, leads, partners, contractors, isLoading, isError, error, refetch } =
+  const { commissions, leads, bonuses, partners, contractors, isLoading, isError, error, refetch } =
     useReports();
 
   const [preset, setPreset] = useState<PresetKey>("last30");
   const [range, setRange] = useState<DateRange>(() => presetRange("last30"));
 
   const kpis = useMemo(
-    () => computeKpis(commissions, leads, range),
-    [commissions, leads, range],
+    () => computeKpis(commissions, leads, bonuses, range),
+    [commissions, leads, bonuses, range],
   );
   const funderRows = useMemo(
     () => computeFunderPerformance(commissions, range),
@@ -100,8 +106,8 @@ export default function ReportsPage() {
     [contractors, commissions, leads, range],
   );
   const partnerRows = useMemo(
-    () => computePartnerPerformance(partners, commissions, leads, range),
-    [partners, commissions, leads, range],
+    () => computePartnerPerformance(partners, commissions, leads, bonuses, range),
+    [partners, commissions, leads, bonuses, range],
   );
   // Fixed last-12-months window, independent of the page filter (per brief).
   const monthly = useMemo(() => commissionByMonth(commissions), [commissions]);
@@ -176,7 +182,7 @@ export default function ReportsPage() {
             columns={partnerColumns}
             rows={partnerRows}
             getRowKey={(r) => r.partnerId}
-            defaultSortKey="share"
+            defaultSortKey="total"
             emptyMessage="No partner activity in this date range."
             csvFilename={`partner-performance-${range.from || "all"}_${range.to || "all"}.csv`}
             csvColumns={partnerCsv}

@@ -133,6 +133,19 @@ export interface LeadReportRow {
   createdDay: string | null;
 }
 
+// A discretionary owner bonus paid to a partner (C2.4). It rides the same
+// funder-invoice lifecycle as a commission (shares the commission_state enum via
+// its own `state` column) and is partner-attributed, so it is partner EARNINGS —
+// folded into the partner leaderboard's totals alongside the commission share.
+export interface BonusReportRow {
+  id: string;
+  dealId: string;
+  partnerId: string | null; // referral_partners.id
+  bonusAmount: number;
+  state: string;
+  windowDay: string | null; // earned_at ?? created_at, day slice
+}
+
 export interface PersonRow {
   id: string;
   name: string;
@@ -167,6 +180,16 @@ type RawLead = {
   created_at: string;
 };
 
+type RawBonus = {
+  id: string;
+  deal_id: string;
+  referral_partner_id: string | null;
+  bonus_amount: string | number | null;
+  state: string;
+  earned_at: string | null;
+  created_at: string;
+};
+
 export function normaliseCommission(raw: RawCommission): CommissionReportRow {
   return {
     id: raw.id,
@@ -195,8 +218,19 @@ export function normaliseLead(raw: RawLead): LeadReportRow {
   };
 }
 
-// A commission row counts toward money totals when it is not void.
-function isLive(r: CommissionReportRow): boolean {
+export function normaliseBonus(raw: RawBonus): BonusReportRow {
+  return {
+    id: raw.id,
+    dealId: raw.deal_id,
+    partnerId: raw.referral_partner_id,
+    bonusAmount: toNum(raw.bonus_amount),
+    state: raw.state,
+    windowDay: dayOf(raw.earned_at ?? raw.created_at),
+  };
+}
+
+// A commission or bonus row counts toward money totals when it is not void.
+function isLive(r: { state: string }): boolean {
   return r.state !== "void";
 }
 
@@ -211,10 +245,12 @@ export interface ReportKpis {
 export function computeKpis(
   commissions: CommissionReportRow[],
   leads: LeadReportRow[],
+  bonuses: BonusReportRow[],
   range: DateRange,
 ): ReportKpis {
   const live = commissions.filter((r) => isLive(r) && dayInRange(r.windowDay, range));
   const leadsIn = leads.filter((l) => dayInRange(l.createdDay, range));
+  const bonusesIn = bonuses.filter((b) => isLive(b) && dayInRange(b.windowDay, range));
 
   const dealIds = new Set(live.map((r) => r.dealId));
 
@@ -227,6 +263,11 @@ export function computeKpis(
   for (const r of live) {
     if (r.contractorId) activeContractors.add(r.contractorId);
     if (r.partnerId) activePartners.add(r.partnerId);
+  }
+  // A partner who earned a bonus in-range is active even if their commission
+  // row falls outside the window (bonuses have no contractor attribution).
+  for (const b of bonusesIn) {
+    if (b.partnerId) activePartners.add(b.partnerId);
   }
 
   return {
@@ -349,27 +390,42 @@ export function computeContractorPerformance(
 }
 
 // ---- partner performance ---------------------------------------------------
+// Partner EARNINGS fold in both sources: the commission `partner_share` and any
+// discretionary `bonus_amount`. They are kept as separate columns for owner
+// transparency (which portion is commission vs bonus) plus a Total Earned
+// headline. `dealsFunded` is the distinct set of deals across BOTH sources — a
+// bonus rides an already-funded deal, so in practice its deal is already in the
+// commission set, but the union keeps a bonus-only deal from being missed.
 export interface PartnerPerfRow {
   partnerId: string;
   name: string; // REAL name — owner view
   leadsSubmitted: number;
   dealsFunded: number;
-  partnerShare: number;
+  partnerShare: number; // commission partner_share
+  bonusEarned: number; // Σ bonus_amount
+  totalEarned: number; // partnerShare + bonusEarned
 }
 
 export function computePartnerPerformance(
   partners: PersonRow[],
   commissions: CommissionReportRow[],
   leads: LeadReportRow[],
+  bonuses: BonusReportRow[],
   range: DateRange,
 ): PartnerPerfRow[] {
   const live = commissions.filter((r) => isLive(r) && dayInRange(r.windowDay, range));
+  const liveBonuses = bonuses.filter((b) => isLive(b) && dayInRange(b.windowDay, range));
   const leadsIn = leads.filter((l) => dayInRange(l.createdDay, range));
 
   const rows = partners.map((p) => {
     const theirCommissions = live.filter((r) => r.partnerId === p.id);
-    const dealIds = new Set(theirCommissions.map((r) => r.dealId));
+    const theirBonuses = liveBonuses.filter((b) => b.partnerId === p.id);
+    const dealIds = new Set<string>([
+      ...theirCommissions.map((r) => r.dealId),
+      ...theirBonuses.map((b) => b.dealId),
+    ]);
     const partnerShare = theirCommissions.reduce((s, r) => s + r.partnerShare, 0);
+    const bonusEarned = theirBonuses.reduce((s, b) => s + b.bonusAmount, 0);
     const leadsSubmitted = leadsIn.filter((l) => l.referralPartnerId === p.id).length;
     return {
       partnerId: p.id,
@@ -377,12 +433,14 @@ export function computePartnerPerformance(
       leadsSubmitted,
       dealsFunded: dealIds.size,
       partnerShare,
+      bonusEarned,
+      totalEarned: partnerShare + bonusEarned,
     };
   });
 
   return rows
-    .filter((r) => r.leadsSubmitted > 0 || r.dealsFunded > 0 || r.partnerShare > 0)
-    .sort((a, b) => b.partnerShare - a.partnerShare || b.leadsSubmitted - a.leadsSubmitted);
+    .filter((r) => r.leadsSubmitted > 0 || r.dealsFunded > 0 || r.totalEarned > 0)
+    .sort((a, b) => b.totalEarned - a.totalEarned || b.leadsSubmitted - a.leadsSubmitted);
 }
 
 // ---- commission by month (fixed last-12-months window) ---------------------
