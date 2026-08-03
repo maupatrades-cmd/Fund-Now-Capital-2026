@@ -1,26 +1,34 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/lib/useSession";
+import type { PrefChannel } from "@/lib/notifications";
 
-export type NotificationPreference = {
-  id: string;
-  user_id: string;
+// A user's stored preference for one event: whether each configurable channel is
+// on. Rows come from the get_my_notification_preferences() RPC (self-scoped to
+// auth.uid()). Events with no row are absent here and treated as "on" by the UI,
+// matching check_notification_channel_enabled()'s default-ON behaviour.
+export type NotificationPreferenceRow = {
   event_type: string;
   email_enabled: boolean;
-  whatsapp_enabled: boolean;
-  sms_enabled: boolean;
   in_app_enabled: boolean;
-  updated_at: string;
 };
 
-// Returns the caller's preference rows keyed by event_type (RLS scopes to own).
-export function useNotificationPreferences() {
+export type PreferenceMap = Record<string, NotificationPreferenceRow>;
+
+// The caller's preferences, keyed by event_type. Cache is keyed by the session
+// user id (mirrors useProfileRole) so a same-tab sign-out/sign-in as a different
+// user can never reuse the previous user's cached preferences.
+export function useMyNotificationPreferences() {
+  const session = useSession();
+  const uid = session?.user?.id ?? null;
+
   return useQuery({
-    queryKey: ["notification-preferences"],
-    queryFn: async (): Promise<Record<string, NotificationPreference>> => {
-      const { data, error } = await supabase.from("notification_preferences").select("*");
+    queryKey: ["notification-preferences", uid],
+    queryFn: async (): Promise<PreferenceMap> => {
+      const { data, error } = await supabase.rpc("get_my_notification_preferences");
       if (error) throw error;
-      const byEvent: Record<string, NotificationPreference> = {};
-      for (const row of (data ?? []) as NotificationPreference[]) {
+      const byEvent: PreferenceMap = {};
+      for (const row of (data ?? []) as NotificationPreferenceRow[]) {
         byEvent[row.event_type] = row;
       }
       return byEvent;
@@ -28,42 +36,57 @@ export function useNotificationPreferences() {
   });
 }
 
-// Channels toggleable from the preferences page. in_app (A11) + email (A12).
-export type ToggleableChannel = "in_app_enabled" | "email_enabled";
+// Column each channel maps to on a preference row (for optimistic patching).
+const CHANNEL_COLUMN: Record<PrefChannel, "in_app_enabled" | "email_enabled"> = {
+  in_app: "in_app_enabled",
+  email: "email_enabled",
+};
 
-// Upserts a single channel column for (user, event). Only the toggled column is
-// written; the row's other columns keep their values (or table defaults on
-// insert). RLS scopes writes to the caller's own rows. Returns the affected row
-// so a silent RLS no-op surfaces loudly (see CLAUDE.md working-style rule).
-export function useSetChannelPreference() {
+// Toggle one channel for one event via the set_notification_preference RPC
+// (server enforces auth.uid()). Optimistic: the matrix flips instantly and rolls
+// back on error. Keyed by uid so the optimistic patch targets the right cache.
+export function useSetNotificationPreference() {
   const qc = useQueryClient();
+  const session = useSession();
+  const uid = session?.user?.id ?? null;
+  const key = ["notification-preferences", uid] as const;
+
   return useMutation({
     mutationFn: async ({
-      userId,
       eventType,
       channel,
       enabled,
     }: {
-      userId: string;
       eventType: string;
-      channel: ToggleableChannel;
+      channel: PrefChannel;
       enabled: boolean;
     }) => {
-      const { data, error } = await supabase
-        .from("notification_preferences")
-        .upsert(
-          {
-            user_id: userId,
-            event_type: eventType,
-            [channel]: enabled,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id,event_type" },
-        )
-        .select("id");
+      const { error } = await supabase.rpc("set_notification_preference", {
+        p_event_type: eventType,
+        p_channel: channel,
+        p_enabled: enabled,
+      });
       if (error) throw error;
-      if (!data || data.length === 0) throw new Error("Preference was not saved");
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notification-preferences"] }),
+    onMutate: async ({ eventType, channel, enabled }) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<PreferenceMap>(key);
+      qc.setQueryData<PreferenceMap>(key, (old) => {
+        const existing = old?.[eventType] ?? {
+          event_type: eventType,
+          email_enabled: true,
+          in_app_enabled: true,
+        };
+        return {
+          ...(old ?? {}),
+          [eventType]: { ...existing, [CHANNEL_COLUMN[channel]]: enabled },
+        };
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous !== undefined) qc.setQueryData(key, ctx.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: key }),
   });
 }

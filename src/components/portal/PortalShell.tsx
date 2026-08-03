@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, LogOut, PlusCircle, ListChecks, Briefcase } from "lucide-react";
+import { Home, LogOut, PlusCircle, ListChecks, Briefcase, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
@@ -34,6 +34,7 @@ function navItems(portal: PortalKind) {
     { to: `${base}/submit-lead`, label: "Submit Lead", icon: PlusCircle, end: false },
     { to: `${base}/leads`, label: "My Leads", icon: ListChecks, end: false },
     { to: `${base}/deals`, label: "My Deals", icon: Briefcase, end: false },
+    { to: `${base}/settings/notifications`, label: "Notifications", icon: Bell, end: false },
   ];
 }
 
