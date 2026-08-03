@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/lib/useSession";
 import type { PortalKind } from "@/components/portal/PortalShell";
 
 /*
@@ -29,8 +30,15 @@ export type PortalDealRow = {
 };
 
 export function usePortalDeals(portal: PortalKind) {
+  // Key by the session user id so a same-tab sign-out/sign-in as a different
+  // user of the same role can never reuse the previous user's cached deals
+  // (the Macroscope cache-isolation fix — mirrors useProfileRole). The RPC is
+  // still the authoritative auth.uid() scope; this just keeps the client cache
+  // per-user.
+  const uid = useSession()?.user?.id ?? null;
+
   return useQuery({
-    queryKey: ["portal-deals", portal],
+    queryKey: ["portal-deals", portal, uid],
     queryFn: async (): Promise<PortalDealRow[]> => {
       const { data, error } = await supabase.rpc(RPC_FOR[portal]);
       if (error) throw error;
