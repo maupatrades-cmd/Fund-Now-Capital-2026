@@ -7,6 +7,7 @@ import ContractorHomePage from "./ContractorHomePage";
 import ContractorSubmitLeadPage from "./contractor/SubmitLeadPage";
 import ContractorMyLeadsPage from "./contractor/MyLeadsPage";
 import ContractorDealsPage from "./contractor/ContractorDealsPage";
+import ContractorNotificationSettingsPage from "./contractor/NotificationSettingsPage";
 
 // Session + role guard for everything under /contractor/*. The contractor
 // portal is its own world: contractors never see the owner CRM, and
@@ -47,6 +48,8 @@ export default function ContractorGate() {
   // contractor screens are added here in later PRs without touching App.tsx.
   // The T&C gate wraps the ENTIRE subtree so an unaccepted contractor can't
   // deep-link past it to a sub-route.
+  // The T&C gate wraps the ENTIRE subtree — including notification settings — so
+  // an unaccepted contractor can't deep-link past acceptance to any sub-route.
   return (
     <PortalTermsGate role="contractor">
       <Routes>
@@ -54,6 +57,7 @@ export default function ContractorGate() {
         <Route path="submit-lead" element={<ContractorSubmitLeadPage />} />
         <Route path="leads" element={<ContractorMyLeadsPage />} />
         <Route path="deals" element={<ContractorDealsPage />} />
+        <Route path="settings/notifications" element={<ContractorNotificationSettingsPage />} />
         <Route path="*" element={<Navigate to="/contractor" replace />} />
       </Routes>
     </PortalTermsGate>

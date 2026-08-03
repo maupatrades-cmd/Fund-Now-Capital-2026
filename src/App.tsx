@@ -10,6 +10,7 @@ import PartnerHomePage from "@/pages/PartnerHomePage";
 import PartnerSubmitLeadPage from "@/pages/partner/SubmitLeadPage";
 import PartnerMyLeadsPage from "@/pages/partner/MyLeadsPage";
 import PartnerDealsPage from "@/pages/partner/PartnerDealsPage";
+import PartnerNotificationSettingsPage from "@/pages/partner/NotificationSettingsPage";
 import ContractorGate from "@/pages/ContractorGate";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
@@ -117,6 +118,7 @@ function AppRoutes() {
         <Route path="submit-lead" element={<PartnerSubmitLeadPage />} />
         <Route path="leads" element={<PartnerMyLeadsPage />} />
         <Route path="deals" element={<PartnerDealsPage />} />
+        <Route path="settings/notifications" element={<PartnerNotificationSettingsPage />} />
         <Route path="*" element={<Navigate to="/partner" replace />} />
       </Route>
       <Route path="/contractor/*" element={<ContractorGate />} />
