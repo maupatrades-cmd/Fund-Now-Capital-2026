@@ -425,8 +425,13 @@ export interface CsvColumn<T> {
 
 function csvCell(value: string | number | null | undefined): string {
   const s = value == null ? "" : String(value);
-  // RFC 4180 quoting + neutralise spreadsheet formula injection.
-  const safe = /^[=+\-@]/.test(s) ? "'" + s : s;
+  // RFC 4180 quoting + neutralise spreadsheet formula injection. The leading-
+  // character set covers the classic formula triggers (= + - @) plus tab, CR,
+  // LF, and full-width equals (＝) — all of which spreadsheet apps can still
+  // parse as a formula from inside a quoted field. Contractor/partner names can
+  // be attacker-influenced (a contractor sets their own full_name via the
+  // portal), so this guards the owner's CSV export against that path.
+  const safe = /^[=+\-@\t\r\n＝]/.test(s) ? "'" + s : s;
   return '"' + safe.replace(/"/g, '""') + '"';
 }
 
