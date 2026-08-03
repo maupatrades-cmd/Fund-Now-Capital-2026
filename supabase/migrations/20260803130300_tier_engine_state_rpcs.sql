@@ -144,6 +144,7 @@ declare
   v_deal public.deals; v_dc public.deal_commissions; v_attr public.deal_attributions;
   v_ref text; v_gross numeric(14,2); v_is_po boolean;
   v_existing_id uuid; v_new_id uuid;
+  v_existing_gross numeric(14,2); v_existing_status public.commission_state;
   b public.commission_breakdown;
   v_pct numeric(10,4); v_amt numeric(14,2);
   v_pool numeric(14,2); v_retention numeric(14,2);
@@ -166,13 +167,16 @@ begin
   v_gross := v_dc.actual_gross_commission;
   if v_gross is null then raise exception 'apply_tier_on_lock: deal % is locked with no actual gross', v_ref; end if;
 
-  -- Idempotency: a non-void tier commission already exists -> no-op.
-  select id into v_existing_id from public.commission_records
-    where deal_id = p_deal_id and deal_funder_submission_id is null and status <> 'void' limit 1;
-  if v_existing_id is not null then
-    return jsonb_build_object('deal_id', p_deal_id, 'status', 'already_written',
-      'commission_record_id', v_existing_id, 'changed', false);
-  end if;
+  -- Detect an existing (non-void) tier commission. We do NOT early-exit: an
+  -- unlock -> corrected actual -> re-lock (picker unlock_commission exists exactly
+  -- for a disputed figure) must be able to REWRITE a still-'earned' row with the new
+  -- split. The write step below decides: same gross -> true no-op; changed gross on an
+  -- 'earned' row -> rewrite; changed gross on an already-billed row -> raise.
+  select id, gross_commission, status
+    into v_existing_id, v_existing_gross, v_existing_status
+    from public.commission_records
+    where deal_id = p_deal_id and deal_funder_submission_id is null and status <> 'void'
+    limit 1;
 
   -- Attribution required. Missing/sub-agent are NON-FATAL (never abort the LOCK).
   select * into v_attr from public.deal_attributions where deal_id = p_deal_id;
@@ -228,6 +232,44 @@ begin
     return jsonb_build_object('deal_id', p_deal_id, 'status', 'unsupported_subagent', 'changed', false);
   end if;
 
+  -- REWRITE PATH (finding #1): an existing tier row means the deal was locked before.
+  if v_existing_id is not null then
+    -- Same actual gross -> a genuine idempotent no-op (e.g. the LOCK trigger re-fired).
+    if v_existing_gross is not distinct from v_gross then
+      return jsonb_build_object('deal_id', p_deal_id, 'status', 'already_written',
+        'commission_record_id', v_existing_id, 'changed', false);
+    end if;
+    -- Changed gross: only a still-'earned' commission may be rewritten in place. Once it
+    -- has advanced (outstanding/payable/settled — i.e. tied to an invoice) the figure is
+    -- committed; the owner must void/redo through the ledger, not silently overwrite it.
+    if v_existing_status <> 'earned' then
+      raise exception 'apply_tier_on_lock: deal % commission already advanced (status %); void it before re-locking with a new gross',
+        v_ref, v_existing_status;
+    end if;
+    update public.commission_records set
+        referral_partner_id = v_ref_partner, contractor_id = v_contractor,
+        gross_commission = v_gross, is_purchase_order = v_is_po, tier_pct = v_tier_pct,
+        company_retention = v_retention, partner_pool = v_pool,
+        partner_share = v_partner_share, owner_share = v_owner_share,
+        contractor_share = v_contractor_share, attribution_type = v_attr.attribution_type,
+        notes = v_notes || ' (rewritten on re-lock; gross R' || to_char(v_existing_gross,'FM999999999990.00') ||
+                ' -> R' || to_char(v_gross,'FM999999999990.00') || ')'
+      where id = v_existing_id
+      returning id into v_new_id;
+    if v_new_id is null then raise exception 'apply_tier_on_lock: deal % rewrite wrote no row', v_ref; end if;
+    perform public.log_tier_engine_activity(p_deal_id, v_deal.client_id, 'COMMISSION_TIER_APPLIED',
+      'Commission tier REWRITTEN on re-lock — ' || v_attr.attribution_type || ' — ' || v_notes,
+      jsonb_build_object('previous_fnc_gross', v_existing_gross),
+      jsonb_build_object('commission_record_id', v_new_id, 'attribution_type', v_attr.attribution_type,
+        'fnc_gross', v_gross, 'fnc_retention', v_retention, 'partner_share', v_partner_share,
+        'contractor_share', v_contractor_share, 'owner_share', v_owner_share));
+    return jsonb_build_object('deal_id', p_deal_id, 'status', 'rewritten', 'changed', true,
+      'commission_record_id', v_new_id, 'attribution_type', v_attr.attribution_type,
+      'fnc_gross', v_gross, 'fnc_retention', v_retention,
+      'partner_share', v_partner_share, 'contractor_share', v_contractor_share, 'owner_share', v_owner_share);
+  end if;
+
+  -- FIRST-LOCK PATH: no existing tier row -> insert. ON CONFLICT is the race backstop.
   insert into public.commission_records (
     deal_id, deal_funder_submission_id, referral_partner_id, contractor_id,
     gross_commission, is_purchase_order, tier_pct, company_retention, partner_pool,
@@ -389,7 +431,7 @@ begin
 end $$;
 
 comment on function public.apply_tier_on_lock(uuid) is
-  'Tier engine: on commission LOCK, reads deal_attributions + deal_commissions.actual_gross_commission and writes ONE commission_record with the correct TIERS.md split (Direct_FNC 100% / Bright_Destiny_Partner 40/60 via calculate_commission / FNC_Contractor flat lookup). Idempotent, owner-only, advisory-locked. R1M+ contractor raises sqlstate FNC1M (manual entry). Called by the deal_commissions LOCK trigger.';
+  'Tier engine: on commission LOCK, reads deal_attributions + deal_commissions.actual_gross_commission and writes ONE commission_record with the correct TIERS.md split (Direct_FNC 100% / Bright_Destiny_Partner 40/60 via calculate_commission / FNC_Contractor flat lookup). Owner-only, advisory-locked. Idempotent on an unchanged actual; on an unlock->corrected-actual->re-lock it REWRITES a still-earned row (and raises if the row has already been billed). R1M+ contractor raises sqlstate FNC1M (manual entry). Called by the deal_commissions LOCK trigger.';
 comment on function public.set_deal_attribution(uuid, text, uuid) is
   'Tier engine: owner sets/updates a deal''s single attribution (deal_attributions). Frozen once the commission is locked or a tier record exists. Polymorphic referent validated per type. Owner-only, advisory-locked, audited (DEAL_ATTRIBUTION_SET).';
 comment on function public.set_contractor_manual_amount(uuid, numeric, text) is
@@ -514,6 +556,14 @@ begin
       -- idempotent second apply
       v_res := public.apply_tier_on_lock(v_deal);
       if (v_res->>'changed') <> 'false' or (v_res->>'status') <> 'already_written' then raise exception 'assert partner: idempotency %', v_res; end if;
+      -- REWRITE (finding #1): unlock -> corrected actual -> re-lock rewrites the still-earned row.
+      update public.deal_commissions set commission_state='pending', commission_locked_at=null, commission_locked_by=null where deal_id=v_deal;
+      update public.deal_commissions set commission_state='locked', actual_gross_commission=100000,
+        commission_locked_at=now(), commission_locked_by=v_owner where deal_id=v_deal;
+      select * into v_rec from public.commission_records where deal_id=v_deal and deal_funder_submission_id is null and status<>'void';
+      if v_rec.gross_commission  <> 100000.00 then raise exception 'assert rewrite: gross not updated %', v_rec.gross_commission; end if;
+      if v_rec.partner_share     <> 18000.00  then raise exception 'assert rewrite: partner_share %', v_rec.partner_share; end if;
+      if v_rec.company_retention <> 40000.00  then raise exception 'assert rewrite: retention %', v_rec.company_retention; end if;
       -- attribution frozen once locked
       begin perform public.set_deal_attribution(v_deal, 'Direct_FNC', null); raise exception 'assert: change attribution on locked should raise';
       exception when others then if sqlerrm like 'assert:%' then raise; end if;
