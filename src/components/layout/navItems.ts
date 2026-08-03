@@ -14,6 +14,7 @@ import {
   ReceiptText,
   Wallet,
   UserCog,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 
@@ -38,6 +39,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/activity", label: "Activity", icon: Activity },
   { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/team", label: "Team", icon: UserCog },
+  { to: "/settings/notifications", label: "Notifications", icon: Bell },
   { to: "/settings/industries", label: "Industries", icon: Factory },
   { to: "/settings/funders", label: "Funder rates", icon: Percent },
 ];

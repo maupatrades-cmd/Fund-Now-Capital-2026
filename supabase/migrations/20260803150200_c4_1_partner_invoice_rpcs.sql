@@ -448,7 +448,11 @@ begin
            li.amount, li.added_at
       from public.partner_invoice_line_items li
       join public.commission_records cr        on cr.id = li.commission_record_id
-      join public.deal_funder_submissions dfs  on dfs.id = cr.deal_funder_submission_id
+      -- LEFT: commission_records.deal_funder_submission_id is nullable (TIER-ENGINE
+      -- tier rows carry no submission), so an INNER join would silently drop a
+      -- partner's tier-attributed line item (CLAUDE.md nullable-FK !left rule).
+      -- A null submission simply yields a null funder name in the row.
+      left join public.deal_funder_submissions dfs  on dfs.id = cr.deal_funder_submission_id
       join public.deals d                      on d.id = li.deal_id
       left join public.clients c               on c.id = d.client_id
      where li.invoice_id = p_invoice_id

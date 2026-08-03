@@ -1,7 +1,8 @@
 // Notification presentation helpers (A11 / SPEC S4).
-// Labels + icons cover the full `notification_event_type` enum (36 values —
+// Labels + icons cover the full `notification_event_type` enum (37 values —
 // 30 verified 2026-07-31 + LEAD_SUBMITTED_BY_CONTRACTOR (LEAD-SUBMIT lane
 // 2026-08-02) + CONTRACTOR_APPLICATION_RECEIVED (APPLY-ROUTE lane 2026-08-03)
+// + TERMS_UPDATED (TC-FRAMEWORK lane 2026-08-03)
 // + PARTNER_INVOICE_{SUBMITTED,APPROVED,REJECTED,PAID} (DOCTOR-INVOICING/C4
 // lane 2026-08-03)). Any unknown/future value still
 // degrades gracefully: eventLabel() falls back to the raw enum string and
@@ -34,6 +35,7 @@ import {
   Handshake,
   Inbox,
   MessageSquare,
+  ScrollText,
   Target,
   TrendingUp,
   BadgeCheck,
@@ -55,8 +57,9 @@ export type Notification = {
   read_at: string | null;
 };
 
-// Full S4 event list — all 36 `notification_event_type` enum values, in enum
-// order (PARTNER_INVOICE_* added by the DOCTOR-INVOICING/C4 lane 2026-08-03).
+// Full S4 event list — all 37 `notification_event_type` enum values, in enum
+// order (TERMS_UPDATED by the TC-FRAMEWORK lane; PARTNER_INVOICE_* by the
+// DOCTOR-INVOICING/C4 lane — both 2026-08-03).
 // The filter and preferences matrix cover them all.
 export const NOTIFICATION_EVENT_TYPES = [
   { value: "LEAD_CREATED_FOR_YOU", label: "Lead created for you" },
@@ -91,6 +94,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   { value: "INVOICE_MARKED_PAID", label: "Invoice paid" },
   { value: "BONUS_PAID", label: "Bonus paid" },
   { value: "CONTRACTOR_APPLICATION_RECEIVED", label: "New contractor application" },
+  { value: "TERMS_UPDATED", label: "Terms & Conditions updated" },
   { value: "PARTNER_INVOICE_SUBMITTED", label: "Partner invoice submitted" },
   { value: "PARTNER_INVOICE_APPROVED", label: "Partner invoice approved" },
   { value: "PARTNER_INVOICE_REJECTED", label: "Partner invoice rejected" },
@@ -142,6 +146,7 @@ const EVENT_ICON: Record<string, LucideIcon> = {
   PARTNER_INVOICE_PAID: CircleDollarSign,
   // Team / onboarding
   CONTRACTOR_APPLICATION_RECEIVED: UserPlus,
+  TERMS_UPDATED: ScrollText,
   // Engagement / ops
   CLIENT_MESSAGE_RECEIVED: MessageSquare,
   FOLLOW_UP_DUE: Clock,
@@ -188,11 +193,89 @@ export function eventIconClass(value: string): string {
   }
 }
 
-// The channels shown in the preferences matrix. In-app (A11) and email (A12)
-// are live; WhatsApp and SMS arrive in Phase D.
-export const NOTIFICATION_CHANNELS = [
-  { key: "in_app_enabled", label: "In-app", live: true },
-  { key: "email_enabled", label: "Email", live: true },
-  { key: "whatsapp_enabled", label: "WhatsApp", live: false },
-  { key: "sms_enabled", label: "SMS", live: false },
-] as const;
+// ─────────────────────────────────────────────────────────────────────────────
+// Notification Preferences matrix (Sprint 4 Lane 4d)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// The two configurable channels in the per-portal preferences matrix. These map
+// 1:1 to the `p_channel` argument of the set_notification_preference /
+// check_notification_channel_enabled RPCs. WhatsApp + SMS are deliberately out
+// of scope here (Phase D). `column` is the wide-table column each channel reads
+// back from get_my_notification_preferences().
+export type PrefChannel = "in_app" | "email";
+export const PREF_MATRIX_CHANNELS = [
+  { channel: "in_app", label: "In-app", column: "in_app_enabled" },
+  { channel: "email", label: "Email", column: "email_enabled" },
+] as const satisfies ReadonlyArray<{
+  channel: PrefChannel;
+  label: string;
+  column: "in_app_enabled" | "email_enabled";
+}>;
+
+export type PortalRole = "owner" | "partner" | "contractor";
+
+// Which events each role can actually receive, so a partner/contractor sees a
+// relevant matrix rather than the full owner-only firehose. The owner sees
+// everything. Partner/contractor lists are generous — every event that already
+// fires to them today (S2/S4) plus the engagement events reserved for the
+// Phase D portal — so no notification they could get is un-configurable. Each
+// list is intersected with NOTIFICATION_EVENT_TYPES in enum order below, so a
+// stale/typo'd value is simply dropped rather than rendering a bogus row.
+const PARTNER_EVENTS: readonly string[] = [
+  "LEAD_CREATED_FOR_YOU",
+  "LEAD_SUBMITTED_BY_PARTNER",
+  "LEAD_STARTED_QUALIFICATION",
+  "LEAD_QUALIFIED",
+  "LEAD_NOT_QUALIFIED",
+  "LEAD_UPDATED",
+  "LEAD_DOCUMENT_REJECTED",
+  "DEAL_SUBMITTED_TO_FUNDER",
+  "DEAL_APPROVED",
+  "DEAL_DECLINED",
+  "DEAL_FUNDED",
+  "FUNDER_RESPONSE_RECEIVED",
+  "COMMISSION_PAID",
+  "BONUS_PAID",
+  "FOLLOW_UP_DUE",
+  "BADGE_EARNED",
+  "MONTHLY_TARGET_MILESTONE",
+  "TIER_REVIEW_UPCOMING",
+  "WEEKLY_SUMMARY",
+  "SYSTEM_MAINTENANCE",
+];
+
+const CONTRACTOR_EVENTS: readonly string[] = [
+  "LEAD_SUBMITTED_BY_CONTRACTOR",
+  "LEAD_STARTED_QUALIFICATION",
+  "LEAD_QUALIFIED",
+  "LEAD_NOT_QUALIFIED",
+  "LEAD_UPDATED",
+  "LEAD_DOCUMENT_REJECTED",
+  "DEAL_SUBMITTED_TO_FUNDER",
+  "DEAL_APPROVED",
+  "DEAL_DECLINED",
+  "DEAL_FUNDED",
+  "FUNDER_RESPONSE_RECEIVED",
+  "COMMISSION_PAID",
+  "BONUS_PAID",
+  "FOLLOW_UP_DUE",
+  "BADGE_EARNED",
+  "MONTHLY_TARGET_MILESTONE",
+  "TIER_REVIEW_UPCOMING",
+  "WEEKLY_SUMMARY",
+  "SYSTEM_MAINTENANCE",
+];
+
+export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];
+
+// Events applicable to a role, preserving NOTIFICATION_EVENT_TYPES (enum) order.
+// Owner => all; partner/contractor => their curated set. Unknown role => [].
+export function applicableEventTypesForRole(
+  role: PortalRole | null | undefined,
+): readonly NotificationEventType[] {
+  if (role === "owner") return NOTIFICATION_EVENT_TYPES;
+  const allow =
+    role === "partner" ? PARTNER_EVENTS : role === "contractor" ? CONTRACTOR_EVENTS : [];
+  const allowSet = new Set(allow);
+  return NOTIFICATION_EVENT_TYPES.filter((e) => allowSet.has(e.value));
+}
