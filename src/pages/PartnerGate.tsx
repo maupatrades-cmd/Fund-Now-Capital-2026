@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useProfileRole } from "@/hooks/useProfileRole";
+import { PortalTermsGate } from "@/components/terms/PortalTermsGate";
 
 /*
  * Session guard for the referral-partner portal (/partner/*).
@@ -30,7 +31,8 @@ export default function PartnerGate({ children }: { children?: ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  // Works both as a layout route (nested /partner/* routes via Outlet) and as
-  // a plain wrapper, whichever shape the routing layer mounts it with.
-  return <>{children ?? <Outlet />}</>;
+  // The T&C gate wraps the ENTIRE partner subtree (not just the home page), so an
+  // unaccepted partner can't deep-link past it. Works both as a layout route
+  // (nested /partner/* via Outlet) and as a plain wrapper.
+  return <PortalTermsGate role="partner">{children ?? <Outlet />}</PortalTermsGate>;
 }

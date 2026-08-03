@@ -11,6 +11,9 @@ import PortalShell from "@/components/portal/PortalShell";
 // page. Both lanes edit this file from the same main base — keep additions in
 // the content stack below so the two merges stay independent.
 export default function ContractorHomePage() {
+  // Note: the first-login T&C gate lives in ContractorGate (PortalTermsGate wraps
+  // the whole /contractor subtree), so no acceptance check is needed on this page.
+
   return (
     <PortalShell portal="contractor">
       <div className="space-y-1">

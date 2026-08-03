@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/lib/useSession";
 import type { PortalKind } from "@/components/portal/PortalShell";
 
 // Documents submitted through the portal are attached to the lead with an honest
@@ -141,8 +142,26 @@ export type PortalLeadRow = {
 // attributed partner/contractor). Keyed by portal so the partner + contractor
 // caches never cross.
 export function usePortalLeads(portal: PortalKind) {
-  return useQuery({
-    queryKey: ["portal-leads", portal],
+  // Key by the session user id so a same-tab sign-out/sign-in as a different
+  // user of the same role can never reuse the previous user's cached leads
+  // (the Macroscope cache-isolation fix — mirrors usePortalDeals / useProfileRole).
+  // RLS is still the authoritative auth.uid() scope; this just keeps the client
+  // cache per-user. The onSuccess invalidate above uses a prefix key, so it still
+  // matches (and clears) this per-uid entry.
+  //
+  // `useSession()` is `undefined` while the session is still resolving and `null`
+  // when signed out — both collapse to `uid === null` here. We must NOT fetch in
+  // that window: on first paint the Supabase client can already authenticate from
+  // its persisted session before React state updates, so an enabled query would
+  // fetch real rows and cache them under the placeholder `[…, null]` key, where a
+  // later signed-out/loading render (or the next user's own resolving window)
+  // could surface them — the exact leak this change closes. Gating on a concrete
+  // uid keeps every cached entry bound to a real user id.
+  const uid = useSession()?.user?.id ?? null;
+
+  const query = useQuery({
+    queryKey: ["portal-leads", portal, uid],
+    enabled: uid !== null,
     queryFn: async (): Promise<PortalLeadRow[]> => {
       const { data, error } = await supabase
         .from("leads")
@@ -152,6 +171,13 @@ export function usePortalLeads(portal: PortalKind) {
       return (data ?? []) as PortalLeadRow[];
     },
   });
+
+  // While uid is still resolving the query is disabled (no data, not fetching),
+  // which the consumer would otherwise read as an empty result and flash the
+  // "no leads yet" state. Surface it as loading instead. Signed-out users never
+  // reach this view (the portal gates redirect to login), so uid is null only
+  // during that brief first-paint window.
+  return { ...query, isLoading: query.isLoading || uid === null };
 }
 
 // Submitter-facing status derived from the owner's qualification_stage. The
