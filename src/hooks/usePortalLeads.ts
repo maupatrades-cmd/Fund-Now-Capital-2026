@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/lib/useSession";
 import type { PortalKind } from "@/components/portal/PortalShell";
 
 // Documents submitted through the portal are attached to the lead with an honest
@@ -141,8 +142,16 @@ export type PortalLeadRow = {
 // attributed partner/contractor). Keyed by portal so the partner + contractor
 // caches never cross.
 export function usePortalLeads(portal: PortalKind) {
+  // Key by the session user id so a same-tab sign-out/sign-in as a different
+  // user of the same role can never reuse the previous user's cached leads
+  // (the Macroscope cache-isolation fix — mirrors usePortalDeals / useProfileRole).
+  // RLS is still the authoritative auth.uid() scope; this just keeps the client
+  // cache per-user. The onSuccess invalidate above uses a prefix key, so it still
+  // matches (and clears) this per-uid entry.
+  const uid = useSession()?.user?.id ?? null;
+
   return useQuery({
-    queryKey: ["portal-leads", portal],
+    queryKey: ["portal-leads", portal, uid],
     queryFn: async (): Promise<PortalLeadRow[]> => {
       const { data, error } = await supabase
         .from("leads")

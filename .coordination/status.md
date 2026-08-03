@@ -1,5 +1,15 @@
 # Agent Coordination Status
 
+## LEADS-CACHE-FIX LANE — usePortalLeads POPIA cache isolation (2026-08-03)
+- Branch: `claude/useportalleads-cache-isolation-95i7iy` (fresh main @ f9b4cf6, PR #111 in). One PR. **DO NOT merge — owner merges after Macroscope.**
+- **Real problem solved (POPIA cross-user cache leak):** `usePortalLeads` cached its query under the static key `["portal-leads", portal]`, with no session-user dimension. On a same-tab sign-out → sign-in as a *different* user of the same role, TanStack Query would briefly serve the previous user's leads from cache before the refetch resolved. Same bug pattern MY-DEALS-VIEW (PR #107) fixed in `usePortalDeals`, flagged in that PR body as follow-up. RLS was never the leak (server scope is always correct); this is purely the client cache key.
+- **Fix (mirrors PR #100 partner-name query · PR #101 `useProfileRole` · PR #107 `usePortalDeals`):** import `useSession`, derive `const uid = useSession()?.user?.id ?? null;`, and add `uid` to the query key → `["portal-leads", portal, uid]`. The mutation's `onSuccess` invalidate still uses the prefix key `["portal-leads", portal]`, which TanStack matches partially — so it continues to clear the per-uid entry after a lead submit (verified: prefix match is the default, `exact` not set).
+- **Scope:** ONE file — `src/hooks/usePortalLeads.ts` (3 lines: 1 import + 1 uid + queryKey). No schema, no RPC, no route, no other file except this status section.
+- **Did NOT touch (other active lanes):** `usePortalDeals.ts` (MY-DEALS-VIEW, merged), `/partner/*` + `/contractor/*` pages, `useApplications`/`/apply` (APPLY-ROUTE), `/reports` (REPORTS-V1), any migration/RPC (PICKER-BACKEND, TIER-ENGINE), notification prefs (NOTIF-PREFS), Doctor invoicing (DOCTOR-INVOICING). Zero collision with any parallel lane — single-file lane.
+- **Build:** `tsc -b` ✔ · `vite build` ✔ · `oxlint` ✔ (only pre-existing vapour-text/FilterBar/ConfettiProvider/generate-invoice-pdf warnings — none in the touched file).
+- **Acceptance test (post-merge + Vercel deploy):** sign in as partner `queenasdice@gmail.com` on `/partner/leads`, note the leads shown → sign out → sign back in as a *different* same-role user in the same tab → their `/partner/leads` does NOT briefly flash the previous user's leads (same cache-isolation test as PR #107).
+- Last update: 2026-08-03.
+
 ## APPLY-ROUTE LANE — Public Application Entry Point (2026-08-03)
 - Branch: `claude/public-apply-route-f2i8o3` (fresh main @ 9d24c28). One PR. **DO NOT merge — owner merges after Macroscope.** Sprint 2, Lane 2a.
 - **Real problem solved (ONBOARDING.md Stage 1 + CONTRACTOR.md standing rule):** cold applicants had no way to apply — contractors could only be created by the owner via Team Management. This ships the public `/apply` entry point that creates a `contractors` record at status `applicant`, plus the owner's Applications review tab.
