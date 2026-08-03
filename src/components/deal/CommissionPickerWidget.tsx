@@ -1,0 +1,1040 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { z } from "zod";
+import { Input } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
+import { formatZAR } from "@/lib/format";
+import { CommissionStateBadge } from "@/components/deal/CommissionStateBadge";
+import {
+  ADJUSTMENTS,
+  ATTRIBUTION_RPC_TOKEN,
+  ATTRIBUTION_TYPES,
+  CALC_BASES,
+  CALC_BASE_BY_VALUE,
+  MAX_TIER_MODIFIERS,
+  TIER_MODIFIERS,
+  TIMINGS,
+  attributionTypeFromToken,
+  estimateGross,
+  labelForAdjustment,
+  labelForAttribution,
+  labelForBase,
+  labelForTierModifier,
+  labelForTiming,
+  type Adjustment,
+  type AttributionType,
+  type CalcBase,
+  type CommissionCalculation,
+  type TierModifier,
+  type Timing,
+} from "@/lib/commissionPicker";
+import {
+  useAttributionOptions,
+  useCommissionPicker,
+  useDealAttribution,
+  useDealCommissionRecord,
+  useProfileName,
+  useSetCommissionPicker,
+  useSetDealAttribution,
+  useTransitionToLocked,
+  useTransitionToPending,
+  useUnlockCommission,
+  useUpdateCommissionPicker,
+} from "@/hooks/useCommissionPicker";
+
+// Owner-only Commission Picker (PICKER.md). Lives on the Deal Detail Page.
+// Section A base / B tier modifiers / C timing / D adjustments + attribution;
+// live estimated-gross preview; POTENTIAL → PENDING → LOCKED lifecycle.
+//
+// Attribution is persisted through the tier engine's set_deal_attribution RPC
+// into public.deal_attributions (its own Save, independent of the picker Save),
+// because the LOCK trigger reads deal_attributions to compute the commission
+// split. So attribution is NOT part of the picker's commission_calculation jsonb.
+
+const numOrNull = (s: string): number | null => {
+  const t = s.trim();
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+};
+
+// Raw (string-backed) form state. Used both to seed the fields and to compute a
+// stable dirty signature — comparing raw fields (never the persisted jsonb,
+// whose key order Postgres does not preserve) avoids false "dirty" positives.
+type RawForm = {
+  base: CalcBase;
+  rate: string;
+  baseAmount: string;
+  sellRate: string;
+  buyRate: string;
+  cap: string;
+  timing: Timing;
+  tierModifiers: TierModifier[];
+  adjustments: Adjustment[];
+};
+
+const DEFAULT_FORM: RawForm = {
+  base: "percent_of_finance_charge",
+  rate: "",
+  baseAmount: "",
+  sellRate: "",
+  buyRate: "",
+  cap: "",
+  timing: "upfront_at_funding",
+  tierModifiers: [],
+  adjustments: [],
+};
+
+function formSig(f: RawForm): string {
+  return JSON.stringify({
+    base: f.base,
+    rate: f.rate,
+    baseAmount: f.baseAmount,
+    sellRate: f.sellRate,
+    buyRate: f.buyRate,
+    cap: f.cap,
+    timing: f.timing,
+    tierModifiers: [...f.tierModifiers].sort(),
+    adjustments: [...f.adjustments].sort(),
+  });
+}
+
+const BASE_VALUES = CALC_BASES.map((b) => b.value) as [CalcBase, ...CalcBase[]];
+const TIMING_VALUES = TIMINGS.map((t) => t.value) as [Timing, ...Timing[]];
+const TIER_VALUES = TIER_MODIFIERS.map((t) => t.value) as [TierModifier, ...TierModifier[]];
+const ADJ_VALUES = ADJUSTMENTS.map((a) => a.value) as [Adjustment, ...Adjustment[]];
+
+// Validates the picker selection at Save time. Cross-field rules (a percent base
+// needs a rate + amount, points needs sell/buy/facility, a cap needs a positive
+// value) live in the superRefine so the error points at the offending field.
+// Attribution is validated + saved separately (its own Save → set_deal_attribution).
+const formSchema = z
+  .object({
+    base: z.enum(BASE_VALUES),
+    rate: z.number().finite().min(0).nullable(),
+    baseAmount: z.number().finite().min(0).nullable(),
+    sellRate: z.number().finite().min(0).nullable(),
+    buyRate: z.number().finite().min(0).nullable(),
+    cap: z.number().finite().nullable(),
+    timing: z.enum(TIMING_VALUES),
+    tierModifiers: z.array(z.enum(TIER_VALUES)).max(MAX_TIER_MODIFIERS),
+    adjustments: z.array(z.enum(ADJ_VALUES)),
+  })
+  .superRefine((v, ctx) => {
+    const kind = CALC_BASE_BY_VALUE[v.base].kind;
+    if (kind === "percent") {
+      if (v.rate == null) ctx.addIssue({ code: "custom", path: ["rate"], message: "Enter a rate (%)." });
+      if (v.baseAmount == null)
+        ctx.addIssue({ code: "custom", path: ["baseAmount"], message: "Enter the base amount." });
+    } else if (kind === "points") {
+      if (v.sellRate == null) ctx.addIssue({ code: "custom", path: ["sellRate"], message: "Enter the sell rate." });
+      if (v.buyRate == null) ctx.addIssue({ code: "custom", path: ["buyRate"], message: "Enter the buy rate." });
+      if (v.baseAmount == null)
+        ctx.addIssue({ code: "custom", path: ["baseAmount"], message: "Enter the advance amount." });
+    } else if (v.baseAmount == null) {
+      ctx.addIssue({ code: "custom", path: ["baseAmount"], message: "Enter the commission amount." });
+    }
+    if (v.adjustments.includes("cap_ceiling") && (v.cap == null || v.cap <= 0)) {
+      ctx.addIssue({ code: "custom", path: ["cap"], message: "Enter a cap greater than zero." });
+    }
+  });
+
+// Attribution's referent id by type (what set_deal_attribution expects):
+//  - fnc_contractor → a profiles.id (role=contractor)
+//  - bright_destiny_partner → a referral_partners.id
+//  - direct_fnc → null
+function attributionReferentId(type: AttributionType, contractorId: string, partnerId: string): string | null {
+  if (type === "fnc_contractor") return contractorId || null;
+  if (type === "bright_destiny_partner") return partnerId || null;
+  return null;
+}
+
+function attrSig(type: AttributionType, contractorId: string, partnerId: string): string {
+  return `${type}|${attributionReferentId(type, contractorId, partnerId) ?? ""}`;
+}
+
+export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: string; amountRequested: string | null }) {
+  const { data: state, isLoading, isError, error } = useCommissionPicker(dealId);
+  const setPicker = useSetCommissionPicker();
+  const updatePicker = useUpdateCommissionPicker();
+  const toPending = useTransitionToPending();
+  const toLocked = useTransitionToLocked();
+  const unlock = useUnlockCommission();
+  const { data: attrOptions } = useAttributionOptions();
+  const { data: dealAttribution } = useDealAttribution(dealId);
+  const setAttribution = useSetDealAttribution();
+
+  // ---- Form state (controlled) ----
+  const [base, setBase] = useState<CalcBase>("percent_of_finance_charge");
+  const [rate, setRate] = useState("");
+  const [baseAmount, setBaseAmount] = useState("");
+  const [sellRate, setSellRate] = useState("");
+  const [buyRate, setBuyRate] = useState("");
+  const [cap, setCap] = useState("");
+  const [timing, setTiming] = useState<Timing>("upfront_at_funding");
+  const [tierModifiers, setTierModifiers] = useState<TierModifier[]>([]);
+  const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
+  const [attrType, setAttrType] = useState<AttributionType>("direct_fnc");
+  const [contractorId, setContractorId] = useState("");
+  const [partnerId, setPartnerId] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const commissionState = state?.commission_state ?? null;
+  const isLocked = commissionState === "locked";
+
+  // Hydrate from the server when the deal changes or the lifecycle state moves
+  // (a transition never changes the picks, so re-seeding on state change is safe
+  // and keeps the read-only locked view canonical). `hydratedKey` prevents an
+  // unrelated refetch from clobbering an in-progress edit. `hydratedSig` snapshots
+  // the seeded field values so `isDirty` (below) can tell edited-from-saved.
+  const hydratedKey = useRef<string | null>(null);
+  const hydratedSig = useRef<string>(formSig(DEFAULT_FORM));
+  useEffect(() => {
+    if (!state) return;
+    const key = `${dealId}:${state.commission_state ?? "none"}`;
+    if (hydratedKey.current === key) return;
+    hydratedKey.current = key;
+
+    const c = state.commission_calculation;
+    // Seed from the persisted calc, or reset to defaults when this deal has no
+    // commission yet. The reset is essential: without it, navigating from a deal
+    // WITH a commission to one WITHOUT keeps the prior deal's field values, and a
+    // Save would copy that commission onto the new deal (cross-deal contamination).
+    const next: RawForm = c
+      ? {
+          base: c.base,
+          rate: c.rate != null ? String(c.rate) : "",
+          baseAmount: c.inputs?.base_amount != null ? String(c.inputs.base_amount) : "",
+          sellRate: c.inputs?.sell_rate != null ? String(c.inputs.sell_rate) : "",
+          buyRate: c.inputs?.buy_rate != null ? String(c.inputs.buy_rate) : "",
+          cap: c.inputs?.cap != null ? String(c.inputs.cap) : "",
+          timing: c.timing,
+          tierModifiers: c.tier_modifiers ?? [],
+          adjustments: c.adjustments ?? [],
+        }
+      : DEFAULT_FORM;
+
+    setBase(next.base);
+    setRate(next.rate);
+    setBaseAmount(next.baseAmount);
+    setSellRate(next.sellRate);
+    setBuyRate(next.buyRate);
+    setCap(next.cap);
+    setTiming(next.timing);
+    setTierModifiers(next.tierModifiers);
+    setAdjustments(next.adjustments);
+    hydratedSig.current = formSig(next);
+    setFormError(null);
+  }, [dealId, state]);
+
+  // Hydrate the attribution section from deal_attributions (the tier engine's
+  // source of truth), independent of the picker. Re-seeds when the deal changes
+  // or the persisted attribution changes (e.g. after its own Save).
+  const attrHydratedKey = useRef<string | null>(null);
+  const attrHydratedSig = useRef<string>(attrSig("direct_fnc", "", ""));
+  useEffect(() => {
+    if (dealAttribution === undefined) return; // still loading
+    const token = dealAttribution?.attribution_type ?? null;
+    const referent = dealAttribution?.attributed_to_id ?? "";
+    const key = `${dealId}:${token ?? "none"}:${referent}`;
+    if (attrHydratedKey.current === key) return;
+    attrHydratedKey.current = key;
+
+    const uiType = attributionTypeFromToken(token) ?? "direct_fnc";
+    const nextContractor = uiType === "fnc_contractor" ? referent : "";
+    const nextPartner = uiType === "bright_destiny_partner" ? referent : "";
+    setAttrType(uiType);
+    setContractorId(nextContractor);
+    setPartnerId(nextPartner);
+    attrHydratedSig.current = attrSig(uiType, nextContractor, nextPartner);
+  }, [dealId, dealAttribution]);
+
+  const baseMeta = CALC_BASE_BY_VALUE[base];
+
+  // Live preview — recomputes on every input change.
+  const estimated = useMemo(
+    () =>
+      estimateGross({
+        base,
+        rate: numOrNull(rate),
+        adjustments,
+        inputs: {
+          base_amount: numOrNull(baseAmount),
+          sell_rate: numOrNull(sellRate),
+          buy_rate: numOrNull(buyRate),
+          cap: numOrNull(cap),
+        },
+      }),
+    [base, rate, baseAmount, sellRate, buyRate, cap, adjustments],
+  );
+
+  // Unsaved-edits guard: true when the current fields differ from what was last
+  // hydrated from the server. Used to block lifecycle transitions that would
+  // otherwise discard the edits on the post-transition refetch.
+  const isDirty = useMemo(
+    () =>
+      formSig({
+        base,
+        rate,
+        baseAmount,
+        sellRate,
+        buyRate,
+        cap,
+        timing,
+        tierModifiers,
+        adjustments,
+      }) !== hydratedSig.current,
+    [base, rate, baseAmount, sellRate, buyRate, cap, timing, tierModifiers, adjustments],
+  );
+
+  // Attribution has its own Save; track its dirty state separately.
+  const attrDirty = useMemo(
+    () => attrSig(attrType, contractorId, partnerId) !== attrHydratedSig.current,
+    [attrType, contractorId, partnerId],
+  );
+  const hasAttribution = !!dealAttribution;
+
+  const toggleTier = (v: TierModifier) => {
+    setTierModifiers((prev) => {
+      if (prev.includes(v)) return prev.filter((x) => x !== v);
+      if (prev.length >= MAX_TIER_MODIFIERS) {
+        toast.error(`Pick at most ${MAX_TIER_MODIFIERS} tier modifiers.`);
+        return prev;
+      }
+      return [...prev, v];
+    });
+  };
+  const toggleAdj = (v: Adjustment) =>
+    setAdjustments((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
+
+  // ---- Save (create or edit) ----
+  const savingRef = useRef(false);
+  const saving = setPicker.isPending || updatePicker.isPending;
+
+  const buildCalculation = (): CommissionCalculation => ({
+    base,
+    rate: baseMeta.kind === "percent" ? numOrNull(rate) : undefined,
+    timing,
+    tier_modifiers: tierModifiers,
+    adjustments,
+    inputs: {
+      base_amount: numOrNull(baseAmount),
+      ...(baseMeta.kind === "points" ? { sell_rate: numOrNull(sellRate), buy_rate: numOrNull(buyRate) } : {}),
+      ...(adjustments.includes("cap_ceiling") ? { cap: numOrNull(cap) } : {}),
+    },
+  });
+
+  const onSave = async () => {
+    if (savingRef.current || isLocked) return;
+    setFormError(null);
+
+    const parsed = formSchema.safeParse({
+      base,
+      rate: numOrNull(rate),
+      baseAmount: numOrNull(baseAmount),
+      sellRate: numOrNull(sellRate),
+      buyRate: numOrNull(buyRate),
+      cap: numOrNull(cap),
+      timing,
+      tierModifiers,
+      adjustments,
+    });
+    if (!parsed.success) {
+      setFormError(parsed.error.issues[0]?.message ?? "Please complete the required fields.");
+      return;
+    }
+    if (estimated == null || estimated < 0) {
+      setFormError("The estimated gross commission couldn't be computed from these inputs.");
+      return;
+    }
+
+    savingRef.current = true;
+    const calculation = buildCalculation();
+    const payload = { dealId, calculation, estimatedGross: estimated };
+    try {
+      // No row yet → create (set); an existing POTENTIAL/PENDING row → edit (update).
+      if (commissionState == null) await setPicker.mutateAsync(payload);
+      else await updatePicker.mutateAsync(payload);
+      toast.success("Commission saved");
+    } catch (e) {
+      toast.error((e as Error).message || "Could not save the commission");
+    } finally {
+      savingRef.current = false;
+    }
+  };
+
+  // ---- Attribution save (own action → set_deal_attribution) ----
+  const attrSavingRef = useRef(false);
+  const onSaveAttribution = async () => {
+    if (attrSavingRef.current || isLocked) return;
+    if (attrType === "fnc_contractor" && !contractorId) {
+      toast.error("Pick a contractor.");
+      return;
+    }
+    if (attrType === "bright_destiny_partner" && !partnerId) {
+      toast.error("Pick a partner.");
+      return;
+    }
+    attrSavingRef.current = true;
+    try {
+      await setAttribution.mutateAsync({
+        dealId,
+        attributionType: ATTRIBUTION_RPC_TOKEN[attrType],
+        attributedToId: attributionReferentId(attrType, contractorId, partnerId),
+      });
+      toast.success("Attribution saved");
+    } catch (e) {
+      toast.error((e as Error).message || "Could not save attribution");
+    } finally {
+      attrSavingRef.current = false;
+    }
+  };
+
+  // ---- Transitions ----
+  const pendingRef = useRef(false);
+  const onMoveToPending = async () => {
+    if (pendingRef.current) return;
+    // A transition refetches and re-hydrates the form, which would silently
+    // discard any unsaved edits. Guide the owner to Save first rather than lose
+    // their changes behind a "Moved to Pending" success toast.
+    if (isDirty || saving) {
+      toast.error("Save your changes before moving to Pending.");
+      return;
+    }
+    pendingRef.current = true;
+    try {
+      await toPending.mutateAsync({ dealId });
+      toast.success("Moved to Pending");
+    } catch (e) {
+      toast.error((e as Error).message || "Could not move to pending");
+    } finally {
+      pendingRef.current = false;
+    }
+  };
+
+  const [lockOpen, setLockOpen] = useState(false);
+  const [unlockOpen, setUnlockOpen] = useState(false);
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Loading commission…</p>;
+  if (isError) {
+    return (
+      <p className="text-sm text-red-600">
+        {(error as Error)?.message ?? "Could not load commission state."}
+      </p>
+    );
+  }
+
+  const disabled = isLocked;
+
+  return (
+    <div className="space-y-5">
+      {/* Header + state badge */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-brand-navy">Commission Calculation</h3>
+        <CommissionStateBadge state={commissionState} />
+      </div>
+
+      {isLocked && <LockedBanner dealId={dealId} state={state!} />}
+
+      {/* Attribution — always visible, above the picker (PICKER.md). */}
+      <fieldset disabled={disabled} className="space-y-2">
+        <SectionTitle>Attribution</SectionTitle>
+        <p className="text-xs text-muted-foreground">Who this deal belongs to — drives the downstream split.</p>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {ATTRIBUTION_TYPES.map((a) => (
+            <RadioCard
+              key={a.value}
+              checked={attrType === a.value}
+              onSelect={() => setAttrType(a.value)}
+              label={a.label}
+              hint={a.hint}
+              disabled={disabled}
+            />
+          ))}
+        </div>
+        {attrType === "fnc_contractor" && (
+          <SelectField
+            label="Contractor"
+            value={contractorId}
+            onChange={setContractorId}
+            options={attrOptions?.contractors ?? []}
+            emptyLabel="No active contractors"
+            disabled={disabled}
+          />
+        )}
+        {attrType === "bright_destiny_partner" && (
+          <SelectField
+            label="Partner"
+            value={partnerId}
+            onChange={setPartnerId}
+            options={attrOptions?.partners ?? []}
+            emptyLabel="No active partners"
+            disabled={disabled}
+          />
+        )}
+        {!isLocked && (
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onSaveAttribution}
+              disabled={setAttribution.isPending || !attrDirty}
+              className="rounded-lg border border-brand-teal px-4 py-1.5 text-sm font-medium text-brand-teal hover:bg-brand-teal/10 disabled:opacity-50"
+            >
+              {setAttribution.isPending ? "Saving…" : "Save attribution"}
+            </button>
+            {attrDirty ? (
+              <span className="text-xs text-amber-600">Unsaved attribution</span>
+            ) : hasAttribution ? (
+              <span className="text-xs text-brand-green">Saved</span>
+            ) : null}
+          </div>
+        )}
+      </fieldset>
+
+      <div className="border-t border-border" />
+
+      {/* Section A — Calculation base (pick 1) */}
+      <fieldset disabled={disabled} className="space-y-2">
+        <SectionTitle>A · Calculation base</SectionTitle>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {CALC_BASES.map((b) => (
+            <RadioCard
+              key={b.value}
+              checked={base === b.value}
+              onSelect={() => setBase(b.value)}
+              label={b.label}
+              hint={b.hint}
+              disabled={disabled}
+            />
+          ))}
+        </div>
+
+        {/* Base-dependent inputs */}
+        <div className="grid gap-3 sm:grid-cols-2 pt-1">
+          {baseMeta.kind === "percent" && (
+            <NumberField label="Rate (%)" value={rate} onChange={setRate} placeholder="10" disabled={disabled} />
+          )}
+          {baseMeta.kind === "points" && (
+            <>
+              <NumberField label="Sell rate" value={sellRate} onChange={setSellRate} placeholder="1.5" disabled={disabled} />
+              <NumberField label="Buy rate" value={buyRate} onChange={setBuyRate} placeholder="1.2" disabled={disabled} />
+            </>
+          )}
+          <NumberField
+            label={baseMeta.amountLabel}
+            value={baseAmount}
+            onChange={setBaseAmount}
+            placeholder="140000"
+            disabled={disabled}
+            hint={
+              amountRequested && (baseMeta.value === "percent_of_gross_funded" || baseMeta.kind === "points")
+                ? `Deal amount requested: ${formatZAR(amountRequested)}`
+                : undefined
+            }
+          />
+        </div>
+      </fieldset>
+
+      {/* Section B — Tier modifiers (0–2) */}
+      <fieldset disabled={disabled} className="space-y-2">
+        <SectionTitle>
+          B · Tier modifiers <span className="font-normal text-muted-foreground">(pick 0–{MAX_TIER_MODIFIERS})</span>
+        </SectionTitle>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {TIER_MODIFIERS.map((t) => (
+            <CheckCard
+              key={t.value}
+              checked={tierModifiers.includes(t.value)}
+              onToggle={() => toggleTier(t.value)}
+              label={t.label}
+              hint={t.hint}
+              disabled={disabled}
+            />
+          ))}
+        </div>
+      </fieldset>
+
+      {/* Section C — Timing (pick 1) */}
+      <fieldset disabled={disabled} className="space-y-2">
+        <SectionTitle>C · Timing</SectionTitle>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {TIMINGS.map((t) => (
+            <RadioCard
+              key={t.value}
+              checked={timing === t.value}
+              onSelect={() => setTiming(t.value)}
+              label={t.label}
+              hint={t.hint}
+              disabled={disabled}
+            />
+          ))}
+        </div>
+      </fieldset>
+
+      {/* Section D — Special adjustments (0–N) */}
+      <fieldset disabled={disabled} className="space-y-2">
+        <SectionTitle>
+          D · Special adjustments <span className="font-normal text-muted-foreground">(pick 0–N)</span>
+        </SectionTitle>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {ADJUSTMENTS.map((a) => (
+            <CheckCard
+              key={a.value}
+              checked={adjustments.includes(a.value)}
+              onToggle={() => toggleAdj(a.value)}
+              label={a.label}
+              hint={a.hint}
+              disabled={disabled}
+            />
+          ))}
+        </div>
+        {adjustments.includes("cap_ceiling") && (
+          <div className="sm:max-w-xs">
+            <NumberField label="Cap / ceiling (R)" value={cap} onChange={setCap} placeholder="20000" disabled={disabled} />
+          </div>
+        )}
+      </fieldset>
+
+      <div className="border-t border-border" />
+
+      {/* Estimated gross preview */}
+      <div className="rounded-lg bg-brand-navy/5 p-4">
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-sm font-medium text-brand-navy">Estimated Gross Commission</span>
+          <span className="text-lg font-bold text-brand-navy">
+            {estimated != null ? formatZAR(estimated, { cents: true }) : "—"}
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          FNC gross before the downstream split. VAT / retention / clawback and other adjustments are applied later by the
+          money engine, not to this figure.
+        </p>
+      </div>
+
+      {formError && <p className="text-sm text-red-600">{formError}</p>}
+
+      {/* Actions */}
+      {!isLocked && (
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60"
+          >
+            {saving ? "Saving…" : commissionState == null ? "Save commission" : "Save changes"}
+          </button>
+
+          {commissionState === "potential" && (
+            <button
+              type="button"
+              onClick={onMoveToPending}
+              disabled={toPending.isPending || saving || isDirty}
+              title={isDirty ? "Save your changes first" : undefined}
+              className="rounded-lg border border-brand-navy px-4 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50 disabled:opacity-60"
+            >
+              {toPending.isPending ? "Moving…" : "Move to Pending"}
+            </button>
+          )}
+
+          {commissionState === "pending" && (
+            <button
+              type="button"
+              onClick={() => setLockOpen(true)}
+              disabled={saving || isDirty}
+              title={isDirty ? "Save your changes first" : undefined}
+              className="rounded-lg bg-brand-green px-4 py-2 text-sm font-semibold text-white hover:bg-brand-green/90 disabled:opacity-60"
+            >
+              Lock Commission
+            </button>
+          )}
+
+          {isDirty && (
+            <span className="text-xs text-amber-600">Unsaved changes — Save before you move or lock this commission.</span>
+          )}
+          {commissionState === "pending" && !isDirty && !hasAttribution && (
+            <span className="text-xs text-amber-600">
+              Set the deal's attribution above before locking so the commission split is calculated.
+            </span>
+          )}
+        </div>
+      )}
+
+      {isLocked && (
+        <button
+          type="button"
+          onClick={() => setUnlockOpen(true)}
+          className="rounded-lg border border-amber-400 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50"
+        >
+          Unlock
+        </button>
+      )}
+
+      {lockOpen && (
+        <LockModal
+          estimated={estimated}
+          isPending={toLocked.isPending}
+          onClose={() => setLockOpen(false)}
+          onConfirm={async (actual) => {
+            try {
+              await toLocked.mutateAsync({ dealId, actualGross: actual });
+              toast.success("Commission locked");
+              setLockOpen(false);
+            } catch (e) {
+              toast.error((e as Error).message || "Could not lock the commission");
+            }
+          }}
+        />
+      )}
+
+      {unlockOpen && (
+        <UnlockModal
+          isPending={unlock.isPending}
+          onClose={() => setUnlockOpen(false)}
+          onConfirm={async (reason) => {
+            try {
+              await unlock.mutateAsync({ dealId, reason });
+              toast.success("Commission unlocked — back to Pending");
+              setUnlockOpen(false);
+            } catch (e) {
+              toast.error((e as Error).message || "Could not unlock the commission");
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// -------------------------------------------------------------------------
+// Locked read-only banner: actual gross, audit trail, downstream tier result.
+// -------------------------------------------------------------------------
+function LockedBanner({ dealId, state }: { dealId: string; state: NonNullable<ReturnType<typeof useCommissionPicker>["data"]> }) {
+  const { data: lockedByName } = useProfileName(state.commission_locked_by);
+  const { data: record } = useDealCommissionRecord(dealId, true);
+  const { data: attribution } = useDealAttribution(dealId);
+  const calc = state.commission_calculation;
+  const attrUiType = attributionTypeFromToken(attribution?.attribution_type);
+  const attrLabel = attribution
+    ? attrUiType
+      ? labelForAttribution(attrUiType)
+      : attribution.attribution_type
+    : null;
+
+  return (
+    <div className="space-y-3 rounded-lg border border-brand-green/30 bg-brand-green/5 p-4">
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-sm font-medium text-brand-navy">Actual Gross Commission (locked)</span>
+        <span className="text-lg font-bold text-brand-navy">
+          {formatZAR(state.actual_gross_commission, { cents: true })}
+        </span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Locked {state.commission_locked_at ? new Date(state.commission_locked_at).toLocaleString("en-ZA") : ""}
+        {lockedByName ? ` by ${lockedByName}` : ""}. Inputs are read-only — use Unlock to make corrections.
+      </p>
+
+      {calc && (
+        <div className="text-xs text-muted-foreground">
+          <span className="font-medium text-brand-navy">{labelForBase(calc.base)}</span>
+          {calc.rate != null ? ` · ${calc.rate}%` : ""} · {labelForTiming(calc.timing)}
+          {attrLabel ? ` · ${attrLabel}` : ""}
+          {calc.tier_modifiers?.length ? ` · ${calc.tier_modifiers.map(labelForTierModifier).join(", ")}` : ""}
+          {calc.adjustments?.length ? ` · ${calc.adjustments.map(labelForAdjustment).join(", ")}` : ""}
+        </div>
+      )}
+
+      {/* Downstream tier / split result (owner-only) */}
+      <div className="border-t border-brand-green/20 pt-2">
+        {record ? (
+          <div className="space-y-1 text-sm">
+            <Row label="Gross commission" value={formatZAR(record.gross_commission, { cents: true })} strong />
+            <Row label="Company retention" value={formatZAR(record.company_retention, { cents: true })} />
+            {record.partner_pool > 0 && (
+              <Row label="Partner pool" value={formatZAR(record.partner_pool, { cents: true })} />
+            )}
+            {record.partner_share > 0 && (
+              <Row
+                label={`Partner share${record.tier_pct != null && record.tier_pct > 0 ? ` (${record.tier_pct}%)` : ""}`}
+                value={formatZAR(record.partner_share, { cents: true })}
+              />
+            )}
+            {record.contractor_share > 0 && (
+              <Row label="Contractor share" value={formatZAR(record.contractor_share, { cents: true })} />
+            )}
+            <Row label="Owner share" value={formatZAR(record.owner_share, { cents: true })} strong />
+            {record.count > 1 && (
+              <p className="pt-1 text-xs text-muted-foreground">Summed across {record.count} funded submissions.</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            The tier split will appear here once this deal's commission is processed by the money engine.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className={strong ? "text-brand-navy" : "text-muted-foreground"}>{label}</span>
+      <span className={strong ? "font-bold text-brand-navy" : "font-medium text-brand-navy"}>{value}</span>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------------------
+// Modals
+// -------------------------------------------------------------------------
+function LockModal({
+  estimated,
+  isPending,
+  onClose,
+  onConfirm,
+}: {
+  estimated: number | null;
+  isPending: boolean;
+  onClose: () => void;
+  onConfirm: (actual: number) => void;
+}) {
+  const [actual, setActual] = useState(estimated != null ? String(estimated) : "");
+  const confirmingRef = useRef(false);
+  const n = numOrNull(actual);
+
+  return (
+    <Modal title="Lock commission" onClose={onClose}>
+      <p className="text-sm text-muted-foreground">
+        Enter the actual FNC gross commission the funder paid. Locking makes it immutable until you unlock for a correction.
+      </p>
+      <NumberField label="Actual gross commission (R)" value={actual} onChange={setActual} placeholder="14000" />
+      <div className="flex items-center gap-3 pt-1">
+        <button
+          type="button"
+          disabled={isPending || n == null || n < 0}
+          onClick={() => {
+            if (confirmingRef.current || n == null || n < 0) return;
+            confirmingRef.current = true;
+            onConfirm(n);
+            // Re-arm shortly after; the modal usually unmounts on success.
+            setTimeout(() => (confirmingRef.current = false), 1000);
+          }}
+          className="rounded-lg bg-brand-green px-4 py-2 text-sm font-semibold text-white hover:bg-brand-green/90 disabled:opacity-60"
+        >
+          {isPending ? "Locking…" : "Confirm lock"}
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function UnlockModal({
+  isPending,
+  onClose,
+  onConfirm,
+}: {
+  isPending: boolean;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState("");
+  const confirmingRef = useRef(false);
+  const trimmed = reason.trim();
+
+  return (
+    <Modal title="Unlock commission" onClose={onClose}>
+      <p className="text-sm text-muted-foreground">
+        This unlocks the deal for corrections and moves it back to <strong>Pending</strong>. A typed reason is recorded in
+        the audit trail.
+      </p>
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-muted-foreground">Reason</label>
+        <textarea
+          rows={3}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="e.g. funder disputed the amount"
+          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20"
+        />
+      </div>
+      <div className="flex items-center gap-3 pt-1">
+        <button
+          type="button"
+          disabled={isPending || trimmed === ""}
+          onClick={() => {
+            if (confirmingRef.current || trimmed === "") return;
+            confirmingRef.current = true;
+            onConfirm(trimmed);
+            setTimeout(() => (confirmingRef.current = false), 1000);
+          }}
+          className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500/90 disabled:opacity-60"
+        >
+          {isPending ? "Unlocking…" : "Unlock for corrections"}
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+// -------------------------------------------------------------------------
+// Small presentational primitives
+// -------------------------------------------------------------------------
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h4 className="text-xs font-semibold uppercase tracking-wide text-brand-navy">{children}</h4>;
+}
+
+function RadioCard({
+  checked,
+  onSelect,
+  label,
+  hint,
+  disabled,
+}: {
+  checked: boolean;
+  onSelect: () => void;
+  label: string;
+  hint: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={disabled}
+      aria-pressed={checked}
+      className={
+        "flex flex-col items-start rounded-lg border px-3 py-2 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-70 " +
+        (checked
+          ? "border-brand-teal bg-brand-teal/10 ring-1 ring-brand-teal"
+          : "border-border hover:bg-slate-50")
+      }
+    >
+      <span className="font-medium text-brand-navy">{label}</span>
+      <span className="text-xs text-muted-foreground">{hint}</span>
+    </button>
+  );
+}
+
+function CheckCard({
+  checked,
+  onToggle,
+  label,
+  hint,
+  disabled,
+}: {
+  checked: boolean;
+  onToggle: () => void;
+  label: string;
+  hint: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      aria-pressed={checked}
+      className={
+        "flex items-start gap-2 rounded-lg border px-3 py-2 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-70 " +
+        (checked ? "border-brand-teal bg-brand-teal/10 ring-1 ring-brand-teal" : "border-border hover:bg-slate-50")
+      }
+    >
+      <span
+        className={
+          "mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border text-[10px] " +
+          (checked ? "border-brand-teal bg-brand-teal text-white" : "border-slate-300")
+        }
+        aria-hidden="true"
+      >
+        {checked ? "✓" : ""}
+      </span>
+      <span className="flex flex-col">
+        <span className="font-medium text-brand-navy">{label}</span>
+        <span className="text-xs text-muted-foreground">{hint}</span>
+      </span>
+    </button>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+  hint,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  hint?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+      <Input
+        type="number"
+        inputMode="decimal"
+        step="any"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+      />
+      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+  emptyLabel,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { id: string; label: string }[];
+  emptyLabel: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-1 sm:max-w-sm">
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled || options.length === 0}
+        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand-teal disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        <option value="">{options.length === 0 ? emptyLabel : "Select…"}</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
