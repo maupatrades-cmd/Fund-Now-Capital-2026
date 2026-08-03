@@ -99,6 +99,118 @@ _Email design: welcome flow (E5) + nurture sequences (E9) extend a **SPEC S16** 
 - ⬜ F9. Data quality full suite (Part 6 M6): completeness scoring, hygiene prompts, merge
 - ⬜ F10. POPIA Audit Trail Compliance Pass (post-deployment compliance follow-up) — redact PII from before/after snapshots on activity_logs across leads + clients + client_contacts. Includes: assessment + redaction of existing rows that may already contain PII (A10 has been live), write-time redaction of sensitive columns going forward, right-to-erasure workflow documentation, and a POPIA data-handling SPEC section. Est. 1–2 focused PRs. Current before/after behaviour documented in SPEC S5.
 
+## Sprints 1-7 — Expanded Scope from Canonical MDs
+
+The original Phase A-F scope has been expanded per the canonical MDs banked
+2026-08-02 (CONTRACTOR.md, ONBOARDING.md, TIERS.md, PICKER.md, TRAINING.md).
+This section maps the remaining work into disciplined sprints. It **expands**
+the Phase A-F structure above — it does not replace it. Where a sprint lane
+maps to an existing phase item (e.g. C4/C5/C6, D2/D3), that item remains
+canonical; the new `Phase G*` / `Phase H*` lanes are the contractor-workforce
++ training additions the five MDs introduce.
+
+### Sprint 0 — Currently Shipping (Aug 2026)
+
+Goal: Foundation + Team Management + Lead Submission live
+
+- Phase D0 foundation (PRs #100, #101, #102) — SHIPPED
+- Phase D0.5 Team Management (PR #103) — SHIPPING
+- Phase D2 Lead Submission Partner + Contractor (PR #104) — SHIPPING
+
+Real unlock: Owner invites people from CRM. Partners + contractors submit leads.
+
+### Sprint 1 — Money Truth (Weeks 1-3)
+
+Goal: Every deal captures real commission truth. Partners + contractors see "Potential Earning."
+
+- Lane 1a: Commission Picker (PICKER.md) — 80-120 hours, 3 PRs
+- Lane 1b: Tier Engine (TIERS.md) — 60-90 hours, 2 PRs
+- Lane 1c: Partner + Contractor "My Deals" view (Phase D2) — 40-60 hours, 2 PRs
+
+Real unlock: Partners + contractors see real earnings. Owner has per-deal money truth.
+
+### Sprint 2 — Real Contractor Onboarding (Weeks 4-6)
+
+Goal: Onboard real contractors properly. No SQL, no shortcuts.
+
+- Lane 2a: Public /apply route (Phase G1 new) — 20-30 hours, 1 PR
+- Lane 2b: Onboarding workflow + 17 forms (Phase G2 new) — 120-180 hours, 4-5 PRs
+- Lane 2c: Service Agreement + digital signature (Phase G3 new) — 40-60 hours, 2 PRs
+- Lane 2d: Mini HR module (Phase G4 new) — 60-90 hours, 2-3 PRs
+
+Owner-side prerequisites:
+- Attorney contact + Service Agreement template drafted (~R3,000-R5,000)
+- Accountant advice on SARS + BEE
+- Real contractor(s) identified to onboard first
+
+Real unlock: Real contractors go from applicant to active with signed agreements + verified docs. Training modules (Sprint 5) are for professional development, motivation, and Level 2 progression — NOT a gate on activation or lead submission.
+
+### Sprint 3 — Real Payments to Real People (Weeks 7-8)
+
+Goal: Contractors get paid correctly. Progression tracked. Reimbursements flow.
+
+- Lane 3a: Progression system Base → Level 3 (Phase G5 new) — 50-80 hours, 2 PRs
+- Lane 3b: Reimbursement engine petrol/airtime/data (Phase G6 new) — 60-90 hours, 2 PRs
+
+Real unlock: Real contractors receive reimbursements + commission per tier + progression.
+
+### Sprint 4 — Real Business Reporting + Doctor Money Loop (Weeks 9-11)
+
+Goal: Doctor invoices FNC. Owner has monthly + report visibility.
+
+- Lane 4a: Doctor Invoicing FNC (Phase C4) — 40-60 hours, 2 PRs
+- Lane 4b: Monthly Statements (Phase C5) — 30-50 hours, 2 PRs
+- Lane 4c: Reports v1 (Phase C6) — 40-60 hours, 2 PRs
+- Lane 4d: Notifications preferences (Phase A11) + T&C acceptance (Phase D8) — 20-30 hours, 1 PR
+
+Real unlock: Doctor invoices FNC + gets paid. Owner has real reporting.
+
+### Sprint 5 — Training + Gamification (Weeks 12-15)
+
+Goal: Contractors trained, certified, motivated.
+
+- Lane 5a: Training platform 6 modules (Phase H1 new) — 80-120 hours engineering + owner writes ~80-120 hours of content in parallel
+- Lane 5b: Assessment engine + question bank (Phase H1 new) — 60-90 hours, 2-3 PRs
+- Lane 5c: Gamification points/badges/levels/leaderboard (Phase H2 new) — 50-80 hours, 2 PRs
+- Lane 5d: Certification PDF + QR verification (Phase H3 new) — 20-30 hours, 1 PR
+
+Real: content writing runs parallel with engineering. Start content earlier if possible.
+
+Real unlock: Contractors trained + certified per TRAINING.md — raising competence, earning the "Certified FNC Contractor" credential, and unlocking Level 2 reimbursement progression. Training is professional development + gamification, never a gate on activation or lead submission.
+
+### Sprint 6 — Late-Phase Enhancements (Weeks 16-19)
+
+Goal: AI assists qualification. POPIA consent packs.
+
+- Lane 6a: AI-assisted qualification (Phase E6) — 60-100 hours, 3 PRs
+- Lane 6b: Consent Pack generation POPIA (Phase E4, S17) — 40-60 hours, 2 PRs
+
+Real unlock: Real regulatory readiness + efficiency gains through AI.
+
+### Sprint 7 — Polish + Real Hardening (Weeks 20-22)
+
+Goal: Production-grade polish across the whole system.
+
+- Lane 7a: Real polish (Phase F) — empty states, loading, error boundaries, mobile, dark mode, micro-interactions — 80-120 hours, 4-5 PRs
+- Lane 7b: Security audit sweep — 40-60 hours, 2 PRs
+
+Real unlock: Real production readiness.
+
+### Real Total Timeline
+
+- Sprint 0: NOW
+- Sprint 1: Weeks 1-3
+- Sprint 2: Weeks 4-6
+- Sprint 3: Weeks 7-8
+- Sprint 4: Weeks 9-11
+- Sprint 5: Weeks 12-15
+- Sprint 6: Weeks 16-19
+- Sprint 7: Weeks 20-22
+
+Real total: 22 weeks focused shipping = 5.5 months. At Sunday's disciplined pace with parallel agents = potentially 3-4 months.
+
+Real total effort: ~1,100-1,700 engineering hours remaining + ~120-180 hours owner content writing + attorney/accountant costs.
+
 ## PART 7 (future, deliberately deferred)
 Client-facing portal, client self-service applications, client dashboards.
 

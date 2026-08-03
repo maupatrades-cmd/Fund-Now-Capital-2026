@@ -23,7 +23,7 @@ and legal protection.
 ## Training Philosophy
 
 - **Gamified** — points, badges, levels, leaderboard (real motivation)
-- **Progression-gated** — training locks contractor stages (see below)
+- **Progression-gated** — training unlocks reimbursement-level progression (see below); it does NOT gate activation or lead submission
 - **Continuous** — annual mandatory refreshers, module updates as products change
 - **Certified** — passing assessment issues a "Certified FNC Contractor" credential
 - **Auditable** — every module completion, assessment attempt, score written to audit_log
@@ -142,17 +142,15 @@ and legal protection.
 
 ## Progression Gates
 
-Training gates contractor progression through their operational stages:
+Training supports contractor development — it does NOT gate activation or lead
+submission. Contractors are activated after document verification (see
+`ONBOARDING.md` Stage 5) and can submit leads + earn commission immediately.
 
-- **Modules 1-3 required** before first lead submission (Stage 1 entry to `active` status)
-- Contractors may submit leads after completing Modules 1-3, but must achieve full
-  certification (all 6 modules + final assessment) to progress beyond Level 1
-  reimbursement — early submission is intentional, letting contractors start earning
-  while completing training
-- **Modules 4-6 required** before progressing from Base to Level 1 reimbursement
-- **Full certification (final assessment passed)** required before Level 2
-- **Annual refresher** required to maintain active status (contractor deactivated
-  if refresher not completed within 30 days of due date)
+- **Modules 1-3:** Strongly recommended for competence + fraud detection. NOT
+  blocking activation or lead submission.
+- **Modules 4-6 + certification:** Required for Level 2 reimbursement progression.
+- **Annual refresher:** Required for maintaining Level 2+ status. Not blocking
+  Level 1 or below.
 
 ## Content Management
 

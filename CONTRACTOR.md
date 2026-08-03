@@ -26,7 +26,7 @@ FNC's direct contractors are independent contractors — not employees. They:
   created_at, activated_at, suspended_at, suspension_reason, deactivated_at)
 - Application workflow: applicant fills form → screening → interview → agreement
   signing → onboarding → activation
-- Status stages (aligned with the full ONBOARDING.md workflow): `applicant`, `screening`, `interview_scheduled`, `agreement_pending`, `document_collection`, `training_pending`, `active`, `suspended`, `deactivated`, plus `rejected` as a terminal state
+- Status stages (aligned with the full ONBOARDING.md workflow): `applicant`, `screening`, `interview_scheduled`, `agreement_pending`, `document_collection`, `active`, `suspended`, `deactivated`, plus `rejected` as a terminal state (activation follows document verification; training is post-activation and optional — see ONBOARDING.md Stage 6)
 - `suspended` is temporary and reversible: `active` → `suspended` → back to `active`
   (owner reinstates) or → `deactivated`. Suspended contractors cannot log in.
   Suspension and reinstatement require a reason and write to audit_log
@@ -110,7 +110,9 @@ See `ONBOARDING.md` for the full 17-form list. Highlights:
 - SARS tax number (provisional taxpayer registration)
 - Banking details (proof of account)
 - BEE affidavit or Level certificate (if applicable)
-- Training module completion certificate (see `TRAINING.md`)
+
+(Training completion is **not** an onboarding document — training is post-activation
+and optional; see ONBOARDING.md Stage 6 and TRAINING.md.)
 
 ## Contractor Portal
 
