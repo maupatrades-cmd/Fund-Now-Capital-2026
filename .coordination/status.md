@@ -1,5 +1,11 @@
 # Agent Coordination Status
 
+## REPORTS-V1 FOLLOW-UP — fold bonus_records into partner leaderboard (2026-08-03)
+- Branch: `claude/jolly-gauss-w799ml` (fresh main @ d61f501, after #108/#109/#110). New PR (REPORTS-V1 #108 already merged). **DO NOT merge — owner merges after Macroscope.**
+- **Change:** the partner leaderboard now folds `bonus_records` (C2.4 discretionary owner bonuses) into partner earnings. New columns **Partner Share** (commission `partner_share`) · **Bonus** (Σ `bonus_amount`) · **Total Earned** (sum, default sort). Same windowing rules as commission (money on `earned_at ?? created_at`, void excluded); `dealsFunded` is the union of commission + bonus deal ids; a bonus-earning partner also counts toward the **Active Partners** KPI. **Total Commission Earned KPI is unchanged** — bonuses are partner payouts, not FNC revenue, so they stay out of that figure.
+- **Read-only, additive:** `src/lib/reports.ts` (BonusReportRow + normaliseBonus + extended computePartnerPerformance/computeKpis), `src/hooks/useReports.ts` (fifth owner-RLS read query on `bonus_records`), `src/pages/ReportsPage.tsx` (columns + CSV), `.coordination/status.md`. No migration, no schema touch. `bonus_records` schema verified live (0 rows). Build `tsc -b`/`vite build`/`oxlint` green; bonus folding runtime-verified (union deals, void + out-of-range exclusion, total-sort, KPI stays commission-only).
+- Last update: 2026-08-03.
+
 ## REPORTS-V1 LANE — owner-only analytics dashboard (Sprint 4 Lane 4c) (2026-08-03)
 - Branch: `claude/jolly-gauss-w799ml` (fresh main @ 9d24c28, includes PICKER-BACKEND #106). One PR. **DO NOT merge — owner merges after Macroscope.**
 - **Real problem solved:** owner had no analytics surface — commission-by-month, funder revenue, contractor/partner leaderboards all required manual SQL. `/reports` closes that gap.
