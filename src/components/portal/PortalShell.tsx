@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, LogOut, PlusCircle, ListChecks } from "lucide-react";
+import { Home, LogOut, PlusCircle, ListChecks, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
@@ -11,7 +11,7 @@ import { useSession } from "@/lib/useSession";
  * Deliberately NOT the owner AppLayout — the partner/contractor worlds get their
  * own lightweight shell (same brand). One nav ("sidebar entry" in the brief,
  * rendered as a top nav bar here) drives every portal screen: Home, Submit Lead,
- * My Leads. FNC branding only; no client data, no funder identity, no commission
+ * My Leads, My Deals. FNC branding only; no client data, no funder identity, no commission
  * figures live in this shell (POPIA — those surfaces come later, S11).
  */
 
@@ -33,6 +33,7 @@ function navItems(portal: PortalKind) {
     { to: base, label: "Home", icon: Home, end: true },
     { to: `${base}/submit-lead`, label: "Submit Lead", icon: PlusCircle, end: false },
     { to: `${base}/leads`, label: "My Leads", icon: ListChecks, end: false },
+    { to: `${base}/deals`, label: "My Deals", icon: Briefcase, end: false },
   ];
 }
 
