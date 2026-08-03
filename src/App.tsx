@@ -2,11 +2,13 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import AuthPage from "@/pages/AuthPage";
+import PublicApplyPage from "@/pages/PublicApplyPage";
 import OwnerGate from "@/components/layout/OwnerGate";
 import PartnerGate from "@/pages/PartnerGate";
 import PartnerHomePage from "@/pages/PartnerHomePage";
 import PartnerSubmitLeadPage from "@/pages/partner/SubmitLeadPage";
 import PartnerMyLeadsPage from "@/pages/partner/MyLeadsPage";
+import PartnerDealsPage from "@/pages/partner/PartnerDealsPage";
 import ContractorGate from "@/pages/ContractorGate";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
@@ -26,6 +28,7 @@ import InvoicesPage from "@/pages/InvoicesPage";
 import InvoiceDetailPage from "@/pages/InvoiceDetailPage";
 import PartnerEarningsPage from "@/pages/PartnerEarningsPage";
 import ActivityPage from "@/pages/ActivityPage";
+import ReportsPage from "@/pages/ReportsPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import NotificationPreferencesPage from "@/pages/NotificationPreferencesPage";
 import IndustriesPage from "@/pages/IndustriesPage";
@@ -57,8 +60,15 @@ function RoleLanding() {
 function AppRoutes() {
   const session = useSession();
 
+  // The public /apply page has no account and must not wait on the session read
+  // — render it immediately (a cold applicant lands here on a fresh load, so
+  // reading window.location at mount is correct). Every other route stays behind
+  // the brief session-loading state below.
+  const onPublicApply =
+    typeof window !== "undefined" && window.location.pathname.replace(/\/+$/, "") === "/apply";
+
   // Brief loading state while we read the persisted session.
-  if (session === undefined) {
+  if (session === undefined && !onPublicApply) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-muted-foreground">
         Loading…
@@ -72,6 +82,13 @@ function AppRoutes() {
         path="/"
         element={session ? <RoleLanding /> : <AuthPage />}
       />
+
+      {/*
+        Public, unauthenticated contractor application (ONBOARDING.md Stage 1).
+        Deliberately OUTSIDE every gate — a cold applicant has no account. It
+        posts to the apply-submit-application Edge Function.
+      */}
+      <Route path="/apply" element={<PublicApplyPage />} />
 
       {/*
         Role portals — the route entries live here because App.tsx owns
@@ -89,6 +106,7 @@ function AppRoutes() {
         <Route index element={<PartnerHomePage />} />
         <Route path="submit-lead" element={<PartnerSubmitLeadPage />} />
         <Route path="leads" element={<PartnerMyLeadsPage />} />
+        <Route path="deals" element={<PartnerDealsPage />} />
         <Route path="*" element={<Navigate to="/partner" replace />} />
       </Route>
       <Route path="/contractor/*" element={<ContractorGate />} />
@@ -124,6 +142,7 @@ function AppRoutes() {
         <Route path="/funders/:id/edit" element={<FunderFormPage />} />
         <Route path="/calculator" element={<CalculatorPage />} />
         <Route path="/activity" element={<ActivityPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
         <Route path="/team" element={<TeamPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings/notifications" element={<NotificationPreferencesPage />} />
