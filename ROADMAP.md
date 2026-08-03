@@ -143,7 +143,7 @@ Owner-side prerequisites:
 - Accountant advice on SARS + BEE
 - Real contractor(s) identified to onboard first
 
-Real unlock: Real contractors go from applicant to active with signed agreements + verified docs.
+Real unlock: Real contractors go from applicant to active with signed agreements + verified docs. Training modules (Sprint 5) are for professional development, motivation, and Level 2 progression — NOT a gate on activation or lead submission.
 
 ### Sprint 3 — Real Payments to Real People (Weeks 7-8)
 
@@ -176,7 +176,7 @@ Goal: Contractors trained, certified, motivated.
 
 Real: content writing runs parallel with engineering. Start content earlier if possible.
 
-Real unlock: Contractors trained + certified per TRAINING.md. Real motivation infrastructure.
+Real unlock: Contractors trained + certified per TRAINING.md — raising competence, earning the "Certified FNC Contractor" credential, and unlocking Level 2 reimbursement progression. Training is professional development + gamification, never a gate on activation or lead submission.
 
 ### Sprint 6 — Late-Phase Enhancements (Weeks 16-19)
 

@@ -63,19 +63,22 @@ The onboarding process must:
 - The gate means "all applicable documents": conditional documents (VAT registration,
   CIPC company registration, shareholding certificate) can be marked Not Applicable
   by the owner and do not block progression
-- Status transitions: `document_collection` → `training_pending` (once all applicable docs approved)
+- Status transitions: `document_collection` → `active` (once all applicable documents approved — the contractor is now activated)
 
-### Stage 6: Training + Certification
+### Stage 6: Post-Activation Training (Optional)
 
-- Contractor completes Product Knowledge Training modules (see `TRAINING.md`)
-- Activation gate: Modules 1-3 complete — early lead submission is intentional,
-  letting contractors start earning while completing training (per `TRAINING.md`)
+- The contractor reaches `active` status after document verification (Stage 5
+  complete — all applicable documents approved). On activation they can log in,
+  submit leads, and earn commission immediately.
+- Product Knowledge Training modules (see `TRAINING.md`) then become available in
+  the contractor portal. They are **NOT required** for activation, lead
+  submission, or commission earning.
+- Training is professional development + gamification: it raises competence and
+  fraud-detection skill, earns the "Certified FNC Contractor" credential, and
+  unlocks Level 2 reimbursement progression.
 - Full certification (all 6 modules + final combined assessment, minimum 80% score)
-  is tracked as a later milestone: required to progress beyond Level 1 reimbursement,
-  not for activation
-- Certification badge added to contractor profile on full certification
-- Status transitions: `training_pending` → `active` (once Modules 1-3 complete)
-- Contractor is now activated: can log in, submit leads, earn commission
+  is required to progress beyond Level 1 reimbursement — never a gate on activation.
+- Certification badge added to contractor profile on full certification.
 
 ## 17 Required Forms & Documents
 
@@ -131,7 +134,7 @@ The mini HR module lives on the owner dashboard and tracks:
 - Document verification status (all 17)
 - Current progression level (Base, 1, 2, 3)
 - Current status (applicant, screening, interview_scheduled, agreement_pending,
-  document_collection, training_pending, active, deactivated; rejected as terminal)
+  document_collection, active, deactivated; rejected as terminal)
 - Activation date
 - Deactivation date (if applicable)
 - Deactivation reason (if applicable)
