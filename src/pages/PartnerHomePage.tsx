@@ -60,6 +60,9 @@ export default function PartnerHomePage() {
   // window where the session is still resolving and the query is disabled.
   const { data: partnerName, isPending } = usePartnerName(session?.user);
 
+  // Note: the first-login T&C gate lives in PartnerGate (PortalTermsGate wraps the
+  // whole /partner subtree), so no acceptance check is needed on this page.
+
   return (
     <PortalShell portal="partner">
       {/* Welcome */}
