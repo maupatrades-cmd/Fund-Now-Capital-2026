@@ -35,16 +35,34 @@ export function usePortalDeals(portal: PortalKind) {
   // (the Macroscope cache-isolation fix — mirrors useProfileRole). The RPC is
   // still the authoritative auth.uid() scope; this just keeps the client cache
   // per-user.
+  //
+  // `useSession()` is `undefined` while the session is still resolving and `null`
+  // when signed out — both collapse to `uid === null` here. We must NOT fetch in
+  // that window: on first paint the Supabase client can already authenticate from
+  // its persisted session before React state updates, so an enabled query would
+  // fetch real rows and cache them under the placeholder `[…, null]` key, where a
+  // later signed-out/loading render (or the next user's own resolving window)
+  // could surface them — the exact leak this key change closes. Gating on a
+  // concrete uid keeps every cached entry bound to a real user id. (Mirrors the
+  // usePortalLeads fix.)
   const uid = useSession()?.user?.id ?? null;
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ["portal-deals", portal, uid],
+    enabled: uid !== null,
     queryFn: async (): Promise<PortalDealRow[]> => {
       const { data, error } = await supabase.rpc(RPC_FOR[portal]);
       if (error) throw error;
       return (data ?? []) as PortalDealRow[];
     },
   });
+
+  // While uid is still resolving the query is disabled (no data, not fetching),
+  // which the consumer would otherwise read as an empty result and flash the
+  // "no deals yet" state. Surface it as loading instead. Signed-out users never
+  // reach this view (the portal gates redirect to login), so uid is null only
+  // during that brief first-paint window.
+  return { ...query, isLoading: query.isLoading || uid === null };
 }
 
 // Submitter-facing status derived from the owner's 15-stage deal pipeline. The

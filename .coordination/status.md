@@ -1,5 +1,14 @@
 # Agent Coordination Status
 
+## DEALS-CACHE-FIX LANE — usePortalDeals POPIA cache isolation follow-up (2026-08-03)
+- Branch: `claude/useportaldeals-cache-isolation` (fresh main @ f9b4cf6). One PR. **DO NOT merge — owner merges after Macroscope.**
+- **Real problem solved:** the follow-up flagged in the LEADS-CACHE-FIX PR (#113). `usePortalDeals` (shipped in MY-DEALS-VIEW PR #107, merged) has the identical first-paint cache-isolation gap that Macroscope raised as 🔴 Critical on #113: keying by `uid` alone isn't enough — `useSession()` is `undefined` while resolving and `null` when signed out (both collapse to `uid === null`), and the query stayed **enabled**, so on first paint the persisted Supabase session could authenticate and cache real rows under the placeholder `["portal-deals", portal, null]` key, surfaceable by a later signed-out/loading render.
+- **Fix (exact mirror of the #113 fix in `usePortalLeads`):** `enabled: uid !== null` (no fetch until a concrete user id is known) + `return { ...query, isLoading: query.isLoading || uid === null }` (brief first-paint resolving window shows the spinner instead of flashing the `MyDealsList` "no deals yet" empty state). The RPCs (`partner_list_own_deals` / `contractor_list_own_deals`) remain the authoritative `auth.uid()` scope; this is purely the client cache key + fetch gate.
+- **Scope:** ONE file — `src/hooks/usePortalDeals.ts` — plus this status section. No schema, no RPC, no route, no other file.
+- **Build:** `tsc -b` ✔ · `vite build` ✔ · `oxlint` ✔ (no new warnings).
+- **Acceptance test (post-merge + Vercel deploy):** sign in as partner `queenasdice@gmail.com` on `/partner/deals`, note the deals shown → sign out → sign back in as a *different* same-role user in the same tab → their `/partner/deals` does NOT briefly flash the previous user's deals (same cache-isolation test as #113 / PR #107).
+- Last update: 2026-08-03.
+
 ## APPLY-ROUTE LANE — Public Application Entry Point (2026-08-03)
 - Branch: `claude/public-apply-route-f2i8o3` (fresh main @ 9d24c28). One PR. **DO NOT merge — owner merges after Macroscope.** Sprint 2, Lane 2a.
 - **Real problem solved (ONBOARDING.md Stage 1 + CONTRACTOR.md standing rule):** cold applicants had no way to apply — contractors could only be created by the owner via Team Management. This ships the public `/apply` entry point that creates a `contractors` record at status `applicant`, plus the owner's Applications review tab.
