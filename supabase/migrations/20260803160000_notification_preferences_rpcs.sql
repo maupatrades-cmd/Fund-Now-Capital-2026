@@ -142,6 +142,27 @@ as $$
   end;
 $$;
 
+-- 4b. get_notification_event_types -------------------------------------------
+-- Returns the notification_event_type enum labels that ACTUALLY exist in this
+-- database, in enum order. The preferences matrix intersects its per-role event
+-- list against this so it can never render a row whose value is missing from the
+-- live enum — which would make set_notification_preference reject the toggle
+-- (e.g. CONTRACTOR_APPLICATION_RECEIVED exists in the repo before APPLY-ROUTE's
+-- enum migration is applied). Reads only world-readable catalog data.
+create or replace function public.get_notification_event_types()
+returns setof text
+language sql
+stable
+security definer
+set search_path to ''
+as $$
+  select e.enumlabel::text
+  from pg_catalog.pg_enum e
+  join pg_catalog.pg_type t on t.oid = e.enumtypid
+  where t.typname = 'notification_event_type'
+  order by e.enumsortorder;
+$$;
+
 -- 5. emit_in_app_notification — gate the in-app channel on preference ---------
 -- Unchanged default behaviour: with no preference row (or in_app_enabled=true)
 -- this behaves EXACTLY as before — insert the notification, mark the in-app
@@ -211,6 +232,7 @@ $$;
 revoke all on function public.set_notification_preference(public.notification_event_type, text, boolean) from public, anon, authenticated;
 revoke all on function public.get_my_notification_preferences() from public, anon, authenticated;
 revoke all on function public.check_notification_channel_enabled(uuid, public.notification_event_type, text) from public, anon, authenticated;
+revoke all on function public.get_notification_event_types() from public, anon, authenticated;
 
 grant execute on function public.set_notification_preference(public.notification_event_type, text, boolean)
   to authenticated, postgres, service_role;
@@ -218,6 +240,9 @@ grant execute on function public.get_my_notification_preferences()
   to authenticated, postgres, service_role;
 grant execute on function public.check_notification_channel_enabled(uuid, public.notification_event_type, text)
   to postgres, service_role;
+-- The matrix needs the live enum list for every signed-in role.
+grant execute on function public.get_notification_event_types()
+  to authenticated, postgres, service_role;
 
 -- 7. Assertions ---------------------------------------------------------------
 do $$
@@ -288,6 +313,14 @@ begin
   end if;
   if public.check_notification_channel_enabled(gen_random_uuid(), 'DEAL_APPROVED', 'whatsapp') is not true then
     raise exception 'assertion failed: unknown channel must fail-open (true)';
+  end if;
+
+  -- get_notification_event_types returns the live enum (DEAL_APPROVED always exists)
+  if not exists (select 1 from public.get_notification_event_types() t(v) where t.v = 'DEAL_APPROVED') then
+    raise exception 'assertion failed: get_notification_event_types did not return the live enum';
+  end if;
+  if not has_function_privilege('authenticated', 'public.get_notification_event_types()', 'EXECUTE') then
+    raise exception 'assertion failed: authenticated must EXECUTE get_notification_event_types';
   end if;
 
   raise notice 'notification_preferences_rpcs: all assertions passed';

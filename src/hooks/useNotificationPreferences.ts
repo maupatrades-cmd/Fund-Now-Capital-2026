@@ -36,6 +36,24 @@ export function useMyNotificationPreferences() {
   });
 }
 
+// The notification_event_type enum labels that actually exist in the live DB
+// (via get_notification_event_types). The matrix intersects its per-role list
+// against this so it never renders a row the DB would reject on toggle — e.g. an
+// enum value that ships in the repo before its migration is applied live. Not
+// user-specific, so it isn't keyed by uid. `null` (query still loading/errored)
+// means "don't filter yet" — callers decide the fallback.
+export function useNotificationEventTypes() {
+  return useQuery({
+    queryKey: ["notification-event-types"],
+    staleTime: 60 * 60_000,
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await supabase.rpc("get_notification_event_types");
+      if (error) throw error;
+      return new Set((data ?? []) as string[]);
+    },
+  });
+}
+
 // Column each channel maps to on a preference row (for optimistic patching).
 const CHANNEL_COLUMN: Record<PrefChannel, "in_app_enabled" | "email_enabled"> = {
   in_app: "in_app_enabled",

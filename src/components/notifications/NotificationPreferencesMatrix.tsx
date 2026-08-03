@@ -10,6 +10,7 @@ import {
 } from "@/lib/notifications";
 import {
   useMyNotificationPreferences,
+  useNotificationEventTypes,
   useSetNotificationPreference,
 } from "@/hooks/useNotificationPreferences";
 
@@ -24,9 +25,17 @@ import {
  */
 export default function NotificationPreferencesMatrix({ role }: { role: PortalRole }) {
   const { data: prefs, isLoading, isError, refetch } = useMyNotificationPreferences();
+  const { data: liveEnum, isLoading: enumLoading } = useNotificationEventTypes();
   const setPref = useSetNotificationPreference();
 
-  const events = applicableEventTypesForRole(role);
+  // Rows applicable to this role, further filtered to the events that actually
+  // exist in the live enum — so a value shipped in the repo ahead of its DB
+  // migration (e.g. CONTRACTOR_APPLICATION_RECEIVED before APPLY-ROUTE applies)
+  // never renders a toggle the RPC would reject. If the enum list failed to load
+  // (`liveEnum` undefined but not loading), fall back to the unfiltered role list
+  // rather than hiding everything.
+  const roleEvents = applicableEventTypesForRole(role);
+  const events = liveEnum ? roleEvents.filter((e) => liveEnum.has(e.value)) : roleEvents;
 
   // Default ON when no stored row / column exists.
   const channelEnabled = (eventType: string, channel: PrefChannel): boolean => {
@@ -50,7 +59,7 @@ export default function NotificationPreferencesMatrix({ role }: { role: PortalRo
     setPref.variables?.eventType === eventType &&
     setPref.variables?.channel === channel;
 
-  if (isLoading) {
+  if (isLoading || enumLoading) {
     return (
       <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-white py-16 text-sm text-muted-foreground shadow-sm">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading preferences…
