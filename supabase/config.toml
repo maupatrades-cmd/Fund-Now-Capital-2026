@@ -16,3 +16,11 @@ verify_jwt = false
 
 [functions.admin-deactivate-user]
 verify_jwt = false
+
+# apply-submit-application is the PUBLIC /apply endpoint — anyone on the internet
+# can submit an application, so there is no caller to authenticate. verify_jwt =
+# false keeps it open; all privileged work goes through the service-role key and
+# the service_role-only submit_contractor_application RPC (never anon/authenticated),
+# with IP throttling for abuse control.
+[functions.apply-submit-application]
+verify_jwt = false

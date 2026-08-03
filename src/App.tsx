@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import AuthPage from "@/pages/AuthPage";
+import PublicApplyPage from "@/pages/PublicApplyPage";
 import OwnerGate from "@/components/layout/OwnerGate";
 import PartnerGate from "@/pages/PartnerGate";
 import PartnerHomePage from "@/pages/PartnerHomePage";
@@ -72,6 +73,13 @@ function AppRoutes() {
         path="/"
         element={session ? <RoleLanding /> : <AuthPage />}
       />
+
+      {/*
+        Public, unauthenticated contractor application (ONBOARDING.md Stage 1).
+        Deliberately OUTSIDE every gate — a cold applicant has no account. It
+        posts to the apply-submit-application Edge Function.
+      */}
+      <Route path="/apply" element={<PublicApplyPage />} />
 
       {/*
         Role portals — the route entries live here because App.tsx owns

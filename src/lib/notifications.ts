@@ -1,7 +1,8 @@
 // Notification presentation helpers (A11 / SPEC S4).
-// Labels + icons cover the full `notification_event_type` enum (31 values —
-// 30 verified 2026-07-31 + LEAD_SUBMITTED_BY_CONTRACTOR added by the LEAD-SUBMIT
-// lane 2026-08-02). Any unknown/future value still
+// Labels + icons cover the full `notification_event_type` enum (32 values —
+// 30 verified 2026-07-31 + LEAD_SUBMITTED_BY_CONTRACTOR (LEAD-SUBMIT lane
+// 2026-08-02) + CONTRACTOR_APPLICATION_RECEIVED (APPLY-ROUTE lane 2026-08-03)).
+// Any unknown/future value still
 // degrades gracefully: eventLabel() falls back to the raw enum string and
 // eventIcon() falls back to the Bell icon.
 import {
@@ -53,8 +54,9 @@ export type Notification = {
   read_at: string | null;
 };
 
-// Full S4 event list — all 31 `notification_event_type` enum values, in enum
-// order. The filter and preferences matrix cover them all.
+// Full S4 event list — all 32 `notification_event_type` enum values, in enum
+// order (CONTRACTOR_APPLICATION_RECEIVED added by the APPLY-ROUTE lane 2026-08-03).
+// The filter and preferences matrix cover them all.
 export const NOTIFICATION_EVENT_TYPES = [
   { value: "LEAD_CREATED_FOR_YOU", label: "Lead created for you" },
   { value: "LEAD_SUBMITTED_BY_PARTNER", label: "Lead submitted by partner" },
@@ -87,6 +89,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   { value: "INVOICE_OVERDUE", label: "Invoice overdue" },
   { value: "INVOICE_MARKED_PAID", label: "Invoice paid" },
   { value: "BONUS_PAID", label: "Bonus paid" },
+  { value: "CONTRACTOR_APPLICATION_RECEIVED", label: "New contractor application" },
 ] as const;
 
 const EVENT_LABEL = new Map<string, string>(
@@ -127,6 +130,8 @@ const EVENT_ICON: Record<string, LucideIcon> = {
   DOCUMENT_EXPIRING_30D: CalendarClock,
   DOCUMENT_EXPIRING_7D: AlarmClock,
   DOCUMENT_EXPIRED: FileX,
+  // Team / onboarding
+  CONTRACTOR_APPLICATION_RECEIVED: UserPlus,
   // Engagement / ops
   CLIENT_MESSAGE_RECEIVED: MessageSquare,
   FOLLOW_UP_DUE: Clock,
