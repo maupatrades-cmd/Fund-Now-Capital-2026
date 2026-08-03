@@ -1,8 +1,9 @@
 // Notification presentation helpers (A11 / SPEC S4).
-// Labels + icons cover the full `notification_event_type` enum (32 values —
+// Labels + icons cover the full `notification_event_type` enum (36 values —
 // 30 verified 2026-07-31 + LEAD_SUBMITTED_BY_CONTRACTOR (LEAD-SUBMIT lane
-// 2026-08-02) + CONTRACTOR_APPLICATION_RECEIVED (APPLY-ROUTE lane 2026-08-03)).
-// Any unknown/future value still
+// 2026-08-02) + CONTRACTOR_APPLICATION_RECEIVED (APPLY-ROUTE lane 2026-08-03)
+// + PARTNER_INVOICE_{SUBMITTED,APPROVED,REJECTED,PAID} (DOCTOR-INVOICING/C4
+// lane 2026-08-03)). Any unknown/future value still
 // degrades gracefully: eventLabel() falls back to the raw enum string and
 // eventIcon() falls back to the Bell icon.
 import {
@@ -54,8 +55,8 @@ export type Notification = {
   read_at: string | null;
 };
 
-// Full S4 event list — all 32 `notification_event_type` enum values, in enum
-// order (CONTRACTOR_APPLICATION_RECEIVED added by the APPLY-ROUTE lane 2026-08-03).
+// Full S4 event list — all 36 `notification_event_type` enum values, in enum
+// order (PARTNER_INVOICE_* added by the DOCTOR-INVOICING/C4 lane 2026-08-03).
 // The filter and preferences matrix cover them all.
 export const NOTIFICATION_EVENT_TYPES = [
   { value: "LEAD_CREATED_FOR_YOU", label: "Lead created for you" },
@@ -90,6 +91,10 @@ export const NOTIFICATION_EVENT_TYPES = [
   { value: "INVOICE_MARKED_PAID", label: "Invoice paid" },
   { value: "BONUS_PAID", label: "Bonus paid" },
   { value: "CONTRACTOR_APPLICATION_RECEIVED", label: "New contractor application" },
+  { value: "PARTNER_INVOICE_SUBMITTED", label: "Partner invoice submitted" },
+  { value: "PARTNER_INVOICE_APPROVED", label: "Partner invoice approved" },
+  { value: "PARTNER_INVOICE_REJECTED", label: "Partner invoice rejected" },
+  { value: "PARTNER_INVOICE_PAID", label: "Partner invoice paid" },
 ] as const;
 
 const EVENT_LABEL = new Map<string, string>(
@@ -130,6 +135,11 @@ const EVENT_ICON: Record<string, LucideIcon> = {
   DOCUMENT_EXPIRING_30D: CalendarClock,
   DOCUMENT_EXPIRING_7D: AlarmClock,
   DOCUMENT_EXPIRED: FileX,
+  // Partner invoices (C4)
+  PARTNER_INVOICE_SUBMITTED: ReceiptText,
+  PARTNER_INVOICE_APPROVED: CheckCircle2,
+  PARTNER_INVOICE_REJECTED: FileX,
+  PARTNER_INVOICE_PAID: CircleDollarSign,
   // Team / onboarding
   CONTRACTOR_APPLICATION_RECEIVED: UserPlus,
   // Engagement / ops
@@ -153,11 +163,13 @@ export function eventIconClass(value: string): string {
     case "COMMISSION_PAID":
     case "INVOICE_MARKED_PAID":
     case "BONUS_PAID":
+    case "PARTNER_INVOICE_PAID":
       return "text-brand-green";
     // Positive / approval → brand teal
     case "DEAL_APPROVED":
     case "LEAD_QUALIFIED":
     case "FUNDER_INVOICE_ISSUED":
+    case "PARTNER_INVOICE_APPROVED":
       return "text-brand-teal";
     // Negative / error → red
     case "DEAL_DECLINED":
@@ -165,6 +177,7 @@ export function eventIconClass(value: string): string {
     case "DOCUMENT_EXPIRED":
     case "LEAD_DOCUMENT_REJECTED":
     case "INVOICE_OVERDUE":
+    case "PARTNER_INVOICE_REJECTED":
       return "text-red-600";
     // Warning (expiring soon) → amber
     case "DOCUMENT_EXPIRING_30D":

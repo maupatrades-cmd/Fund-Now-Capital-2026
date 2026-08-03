@@ -9,6 +9,8 @@ import PartnerHomePage from "@/pages/PartnerHomePage";
 import PartnerSubmitLeadPage from "@/pages/partner/SubmitLeadPage";
 import PartnerMyLeadsPage from "@/pages/partner/MyLeadsPage";
 import PartnerDealsPage from "@/pages/partner/PartnerDealsPage";
+import PartnerInvoicesPage from "@/pages/partner/PartnerInvoicesPage";
+import PartnerInvoiceDetailPage from "@/pages/partner/PartnerInvoiceDetailPage";
 import ContractorGate from "@/pages/ContractorGate";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
@@ -27,6 +29,7 @@ import CalculatorPage from "@/pages/CalculatorPage";
 import InvoicesPage from "@/pages/InvoicesPage";
 import InvoiceDetailPage from "@/pages/InvoiceDetailPage";
 import PartnerEarningsPage from "@/pages/PartnerEarningsPage";
+import PartnerApprovalsPage from "@/pages/PartnerApprovalsPage";
 import ActivityPage from "@/pages/ActivityPage";
 import ReportsPage from "@/pages/ReportsPage";
 import NotificationsPage from "@/pages/NotificationsPage";
@@ -107,6 +110,8 @@ function AppRoutes() {
         <Route path="submit-lead" element={<PartnerSubmitLeadPage />} />
         <Route path="leads" element={<PartnerMyLeadsPage />} />
         <Route path="deals" element={<PartnerDealsPage />} />
+        <Route path="invoices" element={<PartnerInvoicesPage />} />
+        <Route path="invoices/:invoiceId" element={<PartnerInvoiceDetailPage />} />
         <Route path="*" element={<Navigate to="/partner" replace />} />
       </Route>
       <Route path="/contractor/*" element={<ContractorGate />} />
@@ -125,6 +130,8 @@ function AppRoutes() {
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/deals/:id" element={<DealDetailPage />} />
         <Route path="/invoices" element={<InvoicesPage />} />
+        {/* Static path ranks above /invoices/:id in React Router v6. */}
+        <Route path="/invoices/partner-approvals" element={<PartnerApprovalsPage />} />
         <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
         <Route path="/partner-earnings" element={<PartnerEarningsPage />} />
         <Route path="/leads" element={<LeadsPage />} />
