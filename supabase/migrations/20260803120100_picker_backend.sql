@@ -560,7 +560,7 @@ begin
     raise exception 'p_state must be one of potential/pending/locked (got %)', coalesce(p_state, '<null>');
   end if;
 
-  select coalesce(jsonb_agg(row_to_jsonb(t) order by t.updated_at desc), '[]'::jsonb) into v_out
+  select coalesce(jsonb_agg(to_jsonb(t) order by t.updated_at desc), '[]'::jsonb) into v_out
   from (
     select dc.deal_id, d.reference, d.client_id, dc.commission_state, dc.commission_calculation,
            dc.estimated_gross_commission, dc.actual_gross_commission,
