@@ -85,7 +85,8 @@ type LineItem = {
 
 async function renderPdf(inv: InvoiceRow, partnerName: string, items: LineItem[]): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  const page = doc.addPage([595.28, 841.89]); // A4 pt
+  const A4: [number, number] = [595.28, 841.89]; // A4 pt
+  let page = doc.addPage(A4); // reassigned when content paginates onto a new page
   const W = page.getWidth();
   const H = page.getHeight();
   const reg = await doc.embedFont(StandardFonts.Helvetica);
@@ -171,16 +172,44 @@ async function renderPdf(inv: InvoiceRow, partnerName: string, items: LineItem[]
   text(`Company Registration: ${FNC_BILL_TO.cipc}`, M, y, { size: 9, color: INK });
   y += 24;
 
-  // ---- line items table ----
+  // ---- line items table (paginated — Macroscope: never overflow the page) ----
   const boxW = W - 2 * M;
-  rect(M, y, boxW, 20, NAVY);
-  text("DESCRIPTION", M + 10, y + 13, { size: 8.5, font: "bold", color: WHITE });
-  text("AMOUNT (ZAR)", W - M - 10, y + 13, { size: 8.5, font: "bold", color: WHITE, align: "right" });
-  y += 28;
+  const FOOTER_H = 46;
+  const CONTENT_BOTTOM = H - FOOTER_H - 14; // content must never reach the footer band
+
+  const drawFooter = () => {
+    rect(0, H - FOOTER_H, W, FOOTER_H, NAVY);
+    const thanks = "Thank you.";
+    text(thanks, W / 2 - bold.widthOfTextAtSize(thanks, 10) / 2, H - 28, { size: 10, font: "bold", color: WHITE });
+    const foot = `${safe(partnerName)}  |  Referral Partner  |  Invoice to ${FNC_BILL_TO.name}`;
+    text(foot, W / 2 - reg.widthOfTextAtSize(safe(foot), 7.5) / 2, H - 14, { size: 7.5, color: FOOT });
+  };
+  const drawTableHeader = () => {
+    rect(M, y, boxW, 20, NAVY);
+    text("DESCRIPTION", M + 10, y + 13, { size: 8.5, font: "bold", color: WHITE });
+    text("AMOUNT (ZAR)", W - M - 10, y + 13, { size: 8.5, font: "bold", color: WHITE, align: "right" });
+    y += 28;
+  };
+  // When the next block wouldn't fit above the footer, finalize the current page
+  // (draw its footer) and start a fresh one with a "continued" line + table header.
+  const newContentPage = () => {
+    drawFooter();
+    page = doc.addPage(A4);
+    y = 48;
+    text(`Invoice ${inv.invoice_number} — continued`, M, y, { size: 9, font: "ital", color: MUTED });
+    y += 18;
+    drawTableHeader();
+  };
+  const ensureRoom = (needed: number) => {
+    if (y + needed > CONTENT_BOTTOM) newContentPage();
+  };
+
+  drawTableHeader();
 
   const amtColX = W - M - 10;
   const descMaxW = boxW - 150;
   for (const li of items) {
+    ensureRoom(40); // dealRef (12) + optional sub (12) + neutral note (16)
     const dealRef = li.deal_reference || "Deal";
     const sub = [li.client_business_name, li.funder_display_name].filter(Boolean).join("  ·  ");
     text(ellipsize(dealRef, "bold", 9.5, descMaxW), M + 10, y, { size: 9.5, font: "bold", color: NAVY });
@@ -195,13 +224,7 @@ async function renderPdf(inv: InvoiceRow, partnerName: string, items: LineItem[]
     hline(M, y - 6, W - M, 0.5, HAIR);
   }
 
-  y += 10;
-  // ---- total due ----
-  text("TOTAL DUE", M + 10, y, { size: 12, font: "bold", color: NAVY });
-  text(formatR(inv.total_amount), W - M - 10, y, { size: 15, font: "bold", color: NAVY, align: "right" });
-  y += 34;
-
-  // ---- note ----
+  // ---- total due + note (kept together on one page) ----
   const note = splitText(
     "This invoice reflects referral commission earned per the Referral Agreement. " +
       "Payment is made by EFT to the referral partner's banking details on file.",
@@ -209,17 +232,18 @@ async function renderPdf(inv: InvoiceRow, partnerName: string, items: LineItem[]
     7.5,
     boxW,
   );
+  ensureRoom(10 + 34 + note.length * 10 + 6);
+  y += 10;
+  text("TOTAL DUE", M + 10, y, { size: 12, font: "bold", color: NAVY });
+  text(formatR(inv.total_amount), W - M - 10, y, { size: 15, font: "bold", color: NAVY, align: "right" });
+  y += 34;
   for (const l of note) {
     text(l, M, y, { size: 7.5, color: MUTED });
     y += 10;
   }
 
-  // ---- footer band ----
-  rect(0, H - 46, W, 46, NAVY);
-  const thanks = "Thank you.";
-  text(thanks, W / 2 - bold.widthOfTextAtSize(thanks, 10) / 2, H - 28, { size: 10, font: "bold", color: WHITE });
-  const foot = `${safe(partnerName)}  |  Referral Partner  |  Invoice to ${FNC_BILL_TO.name}`;
-  text(foot, W / 2 - reg.widthOfTextAtSize(safe(foot), 7.5) / 2, H - 14, { size: 7.5, color: FOOT });
+  // Footer on the final page.
+  drawFooter();
 
   return await doc.save();
 }

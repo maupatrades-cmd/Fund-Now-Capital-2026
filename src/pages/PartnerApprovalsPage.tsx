@@ -16,6 +16,7 @@ import {
 } from "@/lib/partnerInvoices";
 import {
   useOwnerPartnerInvoices,
+  usePartnerInvoice,
   usePartnerInvoiceLineItems,
   useApprovePartnerInvoice,
   useRejectPartnerInvoice,
@@ -168,6 +169,11 @@ function InvoiceReviewModal({
   onClose: () => void;
 }) {
   const { data: items, isLoading } = usePartnerInvoiceLineItems(invoice.id);
+  // The list row was captured when the modal opened, so its pdf_storage_path can
+  // be stale (the PDF renders async after submit). Read the LIVE row (which polls
+  // while the PDF is pending) so the Download button appears without a reload.
+  const { data: liveInvoice } = usePartnerInvoice(invoice.id);
+  const pdfPath = liveInvoice?.pdf_storage_path ?? invoice.pdf_storage_path;
   const [action, setAction] = useState<ActionKind>(null);
   const [reason, setReason] = useState("");
   const [reference, setReference] = useState("");
@@ -236,7 +242,7 @@ function InvoiceReviewModal({
           Period {formatPeriodRange(invoice.invoice_period_start, invoice.invoice_period_end)}
         </div>
         <div className="flex items-center gap-3">
-          {invoice.state !== "draft" && <DownloadPdfButton path={invoice.pdf_storage_path} />}
+          {invoice.state !== "draft" && <DownloadPdfButton path={pdfPath} />}
           <PartnerInvoiceStateChip state={invoice.state} />
         </div>
       </div>

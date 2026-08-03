@@ -79,6 +79,18 @@ export function usePartnerInvoice(id: string | undefined) {
       if (error) throw error;
       return data as unknown as PartnerInvoice;
     },
+    // The branded PDF is rendered ASYNC (submit → trigger → pg_net → the Edge
+    // Function writes pdf_storage_path a few seconds later), so at submit time the
+    // cached row has a null path and nothing else would refetch it. Poll while a
+    // PDF is expected but not yet written, so DownloadPdfButton flips from
+    // "generating" to a live link on its own. Self-stops once the path lands (or
+    // for draft/rejected invoices, which never get a PDF).
+    refetchInterval: (query) => {
+      const d = query.state.data as PartnerInvoice | undefined;
+      if (!d) return false;
+      const expectsPdf = d.state === "submitted" || d.state === "approved" || d.state === "paid";
+      return expectsPdf && !d.pdf_storage_path ? 4000 : false;
+    },
   });
 }
 
