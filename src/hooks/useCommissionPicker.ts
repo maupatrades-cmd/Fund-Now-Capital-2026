@@ -122,9 +122,12 @@ export function useUnlockCommission() {
   });
 }
 
-// ---- Attribution dropdown options (active contractors / partners) --------
-// profiles is owner-readable via RLS. Owner-only surface (route is OwnerGate),
-// so this reads real names — no anonymisation (S7C anonymisation is partner-side).
+// ---- Attribution dropdown options ----------------------------------------
+// Owner-only surface (route is OwnerGate), so real names — no anonymisation
+// (S7C anonymisation is partner-side). The referent id the tier engine expects
+// differs by type: FNC_Contractor → a profiles.id (role=contractor);
+// Bright_Destiny_Partner → a referral_partners.id (NOT a profile). So contractors
+// come from profiles and partners from referral_partners.
 export type PersonOption = { id: string; label: string };
 
 export function useAttributionOptions() {
@@ -134,22 +137,81 @@ export function useAttributionOptions() {
   return useQuery({
     queryKey: ["attribution-options", uid],
     queryFn: async (): Promise<{ contractors: PersonOption[]; partners: PersonOption[] }> => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, role, is_active")
-        .in("role", ["contractor", "partner"])
-        .eq("is_active", true)
-        .order("full_name", { ascending: true });
-      if (error) throw error;
-      const toOption = (r: Record<string, unknown>): PersonOption => ({
-        id: r.id as string,
-        label: (r.full_name as string | null) || (r.email as string | null) || "Unnamed",
-      });
-      const rows = data ?? [];
+      const [contractorsRes, partnersRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .eq("role", "contractor")
+          .eq("is_active", true)
+          .order("full_name", { ascending: true }),
+        supabase
+          .from("referral_partners")
+          .select("id, name")
+          .eq("is_active", true)
+          .order("name", { ascending: true }),
+      ]);
+      if (contractorsRes.error) throw contractorsRes.error;
+      if (partnersRes.error) throw partnersRes.error;
       return {
-        contractors: rows.filter((r) => r.role === "contractor").map(toOption),
-        partners: rows.filter((r) => r.role === "partner").map(toOption),
+        contractors: (contractorsRes.data ?? []).map((r) => ({
+          id: r.id as string,
+          label: (r.full_name as string | null) || (r.email as string | null) || "Unnamed",
+        })),
+        partners: (partnersRes.data ?? []).map((r) => ({
+          id: r.id as string,
+          label: r.name as string,
+        })),
       };
+    },
+  });
+}
+
+// ---- Deal attribution (deal_attributions), owner-only --------------------
+// The tier engine's source of truth for who earned the deal. Read to hydrate the
+// attribution section; written via set_deal_attribution.
+export type DealAttribution = {
+  attribution_type: string; // canonical token: Direct_FNC / FNC_Contractor / Bright_Destiny_Partner / Bright_Destiny_Sub_Agent
+  attributed_to_id: string | null;
+};
+
+export function useDealAttribution(dealId: string | undefined) {
+  const session = useSession();
+  const uid = session?.user?.id ?? null;
+
+  return useQuery({
+    queryKey: ["deal-attribution", dealId, uid],
+    enabled: !!dealId,
+    queryFn: async (): Promise<DealAttribution | null> => {
+      const { data, error } = await supabase
+        .from("deal_attributions")
+        .select("attribution_type, attributed_to_id")
+        .eq("deal_id", dealId!)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as DealAttribution | null) ?? null;
+    },
+  });
+}
+
+// Set/update the deal's attribution via the tier-engine RPC. Immutable once the
+// commission is locked or a tier record exists — the RPC raises in that case.
+export function useSetDealAttribution() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { dealId: string; attributionType: string; attributedToId: string | null }) => {
+      const { data, error } = await supabase.rpc("set_deal_attribution", {
+        p_deal_id: v.dealId,
+        p_attribution_type: v.attributionType,
+        p_attributed_to_id: v.attributedToId,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["deal-attribution", v.dealId] });
+      // Attribution feeds the eventual LOCK split, so refresh the tier result too.
+      qc.invalidateQueries({ queryKey: ["deal-commission-record", v.dealId] });
+      invalidateActivity(qc);
     },
   });
 }
@@ -186,6 +248,7 @@ export type DealCommissionResult = {
   company_retention: number;
   partner_pool: number;
   partner_share: number;
+  contractor_share: number;
   owner_share: number;
   // Only meaningful when every row shares the same tier band; null when rows
   // span different tiers (a single blended % would be misleading).
@@ -208,7 +271,7 @@ export function useDealCommissionRecord(dealId: string | undefined, enabled: boo
       const { data, error } = await supabase
         .from("commission_records")
         .select(
-          "gross_commission, company_retention, partner_pool, partner_share, owner_share, tier_pct, status",
+          "gross_commission, company_retention, partner_pool, partner_share, contractor_share, owner_share, tier_pct, status",
         )
         .eq("deal_id", dealId!)
         .neq("status", "void");
@@ -223,6 +286,7 @@ export function useDealCommissionRecord(dealId: string | undefined, enabled: boo
         company_retention: rows.reduce((s, r) => s + numOr0(r.company_retention as string | null), 0),
         partner_pool: rows.reduce((s, r) => s + numOr0(r.partner_pool as string | null), 0),
         partner_share: rows.reduce((s, r) => s + numOr0(r.partner_share as string | null), 0),
+        contractor_share: rows.reduce((s, r) => s + numOr0(r.contractor_share as string | null), 0),
         owner_share: rows.reduce((s, r) => s + numOr0(r.owner_share as string | null), 0),
         tier_pct: tierPcts.size === 1 ? [...tierPcts][0] : null,
       };

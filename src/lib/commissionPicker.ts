@@ -170,7 +170,36 @@ export type Attribution = {
   partner_id?: string | null;
 };
 
+// The UI's lowercase attribution values ↔ the tier engine's canonical tokens
+// (public.deal_attributions.attribution_type / set_deal_attribution). The tier
+// engine is the source of truth for attribution — the LOCK trigger reads
+// deal_attributions to compute the split — so the widget persists through
+// set_deal_attribution rather than storing attribution in the picker jsonb.
+export const ATTRIBUTION_RPC_TOKEN: Record<AttributionType, string> = {
+  direct_fnc: "Direct_FNC",
+  fnc_contractor: "FNC_Contractor",
+  bright_destiny_partner: "Bright_Destiny_Partner",
+};
+
+export function attributionTypeFromToken(token: string | null | undefined): AttributionType | null {
+  switch (token) {
+    case "Direct_FNC":
+      return "direct_fnc";
+    case "FNC_Contractor":
+      return "fnc_contractor";
+    case "Bright_Destiny_Partner":
+      return "bright_destiny_partner";
+    default:
+      // Bright_Destiny_Sub_Agent (reserved) and anything unknown have no widget
+      // radio — surfaced read-only via labelForAttribution, never re-saved here.
+      return null;
+  }
+}
+
 // ---- The stored jsonb shape (deal_commissions.commission_calculation) -----
+// Attribution is NOT stored here — it lives in public.deal_attributions (set via
+// set_deal_attribution), which the tier-engine LOCK trigger reads to compute the
+// split. Keeping it out of the picker jsonb avoids a competing source of truth.
 export type CommissionCalculation = {
   base: CalcBase;
   rate?: number | null; // whole-number percent; required for the 5 percent bases
@@ -183,7 +212,6 @@ export type CommissionCalculation = {
     buy_rate?: number | null; // points base
     cap?: number | null; // cap_ceiling adjustment
   };
-  attribution: Attribution;
 };
 
 // ---- Estimated gross (mirrors the DB calc helpers) -----------------------

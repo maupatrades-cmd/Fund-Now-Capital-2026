@@ -7,12 +7,14 @@ import { formatZAR } from "@/lib/format";
 import { CommissionStateBadge } from "@/components/deal/CommissionStateBadge";
 import {
   ADJUSTMENTS,
+  ATTRIBUTION_RPC_TOKEN,
   ATTRIBUTION_TYPES,
   CALC_BASES,
   CALC_BASE_BY_VALUE,
   MAX_TIER_MODIFIERS,
   TIER_MODIFIERS,
   TIMINGS,
+  attributionTypeFromToken,
   estimateGross,
   labelForAdjustment,
   labelForAttribution,
@@ -29,9 +31,11 @@ import {
 import {
   useAttributionOptions,
   useCommissionPicker,
+  useDealAttribution,
   useDealCommissionRecord,
   useProfileName,
   useSetCommissionPicker,
+  useSetDealAttribution,
   useTransitionToLocked,
   useTransitionToPending,
   useUnlockCommission,
@@ -42,11 +46,10 @@ import {
 // Section A base / B tier modifiers / C timing / D adjustments + attribution;
 // live estimated-gross preview; POTENTIAL → PENDING → LOCKED lifecycle.
 //
-// Scope note: this PR folds ATTRIBUTION into the picker's own verified Save
-// (stored under commission_calculation.attribution) rather than a separate
-// set_deal_attribution RPC — that tier-engine RPC is not yet built/live, so
-// wiring a Save to it would ship a broken button. The attribution selection
-// round-trips today and is forward-compatible with the tier engine.
+// Attribution is persisted through the tier engine's set_deal_attribution RPC
+// into public.deal_attributions (its own Save, independent of the picker Save),
+// because the LOCK trigger reads deal_attributions to compute the commission
+// split. So attribution is NOT part of the picker's commission_calculation jsonb.
 
 const numOrNull = (s: string): number | null => {
   const t = s.trim();
@@ -68,9 +71,6 @@ type RawForm = {
   timing: Timing;
   tierModifiers: TierModifier[];
   adjustments: Adjustment[];
-  attrType: AttributionType;
-  contractorId: string;
-  partnerId: string;
 };
 
 const DEFAULT_FORM: RawForm = {
@@ -83,9 +83,6 @@ const DEFAULT_FORM: RawForm = {
   timing: "upfront_at_funding",
   tierModifiers: [],
   adjustments: [],
-  attrType: "direct_fnc",
-  contractorId: "",
-  partnerId: "",
 };
 
 function formSig(f: RawForm): string {
@@ -99,9 +96,6 @@ function formSig(f: RawForm): string {
     timing: f.timing,
     tierModifiers: [...f.tierModifiers].sort(),
     adjustments: [...f.adjustments].sort(),
-    attrType: f.attrType,
-    contractorId: f.contractorId,
-    partnerId: f.partnerId,
   });
 }
 
@@ -109,12 +103,11 @@ const BASE_VALUES = CALC_BASES.map((b) => b.value) as [CalcBase, ...CalcBase[]];
 const TIMING_VALUES = TIMINGS.map((t) => t.value) as [Timing, ...Timing[]];
 const TIER_VALUES = TIER_MODIFIERS.map((t) => t.value) as [TierModifier, ...TierModifier[]];
 const ADJ_VALUES = ADJUSTMENTS.map((a) => a.value) as [Adjustment, ...Adjustment[]];
-const ATTR_VALUES = ATTRIBUTION_TYPES.map((a) => a.value) as [AttributionType, ...AttributionType[]];
 
-// Validates the assembled selection at Save time. Cross-field rules (a percent
-// base needs a rate + amount, points needs sell/buy/facility, a cap needs a
-// positive value, a contractor/partner attribution needs a person) live in the
-// superRefine so the error points at the offending field.
+// Validates the picker selection at Save time. Cross-field rules (a percent base
+// needs a rate + amount, points needs sell/buy/facility, a cap needs a positive
+// value) live in the superRefine so the error points at the offending field.
+// Attribution is validated + saved separately (its own Save → set_deal_attribution).
 const formSchema = z
   .object({
     base: z.enum(BASE_VALUES),
@@ -126,9 +119,6 @@ const formSchema = z
     timing: z.enum(TIMING_VALUES),
     tierModifiers: z.array(z.enum(TIER_VALUES)).max(MAX_TIER_MODIFIERS),
     adjustments: z.array(z.enum(ADJ_VALUES)),
-    attrType: z.enum(ATTR_VALUES),
-    contractorId: z.string().nullable(),
-    partnerId: z.string().nullable(),
   })
   .superRefine((v, ctx) => {
     const kind = CALC_BASE_BY_VALUE[v.base].kind;
@@ -147,11 +137,21 @@ const formSchema = z
     if (v.adjustments.includes("cap_ceiling") && (v.cap == null || v.cap <= 0)) {
       ctx.addIssue({ code: "custom", path: ["cap"], message: "Enter a cap greater than zero." });
     }
-    if (v.attrType === "fnc_contractor" && !v.contractorId)
-      ctx.addIssue({ code: "custom", path: ["contractorId"], message: "Pick a contractor." });
-    if (v.attrType === "bright_destiny_partner" && !v.partnerId)
-      ctx.addIssue({ code: "custom", path: ["partnerId"], message: "Pick a partner." });
   });
+
+// Attribution's referent id by type (what set_deal_attribution expects):
+//  - fnc_contractor → a profiles.id (role=contractor)
+//  - bright_destiny_partner → a referral_partners.id
+//  - direct_fnc → null
+function attributionReferentId(type: AttributionType, contractorId: string, partnerId: string): string | null {
+  if (type === "fnc_contractor") return contractorId || null;
+  if (type === "bright_destiny_partner") return partnerId || null;
+  return null;
+}
+
+function attrSig(type: AttributionType, contractorId: string, partnerId: string): string {
+  return `${type}|${attributionReferentId(type, contractorId, partnerId) ?? ""}`;
+}
 
 export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: string; amountRequested: string | null }) {
   const { data: state, isLoading, isError, error } = useCommissionPicker(dealId);
@@ -161,6 +161,8 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
   const toLocked = useTransitionToLocked();
   const unlock = useUnlockCommission();
   const { data: attrOptions } = useAttributionOptions();
+  const { data: dealAttribution } = useDealAttribution(dealId);
+  const setAttribution = useSetDealAttribution();
 
   // ---- Form state (controlled) ----
   const [base, setBase] = useState<CalcBase>("percent_of_finance_charge");
@@ -209,9 +211,6 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
           timing: c.timing,
           tierModifiers: c.tier_modifiers ?? [],
           adjustments: c.adjustments ?? [],
-          attrType: c.attribution?.type ?? "direct_fnc",
-          contractorId: c.attribution?.contractor_id ?? "",
-          partnerId: c.attribution?.partner_id ?? "",
         }
       : DEFAULT_FORM;
 
@@ -224,12 +223,31 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
     setTiming(next.timing);
     setTierModifiers(next.tierModifiers);
     setAdjustments(next.adjustments);
-    setAttrType(next.attrType);
-    setContractorId(next.contractorId);
-    setPartnerId(next.partnerId);
     hydratedSig.current = formSig(next);
     setFormError(null);
   }, [dealId, state]);
+
+  // Hydrate the attribution section from deal_attributions (the tier engine's
+  // source of truth), independent of the picker. Re-seeds when the deal changes
+  // or the persisted attribution changes (e.g. after its own Save).
+  const attrHydratedKey = useRef<string | null>(null);
+  const attrHydratedSig = useRef<string>(attrSig("direct_fnc", "", ""));
+  useEffect(() => {
+    if (dealAttribution === undefined) return; // still loading
+    const token = dealAttribution?.attribution_type ?? null;
+    const referent = dealAttribution?.attributed_to_id ?? "";
+    const key = `${dealId}:${token ?? "none"}:${referent}`;
+    if (attrHydratedKey.current === key) return;
+    attrHydratedKey.current = key;
+
+    const uiType = attributionTypeFromToken(token) ?? "direct_fnc";
+    const nextContractor = uiType === "fnc_contractor" ? referent : "";
+    const nextPartner = uiType === "bright_destiny_partner" ? referent : "";
+    setAttrType(uiType);
+    setContractorId(nextContractor);
+    setPartnerId(nextPartner);
+    attrHydratedSig.current = attrSig(uiType, nextContractor, nextPartner);
+  }, [dealId, dealAttribution]);
 
   const baseMeta = CALC_BASE_BY_VALUE[base];
 
@@ -265,12 +283,16 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
         timing,
         tierModifiers,
         adjustments,
-        attrType,
-        contractorId,
-        partnerId,
       }) !== hydratedSig.current,
-    [base, rate, baseAmount, sellRate, buyRate, cap, timing, tierModifiers, adjustments, attrType, contractorId, partnerId],
+    [base, rate, baseAmount, sellRate, buyRate, cap, timing, tierModifiers, adjustments],
   );
+
+  // Attribution has its own Save; track its dirty state separately.
+  const attrDirty = useMemo(
+    () => attrSig(attrType, contractorId, partnerId) !== attrHydratedSig.current,
+    [attrType, contractorId, partnerId],
+  );
+  const hasAttribution = !!dealAttribution;
 
   const toggleTier = (v: TierModifier) => {
     setTierModifiers((prev) => {
@@ -300,11 +322,6 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
       ...(baseMeta.kind === "points" ? { sell_rate: numOrNull(sellRate), buy_rate: numOrNull(buyRate) } : {}),
       ...(adjustments.includes("cap_ceiling") ? { cap: numOrNull(cap) } : {}),
     },
-    attribution: {
-      type: attrType,
-      ...(attrType === "fnc_contractor" ? { contractor_id: contractorId } : {}),
-      ...(attrType === "bright_destiny_partner" ? { partner_id: partnerId } : {}),
-    },
   });
 
   const onSave = async () => {
@@ -321,9 +338,6 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
       timing,
       tierModifiers,
       adjustments,
-      attrType,
-      contractorId: contractorId || null,
-      partnerId: partnerId || null,
     });
     if (!parsed.success) {
       setFormError(parsed.error.issues[0]?.message ?? "Please complete the required fields.");
@@ -346,6 +360,33 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
       toast.error((e as Error).message || "Could not save the commission");
     } finally {
       savingRef.current = false;
+    }
+  };
+
+  // ---- Attribution save (own action → set_deal_attribution) ----
+  const attrSavingRef = useRef(false);
+  const onSaveAttribution = async () => {
+    if (attrSavingRef.current || isLocked) return;
+    if (attrType === "fnc_contractor" && !contractorId) {
+      toast.error("Pick a contractor.");
+      return;
+    }
+    if (attrType === "bright_destiny_partner" && !partnerId) {
+      toast.error("Pick a partner.");
+      return;
+    }
+    attrSavingRef.current = true;
+    try {
+      await setAttribution.mutateAsync({
+        dealId,
+        attributionType: ATTRIBUTION_RPC_TOKEN[attrType],
+        attributedToId: attributionReferentId(attrType, contractorId, partnerId),
+      });
+      toast.success("Attribution saved");
+    } catch (e) {
+      toast.error((e as Error).message || "Could not save attribution");
+    } finally {
+      attrSavingRef.current = false;
     }
   };
 
@@ -430,6 +471,23 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
             emptyLabel="No active partners"
             disabled={disabled}
           />
+        )}
+        {!isLocked && (
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onSaveAttribution}
+              disabled={setAttribution.isPending || !attrDirty}
+              className="rounded-lg border border-brand-teal px-4 py-1.5 text-sm font-medium text-brand-teal hover:bg-brand-teal/10 disabled:opacity-50"
+            >
+              {setAttribution.isPending ? "Saving…" : "Save attribution"}
+            </button>
+            {attrDirty ? (
+              <span className="text-xs text-amber-600">Unsaved attribution</span>
+            ) : hasAttribution ? (
+              <span className="text-xs text-brand-green">Saved</span>
+            ) : null}
+          </div>
         )}
       </fieldset>
 
@@ -594,6 +652,11 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
           {isDirty && (
             <span className="text-xs text-amber-600">Unsaved changes — Save before you move or lock this commission.</span>
           )}
+          {commissionState === "pending" && !isDirty && !hasAttribution && (
+            <span className="text-xs text-amber-600">
+              Set the deal's attribution above before locking so the commission split is calculated.
+            </span>
+          )}
         </div>
       )}
 
@@ -649,7 +712,14 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
 function LockedBanner({ dealId, state }: { dealId: string; state: NonNullable<ReturnType<typeof useCommissionPicker>["data"]> }) {
   const { data: lockedByName } = useProfileName(state.commission_locked_by);
   const { data: record } = useDealCommissionRecord(dealId, true);
+  const { data: attribution } = useDealAttribution(dealId);
   const calc = state.commission_calculation;
+  const attrUiType = attributionTypeFromToken(attribution?.attribution_type);
+  const attrLabel = attribution
+    ? attrUiType
+      ? labelForAttribution(attrUiType)
+      : attribution.attribution_type
+    : null;
 
   return (
     <div className="space-y-3 rounded-lg border border-brand-green/30 bg-brand-green/5 p-4">
@@ -667,8 +737,8 @@ function LockedBanner({ dealId, state }: { dealId: string; state: NonNullable<Re
       {calc && (
         <div className="text-xs text-muted-foreground">
           <span className="font-medium text-brand-navy">{labelForBase(calc.base)}</span>
-          {calc.rate != null ? ` · ${calc.rate}%` : ""} · {labelForTiming(calc.timing)} ·{" "}
-          {labelForAttribution(calc.attribution?.type ?? "direct_fnc")}
+          {calc.rate != null ? ` · ${calc.rate}%` : ""} · {labelForTiming(calc.timing)}
+          {attrLabel ? ` · ${attrLabel}` : ""}
           {calc.tier_modifiers?.length ? ` · ${calc.tier_modifiers.map(labelForTierModifier).join(", ")}` : ""}
           {calc.adjustments?.length ? ` · ${calc.adjustments.map(labelForAdjustment).join(", ")}` : ""}
         </div>
@@ -680,11 +750,18 @@ function LockedBanner({ dealId, state }: { dealId: string; state: NonNullable<Re
           <div className="space-y-1 text-sm">
             <Row label="Gross commission" value={formatZAR(record.gross_commission, { cents: true })} strong />
             <Row label="Company retention" value={formatZAR(record.company_retention, { cents: true })} />
-            <Row label="Partner pool" value={formatZAR(record.partner_pool, { cents: true })} />
-            <Row
-              label={`Partner share${record.tier_pct != null ? ` (${record.tier_pct}%)` : ""}`}
-              value={formatZAR(record.partner_share, { cents: true })}
-            />
+            {record.partner_pool > 0 && (
+              <Row label="Partner pool" value={formatZAR(record.partner_pool, { cents: true })} />
+            )}
+            {record.partner_share > 0 && (
+              <Row
+                label={`Partner share${record.tier_pct != null && record.tier_pct > 0 ? ` (${record.tier_pct}%)` : ""}`}
+                value={formatZAR(record.partner_share, { cents: true })}
+              />
+            )}
+            {record.contractor_share > 0 && (
+              <Row label="Contractor share" value={formatZAR(record.contractor_share, { cents: true })} />
+            )}
             <Row label="Owner share" value={formatZAR(record.owner_share, { cents: true })} strong />
             {record.count > 1 && (
               <p className="pt-1 text-xs text-muted-foreground">Summed across {record.count} funded submissions.</p>
