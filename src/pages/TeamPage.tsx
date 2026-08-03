@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -39,6 +40,8 @@ import {
   type TeamMember,
   type UserRole,
 } from "@/lib/team";
+import ApplicationsPanel from "@/components/team/ApplicationsPanel";
+import { useApplications } from "@/hooks/useApplications";
 
 const fieldCls =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-brand-navy outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
@@ -67,18 +70,39 @@ function auditWarn(what: string, recorded: boolean): AuditWarning {
   };
 }
 
-const FILTER_TABS: { value: TeamFilter; label: string }[] = [
+// "applications" is a sibling tab that swaps the whole body to the owner's
+// contractor-application review view (Lane 2a) — it is not a filter over the
+// people (profiles) list, so it lives alongside the role filters here.
+type TeamTab = TeamFilter | "applications";
+
+const FILTER_TABS: { value: TeamTab; label: string }[] = [
   { value: "all", label: "All" },
   { value: "owner", label: "Owners" },
   { value: "partner", label: "Partners" },
   { value: "contractor", label: "Contractors" },
   { value: "deactivated", label: "Deactivated" },
+  { value: "applications", label: "Applications" },
 ];
 
 export default function TeamPage() {
   const { data: members, isLoading, isError, refetch } = useTeamMembers();
-  const [filter, setFilter] = useState<TeamFilter>("all");
+  // Applications share the same cached query the panel uses (owner-only) — this
+  // only powers the tab's count badge.
+  const { data: applications } = useApplications();
+  const [searchParams] = useSearchParams();
+  // Deep-link support: the "New contractor application" notification links to
+  // /team?tab=applications and should land on that tab.
+  const [filter, setFilter] = useState<TeamTab>(
+    searchParams.get("tab") === "applications" ? "applications" : "all",
+  );
   const [inviteOpen, setInviteOpen] = useState(false);
+  // Keep the deep-link honest even if the user is already on /team when the
+  // "New contractor application" notification is clicked (fresh mount is handled
+  // by the state initializer above; this fires only when the URL param changes).
+  const tabParam = searchParams.get("tab");
+  useEffect(() => {
+    if (tabParam === "applications") setFilter("applications");
+  }, [tabParam]);
   const [editing, setEditing] = useState<TeamMember | null>(null);
   const [deactivating, setDeactivating] = useState<TeamMember | null>(null);
   const [tempPassword, setTempPassword] = useState<{ name: string; password: string } | null>(null);
@@ -94,8 +118,9 @@ export default function TeamPage() {
       partner: list.filter((m) => m.is_active && m.role === "partner").length,
       contractor: list.filter((m) => m.is_active && m.role === "contractor").length,
       deactivated: list.filter((m) => !m.is_active).length,
+      applications: applications?.length ?? 0,
     };
-  }, [members]);
+  }, [members, applications]);
 
   const filtered = useMemo(() => {
     const list = members ?? [];
@@ -104,7 +129,12 @@ export default function TeamPage() {
     return list.filter((m) => m.is_active && m.role === (filter as UserRole));
   }, [members, filter]);
 
-  if (isLoading) {
+  // The Applications tab is an independent data source (contractors, not
+  // profiles), so a team-members load/error must not block reaching it —
+  // ApplicationsPanel handles its own loading/error state.
+  const onApplications = filter === "applications";
+
+  if (isLoading && !onApplications) {
     return (
       <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading team…
@@ -113,7 +143,7 @@ export default function TeamPage() {
   }
 
   // A load failure must not masquerade as an empty team ("No people yet").
-  if (isError) {
+  if (isError && !onApplications) {
     return (
       <div className="max-w-5xl">
         <div className="flex flex-col items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-6 py-14 text-center">
@@ -197,7 +227,9 @@ export default function TeamPage() {
         })}
       </div>
 
-      {filtered.length === 0 ? (
+      {filter === "applications" ? (
+        <ApplicationsPanel />
+      ) : filtered.length === 0 ? (
         <EmptyState
           icon={UserPlus}
           title="No people yet"
