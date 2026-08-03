@@ -188,8 +188,19 @@ export type CommissionCalculation = {
 
 // ---- Estimated gross (mirrors the DB calc helpers) -----------------------
 // Half-away-from-zero to 2 dp, matching Postgres round(numeric, 2).
+//
+// Postgres rounds exact decimal half-cents away from zero (round(1.005, 2) =
+// 1.01). A naive `Math.round(n * 100) / 100` disagrees at those boundaries
+// because the IEEE-754 product lands just below the .5 tick (1.005 * 100 =
+// 100.49999999999999 → rounds to 100 → 1.00). Nudging the scaled value up by a
+// magnitude-relative epsilon restores the intended half — the nudge is many
+// orders smaller than a cent at any realistic money magnitude, so non-boundary
+// values are unaffected.
 export function round2(n: number): number {
-  return Math.sign(n) * Math.round(Math.abs(n) * 100) / 100;
+  if (!Number.isFinite(n)) return n;
+  const sign = n < 0 ? -1 : 1;
+  const scaled = Math.abs(n) * 100;
+  return (sign * Math.round(scaled * (1 + Number.EPSILON))) / 100;
 }
 
 // Compute the estimated FNC gross commission (Rands) from the picker selection.

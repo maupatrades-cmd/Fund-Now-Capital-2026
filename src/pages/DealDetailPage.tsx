@@ -198,7 +198,7 @@ export default function DealDetailPage() {
 
       {/* Commission Calculation — owner-only picker (POTENTIAL → PENDING → LOCKED) */}
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
-        <CommissionPickerWidget dealId={deal.id} amountRequested={deal.amount_requested} />
+        <CommissionPickerWidget key={deal.id} dealId={deal.id} amountRequested={deal.amount_requested} />
       </section>
 
       {/* Invoices — generate/track FNC → funder invoices for this deal (C1.2) */}

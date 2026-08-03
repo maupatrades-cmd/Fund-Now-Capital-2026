@@ -55,6 +55,56 @@ const numOrNull = (s: string): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+// Raw (string-backed) form state. Used both to seed the fields and to compute a
+// stable dirty signature — comparing raw fields (never the persisted jsonb,
+// whose key order Postgres does not preserve) avoids false "dirty" positives.
+type RawForm = {
+  base: CalcBase;
+  rate: string;
+  baseAmount: string;
+  sellRate: string;
+  buyRate: string;
+  cap: string;
+  timing: Timing;
+  tierModifiers: TierModifier[];
+  adjustments: Adjustment[];
+  attrType: AttributionType;
+  contractorId: string;
+  partnerId: string;
+};
+
+const DEFAULT_FORM: RawForm = {
+  base: "percent_of_finance_charge",
+  rate: "",
+  baseAmount: "",
+  sellRate: "",
+  buyRate: "",
+  cap: "",
+  timing: "upfront_at_funding",
+  tierModifiers: [],
+  adjustments: [],
+  attrType: "direct_fnc",
+  contractorId: "",
+  partnerId: "",
+};
+
+function formSig(f: RawForm): string {
+  return JSON.stringify({
+    base: f.base,
+    rate: f.rate,
+    baseAmount: f.baseAmount,
+    sellRate: f.sellRate,
+    buyRate: f.buyRate,
+    cap: f.cap,
+    timing: f.timing,
+    tierModifiers: [...f.tierModifiers].sort(),
+    adjustments: [...f.adjustments].sort(),
+    attrType: f.attrType,
+    contractorId: f.contractorId,
+    partnerId: f.partnerId,
+  });
+}
+
 const BASE_VALUES = CALC_BASES.map((b) => b.value) as [CalcBase, ...CalcBase[]];
 const TIMING_VALUES = TIMINGS.map((t) => t.value) as [Timing, ...Timing[]];
 const TIER_VALUES = TIER_MODIFIERS.map((t) => t.value) as [TierModifier, ...TierModifier[]];
@@ -70,8 +120,8 @@ const formSchema = z
     base: z.enum(BASE_VALUES),
     rate: z.number().finite().min(0).nullable(),
     baseAmount: z.number().finite().min(0).nullable(),
-    sellRate: z.number().finite().nullable(),
-    buyRate: z.number().finite().nullable(),
+    sellRate: z.number().finite().min(0).nullable(),
+    buyRate: z.number().finite().min(0).nullable(),
     cap: z.number().finite().nullable(),
     timing: z.enum(TIMING_VALUES),
     tierModifiers: z.array(z.enum(TIER_VALUES)).max(MAX_TIER_MODIFIERS),
@@ -133,8 +183,10 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
   // Hydrate from the server when the deal changes or the lifecycle state moves
   // (a transition never changes the picks, so re-seeding on state change is safe
   // and keeps the read-only locked view canonical). `hydratedKey` prevents an
-  // unrelated refetch from clobbering an in-progress edit.
+  // unrelated refetch from clobbering an in-progress edit. `hydratedSig` snapshots
+  // the seeded field values so `isDirty` (below) can tell edited-from-saved.
   const hydratedKey = useRef<string | null>(null);
+  const hydratedSig = useRef<string>(formSig(DEFAULT_FORM));
   useEffect(() => {
     if (!state) return;
     const key = `${dealId}:${state.commission_state ?? "none"}`;
@@ -142,20 +194,40 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
     hydratedKey.current = key;
 
     const c = state.commission_calculation;
-    if (c) {
-      setBase(c.base);
-      setRate(c.rate != null ? String(c.rate) : "");
-      setBaseAmount(c.inputs?.base_amount != null ? String(c.inputs.base_amount) : "");
-      setSellRate(c.inputs?.sell_rate != null ? String(c.inputs.sell_rate) : "");
-      setBuyRate(c.inputs?.buy_rate != null ? String(c.inputs.buy_rate) : "");
-      setCap(c.inputs?.cap != null ? String(c.inputs.cap) : "");
-      setTiming(c.timing);
-      setTierModifiers(c.tier_modifiers ?? []);
-      setAdjustments(c.adjustments ?? []);
-      setAttrType(c.attribution?.type ?? "direct_fnc");
-      setContractorId(c.attribution?.contractor_id ?? "");
-      setPartnerId(c.attribution?.partner_id ?? "");
-    }
+    // Seed from the persisted calc, or reset to defaults when this deal has no
+    // commission yet. The reset is essential: without it, navigating from a deal
+    // WITH a commission to one WITHOUT keeps the prior deal's field values, and a
+    // Save would copy that commission onto the new deal (cross-deal contamination).
+    const next: RawForm = c
+      ? {
+          base: c.base,
+          rate: c.rate != null ? String(c.rate) : "",
+          baseAmount: c.inputs?.base_amount != null ? String(c.inputs.base_amount) : "",
+          sellRate: c.inputs?.sell_rate != null ? String(c.inputs.sell_rate) : "",
+          buyRate: c.inputs?.buy_rate != null ? String(c.inputs.buy_rate) : "",
+          cap: c.inputs?.cap != null ? String(c.inputs.cap) : "",
+          timing: c.timing,
+          tierModifiers: c.tier_modifiers ?? [],
+          adjustments: c.adjustments ?? [],
+          attrType: c.attribution?.type ?? "direct_fnc",
+          contractorId: c.attribution?.contractor_id ?? "",
+          partnerId: c.attribution?.partner_id ?? "",
+        }
+      : DEFAULT_FORM;
+
+    setBase(next.base);
+    setRate(next.rate);
+    setBaseAmount(next.baseAmount);
+    setSellRate(next.sellRate);
+    setBuyRate(next.buyRate);
+    setCap(next.cap);
+    setTiming(next.timing);
+    setTierModifiers(next.tierModifiers);
+    setAdjustments(next.adjustments);
+    setAttrType(next.attrType);
+    setContractorId(next.contractorId);
+    setPartnerId(next.partnerId);
+    hydratedSig.current = formSig(next);
     setFormError(null);
   }, [dealId, state]);
 
@@ -176,6 +248,28 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
         },
       }),
     [base, rate, baseAmount, sellRate, buyRate, cap, adjustments],
+  );
+
+  // Unsaved-edits guard: true when the current fields differ from what was last
+  // hydrated from the server. Used to block lifecycle transitions that would
+  // otherwise discard the edits on the post-transition refetch.
+  const isDirty = useMemo(
+    () =>
+      formSig({
+        base,
+        rate,
+        baseAmount,
+        sellRate,
+        buyRate,
+        cap,
+        timing,
+        tierModifiers,
+        adjustments,
+        attrType,
+        contractorId,
+        partnerId,
+      }) !== hydratedSig.current,
+    [base, rate, baseAmount, sellRate, buyRate, cap, timing, tierModifiers, adjustments, attrType, contractorId, partnerId],
   );
 
   const toggleTier = (v: TierModifier) => {
@@ -259,6 +353,13 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
   const pendingRef = useRef(false);
   const onMoveToPending = async () => {
     if (pendingRef.current) return;
+    // A transition refetches and re-hydrates the form, which would silently
+    // discard any unsaved edits. Guide the owner to Save first rather than lose
+    // their changes behind a "Moved to Pending" success toast.
+    if (isDirty || saving) {
+      toast.error("Save your changes before moving to Pending.");
+      return;
+    }
     pendingRef.current = true;
     try {
       await toPending.mutateAsync({ dealId });
@@ -470,7 +571,8 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
             <button
               type="button"
               onClick={onMoveToPending}
-              disabled={toPending.isPending}
+              disabled={toPending.isPending || saving || isDirty}
+              title={isDirty ? "Save your changes first" : undefined}
               className="rounded-lg border border-brand-navy px-4 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50 disabled:opacity-60"
             >
               {toPending.isPending ? "Moving…" : "Move to Pending"}
@@ -481,10 +583,16 @@ export function CommissionPickerWidget({ dealId, amountRequested }: { dealId: st
             <button
               type="button"
               onClick={() => setLockOpen(true)}
-              className="rounded-lg bg-brand-green px-4 py-2 text-sm font-semibold text-white hover:bg-brand-green/90"
+              disabled={saving || isDirty}
+              title={isDirty ? "Save your changes first" : undefined}
+              className="rounded-lg bg-brand-green px-4 py-2 text-sm font-semibold text-white hover:bg-brand-green/90 disabled:opacity-60"
             >
               Lock Commission
             </button>
+          )}
+
+          {isDirty && (
+            <span className="text-xs text-amber-600">Unsaved changes — Save before you move or lock this commission.</span>
           )}
         </div>
       )}
@@ -578,6 +686,9 @@ function LockedBanner({ dealId, state }: { dealId: string; state: NonNullable<Re
               value={formatZAR(record.partner_share, { cents: true })}
             />
             <Row label="Owner share" value={formatZAR(record.owner_share, { cents: true })} strong />
+            {record.count > 1 && (
+              <p className="pt-1 text-xs text-muted-foreground">Summed across {record.count} funded submissions.</p>
+            )}
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">

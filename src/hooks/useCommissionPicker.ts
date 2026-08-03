@@ -174,17 +174,27 @@ export function useProfileName(id: string | null | undefined) {
 
 // ---- Downstream tier result (commission_records), owner-only -------------
 // Populated by the C2 money engine / tier engine once a deal's commission is
-// processed. Absent today (no genuine funding + tier engine not yet wired), so
-// the widget degrades to an informational note when this returns nothing.
-export type DealCommissionRecord = {
-  id: string;
-  gross_commission: string | null;
-  company_retention: string | null;
-  partner_pool: string | null;
-  partner_share: string | null;
-  owner_share: string | null;
-  tier_pct: string | null;
-  status: string | null;
+// processed. write_commission_record writes ONE ROW PER FUNDED SUBMISSION, so a
+// deal can carry several rows (partial / multi-funder funding). We fetch every
+// NON-VOID row and sum the money columns so the locked banner reflects the whole
+// deal — never just the newest row, and never a voided one. Absent today (no
+// genuine funding + tier engine not yet wired), so the widget degrades to an
+// informational note when this returns nothing.
+export type DealCommissionResult = {
+  count: number;
+  gross_commission: number;
+  company_retention: number;
+  partner_pool: number;
+  partner_share: number;
+  owner_share: number;
+  // Only meaningful when every row shares the same tier band; null when rows
+  // span different tiers (a single blended % would be misleading).
+  tier_pct: number | null;
+};
+
+const numOr0 = (v: string | number | null | undefined): number => {
+  const n = typeof v === "number" ? v : Number(v ?? 0);
+  return Number.isFinite(n) ? n : 0;
 };
 
 export function useDealCommissionRecord(dealId: string | undefined, enabled: boolean) {
@@ -194,18 +204,28 @@ export function useDealCommissionRecord(dealId: string | undefined, enabled: boo
   return useQuery({
     queryKey: ["deal-commission-record", dealId, uid],
     enabled: !!dealId && enabled,
-    queryFn: async (): Promise<DealCommissionRecord | null> => {
+    queryFn: async (): Promise<DealCommissionResult | null> => {
       const { data, error } = await supabase
         .from("commission_records")
         .select(
-          "id, gross_commission, company_retention, partner_pool, partner_share, owner_share, tier_pct, status",
+          "gross_commission, company_retention, partner_pool, partner_share, owner_share, tier_pct, status",
         )
         .eq("deal_id", dealId!)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .neq("status", "void");
       if (error) throw error;
-      return (data as DealCommissionRecord | null) ?? null;
+      const rows = data ?? [];
+      if (rows.length === 0) return null;
+
+      const tierPcts = new Set(rows.map((r) => numOr0(r.tier_pct as string | null)));
+      return {
+        count: rows.length,
+        gross_commission: rows.reduce((s, r) => s + numOr0(r.gross_commission as string | null), 0),
+        company_retention: rows.reduce((s, r) => s + numOr0(r.company_retention as string | null), 0),
+        partner_pool: rows.reduce((s, r) => s + numOr0(r.partner_pool as string | null), 0),
+        partner_share: rows.reduce((s, r) => s + numOr0(r.partner_share as string | null), 0),
+        owner_share: rows.reduce((s, r) => s + numOr0(r.owner_share as string | null), 0),
+        tier_pct: tierPcts.size === 1 ? [...tierPcts][0] : null,
+      };
     },
   });
 }
