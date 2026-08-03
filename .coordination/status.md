@@ -1,7 +1,7 @@
 # Agent Coordination Status
 
 ## DOCTOR-INVOICING LANE — Sprint 4 Lane 4a — Doctor (partner) invoices FNC (C4) (2026-08-03)
-- Branch: `claude/doctor-invoicing-sprint-4-cso1wa` (fresh main @ `f9b4cf6`). One PR. **DO NOT merge — owner merges after Macroscope.**
+- Branch: `claude/doctor-invoicing-sprint-4-cso1wa` (fresh main @ `f9b4cf6`). **PR #118 OPEN — DO NOT merge; owner merges after Macroscope.**
 - **Real problem solved:** the referral partner (Doctor / Bright Destiny) is owed commission once FNC has been paid by the funder, but had no way to bill FNC for it. This ships the full partner-invoice lifecycle: partner **generates** a draft from his PAYABLE commissions → **submits** → owner **approves/rejects** → owner **marks paid** (which **settles** the underlying commissions + notifies the partner). Fills the C2.3-reserved settle hand-off (C4).
 - **Lane owned (this agent ONLY):** new tables `partner_invoices` + `partner_invoice_line_items`; partner-invoice lifecycle RPCs; the two C2.3 settle stubs; the partner route `/partner/invoices(/:invoiceId)`; the owner route `/invoices/partner-approvals`; `src/lib/partnerInvoices.ts`; `src/hooks/usePartnerInvoices.ts`; `src/components/partner-invoices/*`; `src/components/portal/PartnerInvoicesView.tsx`; `src/pages/partner/PartnerInvoices*Page.tsx`; `src/pages/PartnerApprovalsPage.tsx`.
 - **Schema (3 migrations, dry-run-verified via non-persisting BEGIN/ROLLBACK against live 2026-08-03 — all DDL + every function body compiled, structural grants asserts passed, `partner_invoices` null after rollback; NOT yet applied):**
