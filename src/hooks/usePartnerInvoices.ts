@@ -25,7 +25,8 @@ import type {
 const INVOICE_COLUMNS =
   "id, referral_partner_id, invoice_number, generated_at, invoice_period_start, " +
   "invoice_period_end, total_amount, state, submitted_at, approved_at, approved_by, " +
-  "paid_at, paid_reference, rejected_at, rejected_reason, notes, created_by, created_at, updated_at";
+  "paid_at, paid_reference, rejected_at, rejected_reason, notes, pdf_storage_path, " +
+  "created_by, created_at, updated_at";
 
 // ---- reads -----------------------------------------------------------------
 

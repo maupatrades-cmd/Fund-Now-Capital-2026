@@ -6,6 +6,7 @@ import { formatZAR } from "@/lib/format";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PartnerInvoiceStateChip } from "@/components/partner-invoices/PartnerInvoiceStateChip";
 import { LineItemsTable } from "@/components/partner-invoices/LineItemsTable";
+import { DownloadPdfButton } from "@/components/partner-invoices/DownloadPdfButton";
 import {
   formatPeriodRange,
   formatPeriodDate,
@@ -234,7 +235,10 @@ function InvoiceReviewModal({
         <div className="text-sm text-muted-foreground">
           Period {formatPeriodRange(invoice.invoice_period_start, invoice.invoice_period_end)}
         </div>
-        <PartnerInvoiceStateChip state={invoice.state} />
+        <div className="flex items-center gap-3">
+          {invoice.state !== "draft" && <DownloadPdfButton path={invoice.pdf_storage_path} />}
+          <PartnerInvoiceStateChip state={invoice.state} />
+        </div>
       </div>
 
       {isLoading ? (
