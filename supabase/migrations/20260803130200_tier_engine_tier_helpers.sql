@@ -40,40 +40,44 @@ comment on function public.calc_partner_tier_percent(numeric, boolean) is
 
 -- ===========================================================================
 -- 2. calc_contractor_tier_amount — flat rand contractor commission.
---    TIERS.md Section 2. Contiguous bands, inclusive upper bound. NO 40/60 split.
---    R1,000,000+ returns NULL — the signal that a manual, owner-entered amount is
---    required (set_contractor_manual_amount). Path A: the flat R300 minimum stands
---    even when it exceeds a 40% retention floor; there is no floor logic here — the
---    caller simply pays the flat amount and FNC retains gross - amount.
+--    TIERS.md Section 2. NO 40/60 split. R1,000,000+ returns NULL — the signal that a
+--    manual, owner-entered amount is required (set_contractor_manual_amount). Path A:
+--    the flat R300 minimum stands even when it exceeds a 40% retention floor; there is
+--    no floor logic here — the caller pays the flat amount and FNC retains gross - amount.
+--
+--    Bounds are EXCLUSIVE next-band floors (< 2000, ... < 1000000), NOT inclusive whole
+--    rand (Macroscope M5): gross is numeric(14,2), so an inclusive `<= 1999` would roll a
+--    cent value like R1,999.50 into the next tier (R1,500 instead of R300) and R999,999.50
+--    into NULL instead of R105,000. `< 2000` keeps every cent below R2,000 in the R300 band.
 -- ===========================================================================
 create or replace function public.calc_contractor_tier_amount(
   p_fnc_gross numeric
 ) returns numeric(14,2)
 language sql immutable security definer set search_path to '' as $$
   select case
-    when p_fnc_gross is null      then null
-    when p_fnc_gross <=    1999 then    300   -- R0 – R1,999      (Path A minimum)
-    when p_fnc_gross <=    7999 then   1500   -- R2,000 – R7,999
-    when p_fnc_gross <=   17999 then   3000   -- R8,000 – R17,999
-    when p_fnc_gross <=   28999 then   5600   -- R18,000 – R28,999
-    when p_fnc_gross <=   42999 then   6200   -- R29,000 – R42,999
-    when p_fnc_gross <=   64999 then   6800   -- R43,000 – R64,999
-    when p_fnc_gross <=   84999 then   8800   -- R65,000 – R84,999
-    when p_fnc_gross <=   99999 then  12000   -- R85,000 – R99,999
-    when p_fnc_gross <=  129999 then  22000   -- R100,000 – R129,999
-    when p_fnc_gross <=  169999 then  30000   -- R130,000 – R169,999
-    when p_fnc_gross <=  199999 then  41000   -- R170,000 – R199,999
-    when p_fnc_gross <=  249999 then  49000   -- R200,000 – R249,999
-    when p_fnc_gross <=  299999 then  63000   -- R250,000 – R299,999
-    when p_fnc_gross <=  499999 then  82000   -- R300,000 – R499,999
-    when p_fnc_gross <=  749999 then  95000   -- R500,000 – R749,999
-    when p_fnc_gross <=  999999 then 105000   -- R750,000 – R999,999
-    else null                                 -- R1,000,000+  -> manual entry required
+    when p_fnc_gross is null       then null
+    when p_fnc_gross <    2000 then    300   -- R0 – R1,999.99      (Path A minimum)
+    when p_fnc_gross <    8000 then   1500   -- R2,000 – R7,999.99
+    when p_fnc_gross <   18000 then   3000   -- R8,000 – R17,999.99
+    when p_fnc_gross <   29000 then   5600   -- R18,000 – R28,999.99
+    when p_fnc_gross <   43000 then   6200   -- R29,000 – R42,999.99
+    when p_fnc_gross <   65000 then   6800   -- R43,000 – R64,999.99
+    when p_fnc_gross <   85000 then   8800   -- R65,000 – R84,999.99
+    when p_fnc_gross <  100000 then  12000   -- R85,000 – R99,999.99
+    when p_fnc_gross <  130000 then  22000   -- R100,000 – R129,999.99
+    when p_fnc_gross <  170000 then  30000   -- R130,000 – R169,999.99
+    when p_fnc_gross <  200000 then  41000   -- R170,000 – R199,999.99
+    when p_fnc_gross <  250000 then  49000   -- R200,000 – R249,999.99
+    when p_fnc_gross <  300000 then  63000   -- R250,000 – R299,999.99
+    when p_fnc_gross <  500000 then  82000   -- R300,000 – R499,999.99
+    when p_fnc_gross <  750000 then  95000   -- R500,000 – R749,999.99
+    when p_fnc_gross < 1000000 then 105000   -- R750,000 – R999,999.99
+    else null                                -- R1,000,000+  -> manual entry required
   end::numeric(14,2);
 $$;
 
 comment on function public.calc_contractor_tier_amount(numeric) is
-  'TIERS.md Section 2: flat rand contractor commission by FNC gross band (no 40/60 split). R0-1,999 -> R300 (Path A minimum) ... R750k-999,999 -> R105,000. R1,000,000+ -> NULL, meaning manual owner entry required (set_contractor_manual_amount). NULL gross -> NULL.';
+  'TIERS.md Section 2: flat rand contractor commission by FNC gross band (no 40/60 split), using exclusive next-band floors so cent values fall in the right band. R0-1,999.99 -> R300 (Path A minimum) ... R750k-999,999.99 -> R105,000. R1,000,000+ -> NULL, meaning manual owner entry required (set_contractor_manual_amount). NULL gross -> NULL.';
 
 -- ===========================================================================
 -- 3. Grants: authenticated only; anon/PUBLIC revoked (belt-and-braces).
@@ -125,6 +129,13 @@ begin
   if public.calc_contractor_tier_amount(999999) <> 105000 then raise exception 'assert: contractor 999999'; end if;
   if public.calc_contractor_tier_amount(1000000) is not null then raise exception 'assert: contractor R1M+ must be NULL (manual)'; end if;
   if public.calc_contractor_tier_amount(null)    is not null then raise exception 'assert: contractor NULL-in'; end if;
+  -- Cent-boundary coverage (Macroscope M5): values in the top rand of a band stay in-band.
+  if public.calc_contractor_tier_amount(1999.50)   <>    300 then raise exception 'assert: contractor 1999.50 cents'; end if;
+  if public.calc_contractor_tier_amount(1999.99)   <>    300 then raise exception 'assert: contractor 1999.99 cents'; end if;
+  if public.calc_contractor_tier_amount(2000.00)   <>   1500 then raise exception 'assert: contractor 2000.00 cents'; end if;
+  if public.calc_contractor_tier_amount(999999.50)  <> 105000 then raise exception 'assert: contractor 999999.50 cents'; end if;
+  if public.calc_contractor_tier_amount(999999.99)  <> 105000 then raise exception 'assert: contractor 999999.99 cents'; end if;
+  if public.calc_contractor_tier_amount(1000000.00) is not null then raise exception 'assert: contractor 1000000.00 manual'; end if;
 
   -- (c) grants: authenticated present, anon/PUBLIC absent
   foreach fn in array grant_fns loop

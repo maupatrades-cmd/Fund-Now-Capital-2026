@@ -144,7 +144,7 @@ declare
   v_deal public.deals; v_dc public.deal_commissions; v_attr public.deal_attributions;
   v_ref text; v_gross numeric(14,2); v_is_po boolean;
   v_existing_id uuid; v_new_id uuid;
-  v_existing_gross numeric(14,2); v_existing_status public.commission_state;
+  v_existing_gross numeric(14,2); v_existing_status public.commission_state; v_existing_is_po boolean;
   b public.commission_breakdown;
   v_pct numeric(10,4); v_amt numeric(14,2);
   v_pool numeric(14,2); v_retention numeric(14,2);
@@ -172,8 +172,8 @@ begin
   -- for a disputed figure) must be able to REWRITE a still-'earned' row with the new
   -- split. The write step below decides: same gross -> true no-op; changed gross on an
   -- 'earned' row -> rewrite; changed gross on an already-billed row -> raise.
-  select id, gross_commission, status
-    into v_existing_id, v_existing_gross, v_existing_status
+  select id, gross_commission, status, is_purchase_order
+    into v_existing_id, v_existing_gross, v_existing_status, v_existing_is_po
     from public.commission_records
     where deal_id = p_deal_id and deal_funder_submission_id is null and status <> 'void'
     limit 1;
@@ -234,8 +234,12 @@ begin
 
   -- REWRITE PATH (finding #1): an existing tier row means the deal was locked before.
   if v_existing_id is not null then
-    -- Same actual gross -> a genuine idempotent no-op (e.g. the LOCK trigger re-fired).
-    if v_existing_gross is not distinct from v_gross then
+    -- Same actual gross AND same purchase-order flag -> a genuine idempotent no-op (e.g.
+    -- the LOCK trigger re-fired). is_purchase_order is a split input (PO = 40% flat vs the
+    -- gross-banded partner tiers via calculate_commission), so a corrected PO flag on the
+    -- same gross must still trigger a rewrite (Macroscope M3).
+    if v_existing_gross is not distinct from v_gross
+       and v_existing_is_po is not distinct from v_is_po then
       return jsonb_build_object('deal_id', p_deal_id, 'status', 'already_written',
         'commission_record_id', v_existing_id, 'changed', false);
     end if;
@@ -317,6 +321,7 @@ declare
   v_deal public.deals; v_ref text; v_dc public.deal_commissions; v_attr public.deal_attributions;
   v_reason text := btrim(coalesce(p_reason,'')); v_amt numeric(14,2) := round(p_amount, 2);
   v_gross numeric(14,2); v_retention numeric(14,2); v_existing_id uuid; v_new_id uuid; v_is_po boolean;
+  v_existing_status public.commission_state;
 begin
   if not public.is_owner() then raise exception 'Only the owner can set a manual contractor amount'; end if;
   if v_reason = '' then raise exception 'A typed reason is required to set a manual contractor amount'; end if;
@@ -335,6 +340,14 @@ begin
   v_gross := v_dc.actual_gross_commission;
   if v_gross is null then raise exception 'Deal % has no actual gross', v_ref; end if;
 
+  -- M2: manual entry is the documented R1,000,000+ fallback ONLY (TIERS.md R1M+). Below
+  -- R1M the flat tier is authoritative (calc_contractor_tier_amount), so refuse a manual
+  -- override there — it would bypass the tier table and defeat the tier system. If a
+  -- sub-R1M override is ever needed, that is a canonical TIERS.md change, not a runtime one.
+  if v_gross < 1000000 then
+    raise exception 'set_contractor_manual_amount is the R1,000,000+ fallback only; deal % gross is R% — the flat contractor tier applies automatically',
+      v_ref, to_char(v_gross,'FM999999999990.00'); end if;
+
   select * into v_attr from public.deal_attributions where deal_id = p_deal_id;
   if v_attr.deal_id is null or v_attr.attribution_type <> 'FNC_Contractor' then
     raise exception 'set_contractor_manual_amount only applies to FNC_Contractor deals (deal % is %)',
@@ -342,10 +355,15 @@ begin
 
   v_retention := v_gross - v_amt;
 
-  select id into v_existing_id from public.commission_records
+  select id, status into v_existing_id, v_existing_status from public.commission_records
     where deal_id = p_deal_id and deal_funder_submission_id is null and status <> 'void' limit 1;
 
   if v_existing_id is not null then
+    -- M1: never overwrite a commission that has advanced past 'earned' (tied to an invoice
+    -- or paid); the owner must void/redo through the ledger. Mirrors apply_tier_on_lock.
+    if v_existing_status <> 'earned' then
+      raise exception 'set_contractor_manual_amount: deal % commission already advanced (status %); void it before re-entering the manual amount',
+        v_ref, v_existing_status; end if;
     update public.commission_records
       set contractor_share   = v_amt,
           company_retention  = v_retention,

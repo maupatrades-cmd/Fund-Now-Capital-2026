@@ -165,6 +165,21 @@ create unique index if not exists commission_records_tier_deal_unique
   on public.commission_records (deal_id)
   where (deal_funder_submission_id is null and status <> 'void');
 
+-- 2e. Lock the ledger to DEFINER-only writes (Macroscope M4).
+--     Until now commission_records relied on the recompute BEFORE trigger to sanitise
+--     every split (it re-derived them from calculate_commission on any direct write).
+--     The tier-row guard in section 3 makes recompute skip tier rows (submission NULL),
+--     which would let a direct INSERT/UPDATE persist a FABRICATED split past the trigger
+--     (only the sums check would apply). Verified: the partner RLS policy is SELECT-only
+--     and anon is RLS-blocked, so the exposure is owner-only — but every legitimate write
+--     already flows through a SECURITY DEFINER RPC (write_commission_record,
+--     transition_commission_record, apply_tier_on_lock, set_contractor_manual_amount) and
+--     the frontend only SELECTs. So revoke direct write DML (+ TRUNCATE, which bypasses
+--     RLS) from authenticated/anon — mirroring deal_attributions/deal_commissions — so the
+--     money ledger can only be written through the audited DEFINER RPCs. SELECT is kept
+--     (owner reads + the partner read-own policy); service_role (Edge Functions) keeps full.
+revoke insert, update, delete, truncate on table public.commission_records from authenticated, anon;
+
 -- ===========================================================================
 -- 3. Guard commission_records_recompute() so it NEVER touches tier rows.
 --    This is a byte-for-byte copy of the live C2.2 body with ONE addition: an
@@ -295,7 +310,22 @@ begin
   if pg_get_functiondef('public.commission_records_recompute()'::regprocedure) not ilike '%calculate_commission%' then
     raise exception 'assert: commission_records_recompute() no longer calls calculate_commission'; end if;
 
-  raise notice 'Tier engine part 2 structural assertions passed (deal_attributions + commission_records extension + recompute guard).';
+  -- M4: commission_records is DEFINER-write-only. authenticated keeps SELECT but holds no
+  -- INSERT/UPDATE/DELETE/TRUNCATE; anon holds no write either.
+  if exists (select 1 from information_schema.role_table_grants
+      where table_schema='public' and table_name='commission_records' and grantee='authenticated'
+        and privilege_type in ('INSERT','UPDATE','DELETE','TRUNCATE')) then
+    raise exception 'assert: authenticated still holds a write grant on commission_records'; end if;
+  if not exists (select 1 from information_schema.role_table_grants
+      where table_schema='public' and table_name='commission_records' and grantee='authenticated'
+        and privilege_type='SELECT') then
+    raise exception 'assert: authenticated lost SELECT on commission_records'; end if;
+  if exists (select 1 from information_schema.role_table_grants
+      where table_schema='public' and table_name='commission_records' and grantee='anon'
+        and privilege_type in ('INSERT','UPDATE','DELETE','TRUNCATE')) then
+    raise exception 'assert: anon still holds a write grant on commission_records'; end if;
+
+  raise notice 'Tier engine part 2 structural assertions passed (deal_attributions + commission_records extension + recompute guard + M4 ledger lockdown).';
 end $$;
 
 notify pgrst, 'reload schema';
