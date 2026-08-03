@@ -76,6 +76,15 @@ export function useTermsAcceptance(role: PortalRole) {
       // of which uid the closure captured — robust across a session change.
       void qc.invalidateQueries({ queryKey: ["terms-acceptance"] });
     },
+    onError: () => {
+      // A stale version id makes accept_terms reject it as non-current (e.g. a new
+      // version was published while the modal was open, or between the two reads
+      // in queryFn). Refetch so the gate picks up the NEW current version and the
+      // user retries against it — otherwise a retry keeps resubmitting the same
+      // stale id and the user stays blocked until a remount. The modal re-renders
+      // with the new version.id, which resets its scroll gate.
+      void qc.invalidateQueries({ queryKey: ["terms-acceptance"] });
+    },
   });
 
   return {
