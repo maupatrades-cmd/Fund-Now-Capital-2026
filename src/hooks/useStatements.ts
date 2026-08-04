@@ -30,10 +30,13 @@ function useStatement<T>(rpc: string, ym: YearMonth, roleKey: string) {
   return useQuery({
     queryKey: ["statement", roleKey, uid, ym.year, ym.month],
     enabled: uid !== null,
-    // Statements change only on funded/bonus events (rare) and past months are
-    // immutable once closed, so treat the data as fresh for 5 minutes rather than
-    // refetching on every window focus.
-    staleTime: 5 * 60 * 1000,
+    // No staleTime: statement rows are private earnings, so every navigation /
+    // window-focus must re-hit the SECURITY DEFINER RPC (which re-checks the
+    // caller's identity gate). A stale cache would let a partner/contractor whose
+    // access was revoked mid-session keep seeing (and exporting) their old rows
+    // until it expired — a client cache is not an authorization boundary. Data
+    // volume is tiny and access is infrequent, so there is no perf reason to
+    // cache anyway.
     queryFn: async (): Promise<T> => {
       const { data, error } = await supabase.rpc(rpc, {
         p_year: ym.year,

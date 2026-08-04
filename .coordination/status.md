@@ -1,5 +1,13 @@
 # Agent Coordination Status
 
+## STATEMENTS — follow-up PR (Ito QA fixes, 2026-08-04)
+- PR #124 **MERGED**; migration `20260804120000_monthly_statements_rpcs.sql` **APPLIED + verified live** (3 RPCs SECURITY DEFINER, `authenticated/postgres/service_role` grants, anon absent). Branch restarted from fresh main for this follow-up.
+- **Ito QA (3rd reviewer) findings — owner-ratified dispositions:**
+  - **PRIVACY-4 (High) — FIXED:** removed the 5-minute `staleTime` from `useStatements` entirely. Statement rows are private earnings, so every navigation/focus must re-hit the DEFINER RPC identity gate; a stale cache would let a mid-session-revoked partner/contractor keep viewing/exporting old rows. Data volume is tiny → no perf reason to cache. (Supersedes Greptile's earlier `staleTime` request on this sensitive surface.)
+  - **EXPORT-4 (Minor) — FIXED:** the `ExportCsvButton` in-flight guard now releases on a later task (`GUARD_RELEASE_MS = 300`) instead of synchronously in `finally`, so a rapid double-click yields one download (the previous guard cleared before the second click event fired because `downloadCsv` is synchronous).
+  - **PRIVACY-1 (Medium) — HELD, no change:** the partner "50% split" subtitle is intentional S7C partner-facing business framing (FNC↔Doctor presentation, matches Doctor's day-one understanding), NOT a funder rate; the canonical tier math (29/30/33/25, PO 40) stays server-side in `commission_records`. Owner-ruled keep (CodeRabbit already withdrew the identical finding); replied on Ito's thread.
+- Frontend-only (2 files: `useStatements.ts`, `ExportCsvButton.tsx`). No schema change. `tsc`/`vite`/`oxlint` green.
+
 ## STATEMENTS LANE — Sprint 4 Lane 4b — Monthly Statements (2026-08-04)
 - Branch: `claude/fund-now-monthly-statements-j6igpa` (fresh main). One PR. **DO NOT merge — owner merges after Macroscope.**
 - **Real problem solved:** the money engine (`commission_records` + `bonus_records`, C2/tier-engine) was live but there was **no monthly roll-up** of it for anyone. This ships a per-month statement for all three roles: **owner** (every commission + bonus across all funders/partners/contractors, REAL names + full split), **partner/Doctor** (his own earnings, S7C 50/50 framing, fictional funder), **contractor** (his own commission + a reimbursements section). This is the **first partner/contractor-facing earnings surface** (MY-DEALS-VIEW deliberately excluded earnings).
