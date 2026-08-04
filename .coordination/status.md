@@ -1,7 +1,7 @@
 # Agent Coordination Status
 
 ## TRAINING LANE — Sprint 5 Lane 5a — Product Knowledge training platform SKELETON (2026-08-04)
-- Branch: `claude/training-platform-skeleton-at5lpn` (off latest main @ `91e75d6`). **PR OPEN after push — DO NOT merge; owner merges after Macroscope.**
+- Branch: `claude/training-platform-skeleton-at5lpn` (off latest main @ `91e75d6`). **PR #127 OPEN — DO NOT merge; owner merges after Macroscope/Greptile review.**
 - **Real problem solved:** contractors need somewhere to work through their 6 Product Knowledge modules (TRAINING.md) and track completion. This ships the platform SKELETON: module list + viewer + per-contractor progress + a home-page progress card. INFRASTRUCTURE ONLY — content is owner-authored later (all 6 modules seeded with `"Content coming soon — see TRAINING.md"` placeholder markdown, published so the flow is navigable end-to-end).
 - **Explicitly NOT built (other lanes / later sub-lanes):** assessment engine, question bank, certification (CERTIFICATION lane), badges/points/levels/leaderboard (GAMIFICATION lane), owner content-admin UI, progression tables (PROGRESSION lane). Training does NOT gate activation or lead submission (owner ruling; TRAINING.md "Progression Gates").
 - **Lane owned (this agent ONLY):** tables `training_modules` + `contractor_training_progress`; RPCs `get_training_modules_for_role` / `mark_module_started` / `mark_module_completed` / `get_contractor_training_progress`; `src/lib/training.ts`; `src/hooks/useTraining.ts`; `src/components/training/*` (TrainingMarkdown, TrainingListView, TrainingModuleView, TrainingProgressCard); `src/pages/contractor/TrainingPage.tsx` + `TrainingModulePage.tsx`; the `/contractor/training(/:moduleId)` routes.
