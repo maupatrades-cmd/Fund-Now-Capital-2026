@@ -27,16 +27,16 @@ import type {
 
 function useStatement<T>(rpc: string, ym: YearMonth, roleKey: string) {
   const uid = useSession()?.user?.id ?? null;
-  return useQuery({
+  const q = useQuery({
     queryKey: ["statement", roleKey, uid, ym.year, ym.month],
     enabled: uid !== null,
-    // No staleTime: statement rows are private earnings, so every navigation /
-    // window-focus must re-hit the SECURITY DEFINER RPC (which re-checks the
-    // caller's identity gate). A stale cache would let a partner/contractor whose
-    // access was revoked mid-session keep seeing (and exporting) their old rows
-    // until it expired — a client cache is not an authorization boundary. Data
-    // volume is tiny and access is infrequent, so there is no perf reason to
-    // cache anyway.
+    // staleTime: 0 — explicit, because the app-wide default is 30s
+    // (src/lib/queryClient.ts). Statement rows are private earnings, so every
+    // mount/navigation must re-hit the SECURITY DEFINER RPC, which re-runs the
+    // caller's identity gate. A cached response would let a partner/contractor
+    // whose access was revoked mid-session keep seeing their old rows; a client
+    // cache is not an authorization boundary, and data volume here is tiny.
+    staleTime: 0,
     queryFn: async (): Promise<T> => {
       const { data, error } = await supabase.rpc(rpc, {
         p_year: ym.year,
@@ -46,6 +46,23 @@ function useStatement<T>(rpc: string, ym: YearMonth, roleKey: string) {
       return data as T;
     },
   });
+
+  // React Query keeps the last successful data when a BACKGROUND refetch fails
+  // (status stays 'success', so `isError` is false) — which on this surface would
+  // leave stale private rows rendered and CSV-exportable with no error/retry
+  // shown. Treat ANY fetch failure — initial load or a later refetch (e.g. the
+  // RPC gate now rejecting a revoked caller) — as a hard error: drop the data so
+  // the table and export clear, and surface the retry state. `failureReason` is
+  // set on a failed refetch even while status stays 'success', and resets on the
+  // next success.
+  const failed = q.isError || q.failureReason != null;
+  return {
+    data: failed ? undefined : q.data,
+    isLoading: q.isLoading || uid === null,
+    isError: failed,
+    error: (q.error ?? q.failureReason ?? null) as Error | null,
+    refetch: q.refetch,
+  };
 }
 
 export function useOwnerStatement(ym: YearMonth) {
