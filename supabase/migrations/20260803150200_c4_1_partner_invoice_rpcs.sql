@@ -569,8 +569,8 @@ begin
     v_inv := (v_res->>'invoice_id')::uuid; v_num := v_res->>'invoice_number';
     if (v_res->>'count')::int <> 2 then raise exception 'C4.3 assert: expected 2 line items, got %', v_res->>'count'; end if;
     select total_amount into v_total from public.partner_invoices where id=v_inv;
-    -- 18000 (30% of 60k pool on R100k gross) + 9000 (30% of 30k pool on R50k gross) = 27000
-    if v_total <> 27000.00 then raise exception 'C4.3 assert: total % (exp 27000)', v_total; end if;
+    -- 18000 (30% of 60k pool on R100k gross) + 8700 (29% of 30k pool on R50k gross, R0–80k band) = 26700
+    if v_total <> 26700.00 then raise exception 'C4.3 assert: total % (exp 26700)', v_total; end if;
 
     -- Regenerate for the same window → nothing eligible (already invoiced).
     v_res := public.partner_generate_invoice(current_date - 60, current_date);
@@ -579,7 +579,7 @@ begin
     -- Remove one line → total recomputed.
     select id into v_li from public.partner_invoice_line_items where invoice_id=v_inv order by amount desc limit 1;
     v_res := public.partner_remove_line_item(v_li);
-    if (v_res->>'total_amount')::numeric <> 9000.00 then raise exception 'C4.3 assert: remove recompute % (exp 9000)', v_res->>'total_amount'; end if;
+    if (v_res->>'total_amount')::numeric <> 8700.00 then raise exception 'C4.3 assert: remove recompute % (exp 8700)', v_res->>'total_amount'; end if;
 
     -- Enrichment read as partner → funder name is the FICTIONAL display name.
     select funder_name into v_state from public.list_partner_invoice_line_items(v_inv) limit 1;
