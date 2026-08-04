@@ -3,6 +3,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import AuthPage from "@/pages/AuthPage";
 import PublicApplyPage from "@/pages/PublicApplyPage";
+import TermsViewPage from "@/pages/TermsViewPage";
 import OwnerGate from "@/components/layout/OwnerGate";
 import PartnerGate from "@/pages/PartnerGate";
 import PartnerHomePage from "@/pages/PartnerHomePage";
@@ -11,6 +12,7 @@ import PartnerMyLeadsPage from "@/pages/partner/MyLeadsPage";
 import PartnerDealsPage from "@/pages/partner/PartnerDealsPage";
 import PartnerInvoicesPage from "@/pages/partner/PartnerInvoicesPage";
 import PartnerInvoiceDetailPage from "@/pages/partner/PartnerInvoiceDetailPage";
+import PartnerNotificationSettingsPage from "@/pages/partner/NotificationSettingsPage";
 import ContractorGate from "@/pages/ContractorGate";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
@@ -63,15 +65,18 @@ function RoleLanding() {
 function AppRoutes() {
   const session = useSession();
 
-  // The public /apply page has no account and must not wait on the session read
-  // — render it immediately (a cold applicant lands here on a fresh load, so
-  // reading window.location at mount is correct). Every other route stays behind
-  // the brief session-loading state below.
-  const onPublicApply =
-    typeof window !== "undefined" && window.location.pathname.replace(/\/+$/, "") === "/apply";
+  // The public /apply and /terms/current pages have no account and must not wait
+  // on the session read — render them immediately (a cold applicant or a website
+  // footer visitor lands here on a fresh load, so reading window.location at mount
+  // is correct). Every other route stays behind the brief session-loading state.
+  const publicPath =
+    typeof window !== "undefined"
+      ? window.location.pathname.replace(/\/+$/, "")
+      : "";
+  const onPublicRoute = publicPath === "/apply" || publicPath === "/terms/current";
 
   // Brief loading state while we read the persisted session.
-  if (session === undefined && !onPublicApply) {
+  if (session === undefined && !onPublicRoute) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-muted-foreground">
         Loading…
@@ -94,6 +99,12 @@ function AppRoutes() {
       <Route path="/apply" element={<PublicApplyPage />} />
 
       {/*
+        Public Terms & Conditions viewer (Sprint 4, Lane 4d). No account needed —
+        the FNC website footer links here. RLS exposes the current version to anon.
+      */}
+      <Route path="/terms/current" element={<TermsViewPage />} />
+
+      {/*
         Role portals — the route entries live here because App.tsx owns
         routing; the gate components are each lane's own file.
 
@@ -112,6 +123,7 @@ function AppRoutes() {
         <Route path="deals" element={<PartnerDealsPage />} />
         <Route path="invoices" element={<PartnerInvoicesPage />} />
         <Route path="invoices/:invoiceId" element={<PartnerInvoiceDetailPage />} />
+        <Route path="settings/notifications" element={<PartnerNotificationSettingsPage />} />
         <Route path="*" element={<Navigate to="/partner" replace />} />
       </Route>
       <Route path="/contractor/*" element={<ContractorGate />} />

@@ -168,7 +168,7 @@ function InvoiceReviewModal({
   invoice: OwnerPartnerInvoiceRow;
   onClose: () => void;
 }) {
-  const { data: items, isLoading } = usePartnerInvoiceLineItems(invoice.id);
+  const { data: items, isLoading, isError: itemsError } = usePartnerInvoiceLineItems(invoice.id);
   // The list row was captured when the modal opened, so its pdf_storage_path can
   // be stale (the PDF renders async after submit). Read the LIVE row (which polls
   // while the PDF is pending) so the Download button appears without a reload.
@@ -183,8 +183,16 @@ function InvoiceReviewModal({
   const markPaid = useMarkPartnerInvoicePaid();
   const busyRef = useRef(false);
 
+  // Never let the owner take a financial action while the line items are silently
+  // unavailable (Macroscope #1) — approve/pay require a clean line-item load.
+  const canFinancialAct = !itemsError && !isLoading;
+
   const runApprove = async () => {
     if (busyRef.current) return; // FIX #4 synchronous guard
+    if (!canFinancialAct) {
+      toast.error("Load the invoice's line items before approving.");
+      return;
+    }
     busyRef.current = true;
     try {
       await approve.mutateAsync({ invoiceId: invoice.id });
@@ -217,6 +225,10 @@ function InvoiceReviewModal({
 
   const runPay = async () => {
     if (busyRef.current) return;
+    if (!canFinancialAct) {
+      toast.error("Load the invoice's line items before marking it paid.");
+      return;
+    }
     if (!reference.trim()) {
       toast.error("An EFT payment reference is required.");
       return;
@@ -249,6 +261,11 @@ function InvoiceReviewModal({
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading line items…</p>
+      ) : itemsError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          Couldn't load this invoice's line items. Approve and Mark-paid are disabled until they load
+          — reload the page to try again.
+        </div>
       ) : (
         <LineItemsTable invoiceId={invoice.id} items={items ?? []} />
       )}
@@ -298,7 +315,7 @@ function InvoiceReviewModal({
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
         {invoice.state === "submitted" && action === null && (
           <>
-            <button type="button" className={successBtn} onClick={() => void runApprove()} disabled={pending}>
+            <button type="button" className={successBtn} onClick={() => void runApprove()} disabled={pending || !canFinancialAct}>
               <CheckCircle2 className="h-4 w-4" /> {approve.isPending ? "Approving…" : "Approve"}
             </button>
             <button type="button" className={dangerBtn} onClick={() => setAction("reject")} disabled={pending}>
@@ -317,7 +334,7 @@ function InvoiceReviewModal({
           </>
         )}
         {invoice.state === "approved" && action === null && (
-          <button type="button" className={primaryBtn} onClick={() => setAction("pay")} disabled={pending}>
+          <button type="button" className={primaryBtn} onClick={() => setAction("pay")} disabled={pending || !canFinancialAct}>
             <Banknote className="h-4 w-4" /> Mark paid
           </button>
         )}

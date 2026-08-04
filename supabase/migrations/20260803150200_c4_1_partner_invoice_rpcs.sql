@@ -205,10 +205,15 @@ end $function$;
 -- ===========================================================================
 create or replace function public.partner_submit_invoice(p_invoice_id uuid)
 returns jsonb language plpgsql security definer set search_path = '' as $function$
-declare v_partner uuid; v_inv public.partner_invoices; v_partner_name text; v_id uuid;
+declare v_partner uuid; v_active boolean; v_inv public.partner_invoices; v_partner_name text; v_id uuid;
 begin
   v_partner := public.current_partner_id();
   if v_partner is null then raise exception 'Only a referral partner can submit invoices'; end if;
+  -- Deactivated-account guard (Macroscope #3): a banned partner with a still-valid
+  -- JWT must not act. Mirrors partner_generate_invoice; kept explicit per-RPC rather
+  -- than folded into current_partner_id() (that helper backs every partner RLS path).
+  select is_active into v_active from public.profiles where id = (select auth.uid());
+  if not coalesce(v_active, false) then raise exception 'Your account is inactive'; end if;
   perform pg_advisory_xact_lock(hashtext('partner_invoice_state:' || p_invoice_id::text));
 
   select * into v_inv from public.partner_invoices where id = p_invoice_id;
@@ -249,19 +254,27 @@ end $function$;
 -- ===========================================================================
 create or replace function public.partner_remove_line_item(p_line_item_id uuid)
 returns jsonb language plpgsql security definer set search_path = '' as $function$
-declare v_partner uuid; v_inv_id uuid; v_state public.partner_invoice_state; v_total numeric(14,2); v_id uuid;
+declare v_partner uuid; v_active boolean; v_inv_id uuid; v_state public.partner_invoice_state; v_total numeric(14,2); v_id uuid;
 begin
   v_partner := public.current_partner_id();
   if v_partner is null then raise exception 'Only a referral partner can edit invoices'; end if;
+  -- Deactivated-account guard (Macroscope #3), mirrors partner_generate_invoice.
+  select is_active into v_active from public.profiles where id = (select auth.uid());
+  if not coalesce(v_active, false) then raise exception 'Your account is inactive'; end if;
 
-  select li.invoice_id, pi.state into v_inv_id, v_state
+  -- Resolve (and ownership-check) the owning invoice WITHOUT trusting its state yet.
+  select li.invoice_id into v_inv_id
     from public.partner_invoice_line_items li
     join public.partner_invoices pi on pi.id = li.invoice_id
    where li.id = p_line_item_id and pi.referral_partner_id = v_partner;
   if v_inv_id is null then raise exception 'Line item % not found for you', p_line_item_id; end if;
-  if v_state <> 'draft' then raise exception 'Only a draft invoice can be edited (invoice is %)', v_state; end if;
 
+  -- Lock FIRST, then re-read state UNDER the lock (Macroscope #2): a concurrent
+  -- partner_submit_invoice holds this same lock, so once we own it the draft check
+  -- cannot be raced into deleting a line off an already-submitted invoice.
   perform pg_advisory_xact_lock(hashtext('partner_invoice_state:' || v_inv_id::text));
+  select state into v_state from public.partner_invoices where id = v_inv_id;
+  if v_state <> 'draft' then raise exception 'Only a draft invoice can be edited (invoice is %)', v_state; end if;
 
   delete from public.partner_invoice_line_items where id = p_line_item_id returning id into v_id;
   if v_id is null then raise exception 'Line item % was not removed (no row deleted)', p_line_item_id; end if;
@@ -414,11 +427,13 @@ returns table (
   line_item_id uuid, deal_id uuid, deal_reference text,
   client_business_name text, funder_name text, amount numeric, added_at timestamptz
 ) language plpgsql stable security definer set search_path = '' as $function$
-declare v_partner uuid;
+declare v_partner uuid; v_active boolean;
 begin
   if not public.is_owner() then
     v_partner := public.current_partner_id();
-    if v_partner is null or not exists (
+    -- Deactivated-account guard (Macroscope #3): a banned partner cannot read either.
+    select is_active into v_active from public.profiles where id = (select auth.uid());
+    if v_partner is null or not coalesce(v_active, false) or not exists (
       select 1 from public.partner_invoices pi
        where pi.id = p_invoice_id and pi.referral_partner_id = v_partner
     ) then
@@ -433,7 +448,11 @@ begin
            li.amount, li.added_at
       from public.partner_invoice_line_items li
       join public.commission_records cr        on cr.id = li.commission_record_id
-      join public.deal_funder_submissions dfs  on dfs.id = cr.deal_funder_submission_id
+      -- LEFT: commission_records.deal_funder_submission_id is nullable (TIER-ENGINE
+      -- tier rows carry no submission), so an INNER join would silently drop a
+      -- partner's tier-attributed line item (CLAUDE.md nullable-FK !left rule).
+      -- A null submission simply yields a null funder name in the row.
+      left join public.deal_funder_submissions dfs  on dfs.id = cr.deal_funder_submission_id
       join public.deals d                      on d.id = li.deal_id
       left join public.clients c               on c.id = d.client_id
      where li.invoice_id = p_invoice_id

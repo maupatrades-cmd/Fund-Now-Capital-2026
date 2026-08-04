@@ -17,12 +17,17 @@ import {
 export default function PartnerInvoiceDetailPage() {
   const { invoiceId } = useParams();
   const { data: invoice, isLoading, isError, error } = usePartnerInvoice(invoiceId);
-  const { data: items } = usePartnerInvoiceLineItems(invoiceId);
+  const { data: items, isError: itemsError } = usePartnerInvoiceLineItems(invoiceId);
   const submit = useSubmitPartnerInvoice();
   const submittingRef = useRef(false);
 
   const onSubmit = async () => {
     if (!invoice || submittingRef.current) return; // synchronous double-submit guard (FIX #4)
+    // Don't confuse a load failure with an empty invoice (Macroscope #1).
+    if (itemsError) {
+      toast.error("Couldn't load the line items — reload the page before submitting.");
+      return;
+    }
     if ((items?.length ?? 0) === 0) {
       toast.error("Add at least one commission before submitting.");
       return;
@@ -112,11 +117,17 @@ export default function PartnerInvoiceDetailPage() {
                   <span className="text-xs text-muted-foreground">Remove any you don't want to bill yet</span>
                 )}
               </div>
-              <LineItemsTable
-                invoiceId={invoice.id}
-                items={items ?? []}
-                editable={invoice.state === "draft"}
-              />
+              {itemsError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                  Couldn't load the line items on this invoice. Reload the page to try again.
+                </div>
+              ) : (
+                <LineItemsTable
+                  invoiceId={invoice.id}
+                  items={items ?? []}
+                  editable={invoice.state === "draft"}
+                />
+              )}
             </section>
 
             {/* Draft → submit */}
@@ -125,7 +136,7 @@ export default function PartnerInvoiceDetailPage() {
                 <button
                   type="button"
                   onClick={() => void onSubmit()}
-                  disabled={submit.isPending || (items?.length ?? 0) === 0}
+                  disabled={submit.isPending || (!itemsError && (items?.length ?? 0) === 0)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60"
                 >
                   <Send className="h-4 w-4" />
