@@ -224,7 +224,10 @@ export function toCsv<T>(rows: T[], columns: CsvColumn<T>[]): string {
 }
 
 export function downloadCsv<T>(filename: string, rows: T[], columns: CsvColumn<T>[]): void {
-  const blob = new Blob([toCsv(rows, columns)], { type: "text/csv;charset=utf-8;" });
+  // Leading UTF-8 BOM (\uFEFF) so Excel on Windows reads the file as UTF-8 rather
+  // than the system default (Windows-1252) — SA business/funder names with
+  // non-ASCII characters ("O'Brien Trading", "Naïve Concepts") otherwise garble.
+  const blob = new Blob(["\uFEFF" + toCsv(rows, columns)], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -232,7 +235,9 @@ export function downloadCsv<T>(filename: string, rows: T[], columns: CsvColumn<T
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Defer revocation to the next tick — revoking synchronously in the same task
+  // as a.click() can cancel the blob download before the browser starts it.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 // A stable filename slug for a role's statement in a given month.

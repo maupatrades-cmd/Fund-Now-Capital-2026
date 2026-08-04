@@ -22,7 +22,14 @@
 -- an unauthorised caller + read-only (no writes, so no advisory lock needed).
 --
 -- Money windowing mirrors /reports: a row belongs to a month by
--- coalesce(earned_at, created_at); void rows are always excluded.
+-- coalesce(earned_at, created_at); void rows are always excluded. The window is
+-- anchored to the **business timezone (Africa/Johannesburg)**, not the session
+-- timezone: `earned_at`/`created_at` are timestamptz and the month bounds are
+-- dates, so a naive comparison would bucket rows by the session's UTC calendar
+-- day — putting an early-morning SAST funding (e.g. 01:00 on the 1st = 23:00 UTC
+-- on the last of the prior month) into the wrong month's statement. We convert
+-- each timestamp to SAST wall time before slicing to a date, and return
+-- occurred_at as SAST wall time so the displayed date matches the window month.
 
 -- ============================================================================
 -- OWNER — all commissions + bonuses across every funder / partner / contractor,
@@ -74,7 +81,7 @@ begin
       0::numeric        as bonus_amount,
       cr.gross_commission as amount,
       cr.status::text   as state,
-      coalesce(cr.earned_at, cr.created_at) as occurred_at
+      (coalesce(cr.earned_at, cr.created_at) at time zone 'Africa/Johannesburg') as occurred_at
     from public.commission_records cr
     left join public.deals d on d.id = cr.deal_id
     left join public.clients cl on cl.id = d.client_id
@@ -82,8 +89,8 @@ begin
     left join public.referral_partners rp on rp.id = cr.referral_partner_id
     left join public.profiles pr on pr.id = cr.contractor_id
     where cr.status <> 'void'
-      and coalesce(cr.earned_at, cr.created_at) >= v_start
-      and coalesce(cr.earned_at, cr.created_at) <  v_end
+      and (coalesce(cr.earned_at, cr.created_at) at time zone 'Africa/Johannesburg')::date >= v_start
+      and (coalesce(cr.earned_at, cr.created_at) at time zone 'Africa/Johannesburg')::date <  v_end
     union all
     -- discretionary owner bonuses (partner-attributed)
     select
@@ -104,15 +111,15 @@ begin
       br.bonus_amount,
       br.bonus_amount   as amount,
       br.state::text    as state,
-      coalesce(br.earned_at, br.created_at) as occurred_at
+      (coalesce(br.earned_at, br.created_at) at time zone 'Africa/Johannesburg') as occurred_at
     from public.bonus_records br
     left join public.deals d on d.id = br.deal_id
     left join public.clients cl on cl.id = d.client_id
     left join public.deal_funder_submissions dfs on dfs.id = br.deal_funder_submission_id
     left join public.referral_partners rp on rp.id = br.referral_partner_id
     where br.state <> 'void'
-      and coalesce(br.earned_at, br.created_at) >= v_start
-      and coalesce(br.earned_at, br.created_at) <  v_end
+      and (coalesce(br.earned_at, br.created_at) at time zone 'Africa/Johannesburg')::date >= v_start
+      and (coalesce(br.earned_at, br.created_at) at time zone 'Africa/Johannesburg')::date <  v_end
   )
   select
     coalesce(jsonb_agg(to_jsonb(i.*) order by i.occurred_at desc, i.id), '[]'::jsonb),
@@ -185,15 +192,15 @@ begin
       public.funder_display_name(coalesce(dfs.funder_id, d.awarded_funder_id), auth.uid()) as funder_name,
       cr.partner_share  as amount,
       cr.status::text   as state,
-      coalesce(cr.earned_at, cr.created_at) as occurred_at
+      (coalesce(cr.earned_at, cr.created_at) at time zone 'Africa/Johannesburg') as occurred_at
     from public.commission_records cr
     left join public.deals d on d.id = cr.deal_id
     left join public.clients cl on cl.id = d.client_id
     left join public.deal_funder_submissions dfs on dfs.id = cr.deal_funder_submission_id
     where cr.referral_partner_id = v_partner
       and cr.status <> 'void'
-      and coalesce(cr.earned_at, cr.created_at) >= v_start
-      and coalesce(cr.earned_at, cr.created_at) <  v_end
+      and (coalesce(cr.earned_at, cr.created_at) at time zone 'Africa/Johannesburg')::date >= v_start
+      and (coalesce(cr.earned_at, cr.created_at) at time zone 'Africa/Johannesburg')::date <  v_end
     union all
     -- discretionary bonus: the bonus amount is his to receive
     select
@@ -204,15 +211,15 @@ begin
       public.funder_display_name(coalesce(dfs.funder_id, d.awarded_funder_id), auth.uid()) as funder_name,
       br.bonus_amount   as amount,
       br.state::text    as state,
-      coalesce(br.earned_at, br.created_at) as occurred_at
+      (coalesce(br.earned_at, br.created_at) at time zone 'Africa/Johannesburg') as occurred_at
     from public.bonus_records br
     left join public.deals d on d.id = br.deal_id
     left join public.clients cl on cl.id = d.client_id
     left join public.deal_funder_submissions dfs on dfs.id = br.deal_funder_submission_id
     where br.referral_partner_id = v_partner
       and br.state <> 'void'
-      and coalesce(br.earned_at, br.created_at) >= v_start
-      and coalesce(br.earned_at, br.created_at) <  v_end
+      and (coalesce(br.earned_at, br.created_at) at time zone 'Africa/Johannesburg')::date >= v_start
+      and (coalesce(br.earned_at, br.created_at) at time zone 'Africa/Johannesburg')::date <  v_end
   )
   select
     coalesce(jsonb_agg(to_jsonb(i.*) order by i.occurred_at desc, i.id), '[]'::jsonb),
@@ -293,15 +300,15 @@ begin
       public.funder_display_name(coalesce(dfs.funder_id, d.awarded_funder_id), auth.uid()) as funder_name,
       cr.contractor_share as amount,
       cr.status::text   as state,
-      coalesce(cr.earned_at, cr.created_at) as occurred_at
+      (coalesce(cr.earned_at, cr.created_at) at time zone 'Africa/Johannesburg') as occurred_at
     from public.commission_records cr
     left join public.deals d on d.id = cr.deal_id
     left join public.clients cl on cl.id = d.client_id
     left join public.deal_funder_submissions dfs on dfs.id = cr.deal_funder_submission_id
     where cr.contractor_id = v_uid
       and cr.status <> 'void'
-      and coalesce(cr.earned_at, cr.created_at) >= v_start
-      and coalesce(cr.earned_at, cr.created_at) <  v_end
+      and (coalesce(cr.earned_at, cr.created_at) at time zone 'Africa/Johannesburg')::date >= v_start
+      and (coalesce(cr.earned_at, cr.created_at) at time zone 'Africa/Johannesburg')::date <  v_end
   )
   select
     coalesce(jsonb_agg(to_jsonb(i.*) order by i.occurred_at desc, i.id), '[]'::jsonb),

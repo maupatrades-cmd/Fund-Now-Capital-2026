@@ -30,6 +30,10 @@ function useStatement<T>(rpc: string, ym: YearMonth, roleKey: string) {
   return useQuery({
     queryKey: ["statement", roleKey, uid, ym.year, ym.month],
     enabled: uid !== null,
+    // Statements change only on funded/bonus events (rare) and past months are
+    // immutable once closed, so treat the data as fresh for 5 minutes rather than
+    // refetching on every window focus.
+    staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<T> => {
       const { data, error } = await supabase.rpc(rpc, {
         p_year: ym.year,

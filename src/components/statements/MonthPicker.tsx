@@ -22,6 +22,13 @@ export function MonthPicker({
   const years = yearOptions();
   const nextDisabled = isFutureMonth(addMonth(value, 1));
 
+  // The selects can jump to any month/year directly, so guard them the same way
+  // the Next arrow is guarded — never emit a future period (no statement exists
+  // for a month that hasn't started).
+  const changeMonth = (next: YearMonth) => {
+    if (!isFutureMonth(next)) onChange(next);
+  };
+
   return (
     <div className="flex items-center gap-1.5">
       <button
@@ -36,7 +43,7 @@ export function MonthPicker({
       <select
         aria-label="Month"
         value={value.month}
-        onChange={(e) => onChange({ ...value, month: Number(e.target.value) })}
+        onChange={(e) => changeMonth({ ...value, month: Number(e.target.value) })}
         className="rounded-lg border border-border bg-white px-2.5 py-2 text-sm font-medium text-brand-navy"
       >
         {MONTH_NAMES.map((name, i) => (
@@ -49,7 +56,7 @@ export function MonthPicker({
       <select
         aria-label="Year"
         value={value.year}
-        onChange={(e) => onChange({ ...value, year: Number(e.target.value) })}
+        onChange={(e) => changeMonth({ ...value, year: Number(e.target.value) })}
         className="rounded-lg border border-border bg-white px-2.5 py-2 text-sm font-medium text-brand-navy"
       >
         {/* Guard against a value.year that predates the option list (e.g. an old
