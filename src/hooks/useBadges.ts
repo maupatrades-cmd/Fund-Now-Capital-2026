@@ -17,7 +17,13 @@ export function useMyBadges() {
   return useQuery({
     queryKey: ["my-badges", uid],
     enabled: !!uid,
-    staleTime: 60_000,
+    // staleTime 0: a badge is earned by a server-side trigger (on lead submit /
+    // commission settle) and announced via a BADGE_EARNED notification, so the
+    // card must not serve stale "no badges yet" data. 0 means React Query
+    // refetches on mount — navigating back to the home/collection after the
+    // triggering action shows the new badge immediately, instead of lagging the
+    // notification by up to a minute (Greptile P1).
+    staleTime: 0,
     queryFn: async (): Promise<MyBadge[]> => {
       const { data, error } = await supabase.rpc("get_my_badges");
       if (error) throw error;
@@ -32,7 +38,9 @@ export function useMyBadges() {
 export function recentEarned(badges: MyBadge[] | undefined, limit = 3): MyBadge[] {
   return (badges ?? [])
     .filter((b) => b.earned && b.earned_at)
-    .sort((a, b) => (b.earned_at ?? "").localeCompare(a.earned_at ?? ""))
+    // Numeric timestamp compare (not localeCompare, which is locale-collation
+    // sensitive) — ISO 8601 strings sort correctly by epoch millis (Greptile P2).
+    .sort((a, b) => new Date(b.earned_at!).getTime() - new Date(a.earned_at!).getTime())
     .slice(0, limit);
 }
 
