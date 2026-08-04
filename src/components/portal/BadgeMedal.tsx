@@ -50,7 +50,11 @@ export function BadgeMedal({
           />
         )
       ) : (
-        <span className="absolute -bottom-0.5 -right-0.5 grid h-5 w-5 place-items-center rounded-full bg-white ring-1 ring-slate-200">
+        <span
+          role="img"
+          aria-label="Locked badge"
+          className="absolute -bottom-0.5 -right-0.5 grid h-5 w-5 place-items-center rounded-full bg-white ring-1 ring-slate-200"
+        >
           <Lock className="h-3 w-3 text-slate-400" aria-hidden="true" />
         </span>
       )}

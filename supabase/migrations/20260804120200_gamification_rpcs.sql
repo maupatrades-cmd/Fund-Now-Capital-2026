@@ -242,9 +242,15 @@ begin
     jsonb_build_object('deal_id', new.deal_id, 'commission_record_id', new.id));
 
   -- Cumulative realised (settled) own-share, taken AFTER the lock so a
-  -- later-committing concurrent settlement sees the full committed total.
+  -- later-committing concurrent settlement sees the full committed total. The
+  -- share column is keyed on the RESOLVED earner branch (new.contractor_id), NOT
+  -- each aggregated row's cr.contractor_id (CodeRabbit ①, ported from PR #126 /
+  -- live migration 20260804184731): nothing enforces contractor/partner
+  -- mutual-exclusivity on a commission row, so a row carrying both a
+  -- contractor_id and the partner's referral_partner_id must never leak
+  -- contractor_share into a partner's total.
   select coalesce(sum(
-           case when cr.contractor_id is not null then cr.contractor_share
+           case when new.contractor_id is not null then cr.contractor_share
                 else cr.partner_share end), 0)
     into v_total
     from public.commission_records cr
@@ -287,5 +293,21 @@ begin
     select 1 from information_schema.role_routine_grants
     where routine_schema = 'public' and routine_name = 'get_my_badges' and grantee = 'authenticated'
   ), 'get_my_badges must be executable by authenticated';
+
+  -- CodeRabbit Nitpick A + ① (ported from PR #126): the per-earner advisory lock
+  -- must PRECEDE the settled-total aggregate, and the share CASE must be keyed on
+  -- the resolved earner branch (new.contractor_id).
+  declare
+    v_def  text := pg_get_functiondef('public.award_commission_badges()'::regprocedure);
+    v_lock int  := position('pg_advisory_xact_lock' in v_def);
+    v_agg  int  := position('coalesce(sum(' in v_def);
+  begin
+    assert v_lock > 0, 'award_commission_badges missing advisory lock';
+    assert v_agg  > 0, 'award_commission_badges settled-total aggregate not found';
+    assert v_lock < v_agg, 'advisory lock must precede the settled-total aggregate';
+    assert position('case when new.contractor_id is not null then cr.contractor_share' in v_def) > 0,
+      'aggregate share CASE must be keyed on new.contractor_id (fix ① not applied)';
+  end;
+
   raise notice 'gamification_rpcs structural assertions passed';
 end $$;

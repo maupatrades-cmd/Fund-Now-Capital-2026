@@ -53,11 +53,17 @@ drop policy if exists badges_read_all on public.badges;
 create policy badges_read_all on public.badges
   for select to authenticated using (true);
 
--- Catalogue is read-only for the API roles; owner curates via service_role/SQL
--- (no runtime badge-authoring surface this lane). Revoke the default write
--- grants (belt-and-braces; RLS already blocks writes without a write policy).
+-- Owner-full write (CLAUDE.md rule 3 "Owner: full" on every table; CodeRabbit
+-- Nitpick B, ported from PR #126 / live migration 20260804184731). DML is granted
+-- to authenticated but RLS confines actual writes to the owner via is_owner();
+-- badges_read_all (permissive) still lets every authenticated user read the
+-- catalogue. anon stays fully revoked (no anon policy → no access).
+drop policy if exists badges_owner_all on public.badges;
+create policy badges_owner_all on public.badges
+  for all to authenticated using (public.is_owner()) with check (public.is_owner());
+
 revoke all on table public.badges from anon, authenticated;
-grant select on table public.badges to authenticated;
+grant select, insert, update, delete on table public.badges to authenticated;
 
 -- ----------------------------------------------------------------------------
 -- contractor_milestones — a contractor's earned badges.
@@ -160,5 +166,11 @@ begin
     where table_schema = 'public' and table_name in ('contractor_milestones','partner_milestones')
       and grantee = 'authenticated' and privilege_type in ('INSERT','UPDATE','DELETE','TRUNCATE')
   ), 'milestone tables must not grant write to authenticated';
+  -- Owner-full write policy present (CodeRabbit Nitpick B); writes are RLS-gated
+  -- to the owner, so the DML grant to authenticated is safe.
+  assert exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'badges' and policyname = 'badges_owner_all'
+  ), 'badges_owner_all owner-write policy missing';
   raise notice 'gamification_badges structural assertions passed';
 end $$;
