@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, LogOut, PlusCircle, ListChecks, Briefcase, ReceiptText, Bell, TrendingUp } from "lucide-react";
+import { Home, LogOut, PlusCircle, ListChecks, Briefcase, FileText, ReceiptText, Bell, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
@@ -39,6 +39,9 @@ function navItems(portal: PortalKind) {
     ...(portal === "contractor"
       ? [{ to: `${base}/progression`, label: "My Progress", icon: TrendingUp, end: false }]
       : []),
+    // Statements is a monthly earnings roll-up for both portals (partner sees his
+    // 50/50 split; contractor sees commission + reimbursements). Own take only.
+    { to: `${base}/statements`, label: "Statements", icon: FileText, end: false },
     // Invoicing is a partner-only surface (C4 Doctor invoicing). Contractor
     // invoicing is a separate, later concern — no invoices tab for contractors.
     ...(portal === "partner"

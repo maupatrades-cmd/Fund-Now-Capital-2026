@@ -13,6 +13,7 @@ import PartnerDealsPage from "@/pages/partner/PartnerDealsPage";
 import PartnerInvoicesPage from "@/pages/partner/PartnerInvoicesPage";
 import PartnerInvoiceDetailPage from "@/pages/partner/PartnerInvoiceDetailPage";
 import PartnerNotificationSettingsPage from "@/pages/partner/NotificationSettingsPage";
+import PartnerStatementsPage from "@/pages/partner/StatementsPage";
 import ContractorGate from "@/pages/ContractorGate";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
@@ -34,6 +35,7 @@ import PartnerEarningsPage from "@/pages/PartnerEarningsPage";
 import PartnerApprovalsPage from "@/pages/PartnerApprovalsPage";
 import ActivityPage from "@/pages/ActivityPage";
 import ReportsPage from "@/pages/ReportsPage";
+import StatementsPage from "@/pages/StatementsPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import NotificationPreferencesPage from "@/pages/NotificationPreferencesPage";
 import IndustriesPage from "@/pages/IndustriesPage";
@@ -121,6 +123,7 @@ function AppRoutes() {
         <Route path="submit-lead" element={<PartnerSubmitLeadPage />} />
         <Route path="leads" element={<PartnerMyLeadsPage />} />
         <Route path="deals" element={<PartnerDealsPage />} />
+        <Route path="statements" element={<PartnerStatementsPage />} />
         <Route path="invoices" element={<PartnerInvoicesPage />} />
         <Route path="invoices/:invoiceId" element={<PartnerInvoiceDetailPage />} />
         <Route path="settings/notifications" element={<PartnerNotificationSettingsPage />} />
@@ -162,6 +165,7 @@ function AppRoutes() {
         <Route path="/calculator" element={<CalculatorPage />} />
         <Route path="/activity" element={<ActivityPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/statements" element={<StatementsPage />} />
         <Route path="/team" element={<TeamPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings/notifications" element={<NotificationPreferencesPage />} />
