@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { FileText, ListChecks, PlusCircle } from "lucide-react";
 import PortalShell from "@/components/portal/PortalShell";
+import ProgressionCard from "@/components/portal/ProgressionCard";
 
 // Contractor portal home. Branded PortalShell chrome (shared with the partner
 // portal) with the "Submit Lead" / "My Leads" nav, a welcome, and a top-level
@@ -8,8 +9,10 @@ import PortalShell from "@/components/portal/PortalShell";
 // from here in later PRs.
 //
 // NOTE (coordination): the BADGES lane also adds a badge-display CARD to this
-// page. Both lanes edit this file from the same main base — keep additions in
-// the content stack below so the two merges stay independent.
+// page, and the TRAINING lane a module-progress CARD. Every lane edits this file
+// from the same main base — keep additions in the content stack below so the
+// merges stay independent (whoever lands last rebases around what's already here).
+// This lane (PROGRESSION) contributes the <ProgressionCard /> below.
 export default function ContractorHomePage() {
   // Note: the first-login T&C gate lives in ContractorGate (PortalTermsGate wraps
   // the whole /contractor subtree), so no acceptance check is needed on this page.
@@ -40,6 +43,9 @@ export default function ContractorHomePage() {
           My leads
         </Link>
       </div>
+
+      {/* PROGRESSION lane: level + reimbursement + progress-to-next card. */}
+      <ProgressionCard />
 
       {/* Placeholder: submitted-leads snapshot grows here alongside the BADGES card. */}
       <div className="rounded-xl border border-border bg-white p-8 text-center shadow-sm">
