@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, LogOut, PlusCircle, ListChecks, Briefcase, ReceiptText, Bell } from "lucide-react";
+import { Home, LogOut, PlusCircle, ListChecks, Briefcase, ReceiptText, Bell, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
@@ -39,6 +39,8 @@ function navItems(portal: PortalKind) {
     ...(portal === "partner"
       ? [{ to: `${base}/invoices`, label: "Invoices", icon: ReceiptText, end: false }]
       : []),
+    // Gamification: badge collection (both portals).
+    { to: `${base}/badges`, label: "Badges", icon: Award, end: false },
     { to: `${base}/settings/notifications`, label: "Notifications", icon: Bell, end: false },
   ];
 }

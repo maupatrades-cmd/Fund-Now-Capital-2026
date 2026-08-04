@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Handshake, ListChecks, PlusCircle } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import PortalShell from "@/components/portal/PortalShell";
+import { BadgesCard } from "@/components/portal/BadgesCard";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
 
@@ -92,6 +93,9 @@ export default function PartnerHomePage() {
           My leads
         </Link>
       </div>
+
+      {/* Gamification: recently earned badges + link to the full collection. */}
+      <BadgesCard portal="partner" />
 
       {/* Placeholder: referred deals land here in a later release. */}
       <EmptyState

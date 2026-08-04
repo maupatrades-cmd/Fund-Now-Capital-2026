@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { FileText, ListChecks, PlusCircle } from "lucide-react";
 import PortalShell from "@/components/portal/PortalShell";
+import { BadgesCard } from "@/components/portal/BadgesCard";
 
 // Contractor portal home. Branded PortalShell chrome (shared with the partner
 // portal) with the "Submit Lead" / "My Leads" nav, a welcome, and a top-level
@@ -40,6 +41,9 @@ export default function ContractorHomePage() {
           My leads
         </Link>
       </div>
+
+      {/* Gamification: recently earned badges + link to the full collection. */}
+      <BadgesCard portal="contractor" />
 
       {/* Placeholder: submitted-leads snapshot grows here alongside the BADGES card. */}
       <div className="rounded-xl border border-border bg-white p-8 text-center shadow-sm">
