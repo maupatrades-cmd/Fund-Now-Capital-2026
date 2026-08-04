@@ -2,6 +2,7 @@ import { FileText } from "lucide-react";
 import { formatZAR } from "@/lib/format";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
+  csvMoney,
   statementFilename,
   toNum,
   type CsvColumn,
@@ -25,12 +26,12 @@ const ownerCsv: CsvColumn<OwnerStatementLine>[] = [
   { header: "Funder", value: (r) => r.funder_name ?? "" },
   { header: "Partner", value: (r) => r.partner_name ?? "" },
   { header: "Contractor", value: (r) => r.contractor_name ?? "" },
-  { header: "Gross Commission", value: (r) => toNum(r.gross_commission) },
-  { header: "Company Retention", value: (r) => toNum(r.company_retention) },
-  { header: "Partner Share", value: (r) => toNum(r.partner_share) },
-  { header: "Owner Share", value: (r) => toNum(r.owner_share) },
-  { header: "Contractor Share", value: (r) => toNum(r.contractor_share) },
-  { header: "Bonus", value: (r) => toNum(r.bonus_amount) },
+  { header: "Gross Commission", value: (r) => csvMoney(r.gross_commission) },
+  { header: "Company Retention", value: (r) => csvMoney(r.company_retention) },
+  { header: "Partner Share", value: (r) => csvMoney(r.partner_share) },
+  { header: "Owner Share", value: (r) => csvMoney(r.owner_share) },
+  { header: "Contractor Share", value: (r) => csvMoney(r.contractor_share) },
+  { header: "Bonus", value: (r) => csvMoney(r.bonus_amount) },
   { header: "State", value: (r) => r.state },
 ];
 

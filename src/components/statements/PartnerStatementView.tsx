@@ -2,6 +2,7 @@ import { Wallet } from "lucide-react";
 import { formatZAR } from "@/lib/format";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
+  csvMoney,
   statementFilename,
   toNum,
   type CsvColumn,
@@ -23,7 +24,7 @@ const partnerCsv: CsvColumn<PartnerStatementLine>[] = [
   { header: "Deal", value: (r) => r.deal_reference ?? "" },
   { header: "Client", value: (r) => r.client_name ?? "" },
   { header: "Funder", value: (r) => r.funder_name ?? "" },
-  { header: "Your Earnings", value: (r) => toNum(r.amount) },
+  { header: "Your Earnings", value: (r) => csvMoney(r.amount) },
   { header: "Status", value: (r) => r.state },
 ];
 

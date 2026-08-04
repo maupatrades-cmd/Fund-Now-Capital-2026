@@ -209,6 +209,14 @@ export interface CsvColumn<T> {
   value: (row: T) => string | number | null | undefined;
 }
 
+// Money in a CSV always carries cents ("2436.40", never "2436" or "2436.4") so
+// the exported figures read as currency in a spreadsheet. Returns a fixed
+// 2-decimal string; the DB delivers exact numeric(14,2) values so this only
+// normalises the text form, it does not change the amount.
+export function csvMoney(value: string | number | null | undefined): string {
+  return toNum(value).toFixed(2);
+}
+
 function csvCell(value: string | number | null | undefined): string {
   const s = value == null ? "" : String(value);
   // RFC 4180 quoting + neutralise spreadsheet formula injection (a partner or
