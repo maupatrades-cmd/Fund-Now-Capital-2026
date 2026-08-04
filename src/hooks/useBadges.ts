@@ -26,7 +26,13 @@ export function useMyBadges(portal: PortalKind) {
   const query = useQuery({
     queryKey: ["my-badges", portal, uid],
     enabled: uid !== null,
-    staleTime: 60_000,
+    // staleTime 0 (Greptile P1, ported from PR #126): a badge is earned by a
+    // server-side trigger (lead submit / commission settle) and announced via a
+    // BADGE_EARNED notification, so the card must never serve stale "no badges
+    // yet" data. 0 → refetch on mount, so navigating back to the home/collection
+    // after the triggering action shows the new badge immediately instead of
+    // lagging the notification by up to a minute.
+    staleTime: 0,
     queryFn: async (): Promise<MyBadge[]> => {
       const { data, error } = await supabase.rpc("get_my_badges");
       if (error) throw error;

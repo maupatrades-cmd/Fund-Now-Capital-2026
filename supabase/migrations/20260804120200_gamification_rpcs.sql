@@ -225,9 +225,24 @@ begin
     return null;
   end if;
 
+  -- Serialize the aggregate + threshold-award section PER EARNER (Ito QA fix,
+  -- ported from PR #126 / live migration 20260804183500). Under READ COMMITTED,
+  -- two commission rows settling in concurrent transactions can each see a SUM
+  -- that excludes the other's uncommitted row; if the COMBINED committed total
+  -- crosses a threshold (e.g. R98k + R3k = R101k) but neither txn saw >= R100k,
+  -- the badge would be PERMANENTLY missed (idempotency can't help — no later
+  -- trigger is guaranteed to fire). A transaction-scoped advisory lock keyed by
+  -- the earner makes the second settlement block until the first commits, then
+  -- re-aggregate against a snapshot that includes it. Mirrors the funder-invoice
+  -- state RPCs. Held to end-of-transaction.
+  perform pg_advisory_xact_lock(hashtext('badge_commission_earner:' || v_user::text));
+
+  -- The existence of a commission row means a deal reached funded. Idempotent.
   perform public.award_badge(v_user, 'first_funded_deal',
     jsonb_build_object('deal_id', new.deal_id, 'commission_record_id', new.id));
 
+  -- Cumulative realised (settled) own-share, taken AFTER the lock so a
+  -- later-committing concurrent settlement sees the full committed total.
   select coalesce(sum(
            case when cr.contractor_id is not null then cr.contractor_share
                 else cr.partner_share end), 0)

@@ -125,8 +125,11 @@ export function tierStyle(tier: string): TierStyle {
 // the "Recent Badges" ordering explicit and independent of RPC order).
 export function recentEarned(badges: MyBadge[], limit?: number): MyBadge[] {
   const earned = badges
-    .filter((b) => b.earned)
-    .sort((a, b) => (b.earned_at ?? "").localeCompare(a.earned_at ?? ""));
+    .filter((b) => b.earned && b.earned_at)
+    // Numeric epoch compare (Greptile P2, ported from PR #126) — not
+    // localeCompare, whose collation is locale-sensitive; ISO 8601 timestamps
+    // sort deterministically by millis, newest first.
+    .sort((a, b) => new Date(b.earned_at!).getTime() - new Date(a.earned_at!).getTime());
   return typeof limit === "number" ? earned.slice(0, limit) : earned;
 }
 
