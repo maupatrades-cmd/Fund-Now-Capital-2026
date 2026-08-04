@@ -12,6 +12,7 @@ import PartnerMyLeadsPage from "@/pages/partner/MyLeadsPage";
 import PartnerDealsPage from "@/pages/partner/PartnerDealsPage";
 import PartnerInvoicesPage from "@/pages/partner/PartnerInvoicesPage";
 import PartnerInvoiceDetailPage from "@/pages/partner/PartnerInvoiceDetailPage";
+import PartnerBadgesPage from "@/pages/partner/BadgesPage";
 import PartnerNotificationSettingsPage from "@/pages/partner/NotificationSettingsPage";
 import ContractorGate from "@/pages/ContractorGate";
 import DashboardPage from "@/pages/DashboardPage";
@@ -123,6 +124,7 @@ function AppRoutes() {
         <Route path="deals" element={<PartnerDealsPage />} />
         <Route path="invoices" element={<PartnerInvoicesPage />} />
         <Route path="invoices/:invoiceId" element={<PartnerInvoiceDetailPage />} />
+        <Route path="badges" element={<PartnerBadgesPage />} />
         <Route path="settings/notifications" element={<PartnerNotificationSettingsPage />} />
         <Route path="*" element={<Navigate to="/partner" replace />} />
       </Route>
