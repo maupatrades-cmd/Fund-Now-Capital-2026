@@ -1,15 +1,18 @@
 import { Link } from "react-router-dom";
 import { FileText, ListChecks, PlusCircle } from "lucide-react";
 import PortalShell from "@/components/portal/PortalShell";
+import TrainingProgressCard from "@/components/training/TrainingProgressCard";
 
 // Contractor portal home. Branded PortalShell chrome (shared with the partner
 // portal) with the "Submit Lead" / "My Leads" nav, a welcome, and a top-level
 // "Submit a new lead" CTA. Real screens (progression, earnings, training) grow
 // from here in later PRs.
 //
-// NOTE (coordination): the BADGES lane also adds a badge-display CARD to this
-// page. Both lanes edit this file from the same main base — keep additions in
-// the content stack below so the two merges stay independent.
+// NOTE (coordination — ContractorHomePage collision zone): the TRAINING lane
+// (this card), PROGRESSION and GAMIFICATION all add a CARD to this page. Each
+// card is self-contained (own data hooks). Whichever lane merges last stacks
+// its card in the content column below — keep additions here so the merges stay
+// independent.
 export default function ContractorHomePage() {
   // Note: the first-login T&C gate lives in ContractorGate (PortalTermsGate wraps
   // the whole /contractor subtree), so no acceptance check is needed on this page.
@@ -41,7 +44,11 @@ export default function ContractorHomePage() {
         </Link>
       </div>
 
-      {/* Placeholder: submitted-leads snapshot grows here alongside the BADGES card. */}
+      {/* Training progress (TRAINING lane). Self-contained card; other lanes'
+          cards (progression, gamification) stack alongside it here. */}
+      <TrainingProgressCard />
+
+      {/* Placeholder: submitted-leads snapshot grows here alongside other cards. */}
       <div className="rounded-xl border border-border bg-white p-8 text-center shadow-sm">
         <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-brand-teal/10 text-brand-teal">
           <FileText className="h-6 w-6" />

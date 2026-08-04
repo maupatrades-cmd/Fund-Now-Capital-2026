@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, LogOut, PlusCircle, ListChecks, Briefcase, ReceiptText, Bell } from "lucide-react";
+import { Home, LogOut, PlusCircle, ListChecks, Briefcase, ReceiptText, GraduationCap, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
@@ -38,6 +38,11 @@ function navItems(portal: PortalKind) {
     // invoicing is a separate, later concern — no invoices tab for contractors.
     ...(portal === "partner"
       ? [{ to: `${base}/invoices`, label: "Invoices", icon: ReceiptText, end: false }]
+      : []),
+    // Training is a contractor-only surface (TRAINING lane — Product Knowledge
+    // modules). Partners have no training programme.
+    ...(portal === "contractor"
+      ? [{ to: `${base}/training`, label: "Training", icon: GraduationCap, end: false }]
       : []),
     { to: `${base}/settings/notifications`, label: "Notifications", icon: Bell, end: false },
   ];
