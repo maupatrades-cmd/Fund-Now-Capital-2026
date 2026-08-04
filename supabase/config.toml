@@ -24,3 +24,9 @@ verify_jwt = false
 # with IP throttling for abuse control.
 [functions.apply-submit-application]
 verify_jwt = false
+
+# generate-partner-invoice-pdf renders the partner → FNC invoice PDF. Invoked
+# server-to-server by the DB (pg_net) on submit, so it authenticates via the
+# shared X-Webhook-Secret header (same as generate-invoice-pdf). verify_jwt = false.
+[functions.generate-partner-invoice-pdf]
+verify_jwt = false

@@ -7,6 +7,7 @@ import { formatZAR } from "@/lib/format";
 import { formatPeriodRange, formatPeriodDate } from "@/lib/partnerInvoices";
 import { PartnerInvoiceStateChip } from "@/components/partner-invoices/PartnerInvoiceStateChip";
 import { LineItemsTable } from "@/components/partner-invoices/LineItemsTable";
+import { DownloadPdfButton } from "@/components/partner-invoices/DownloadPdfButton";
 import {
   usePartnerInvoice,
   usePartnerInvoiceLineItems,
@@ -72,11 +73,15 @@ export default function PartnerInvoiceDetailPage() {
                   Period {formatPeriodRange(invoice.invoice_period_start, invoice.invoice_period_end)}
                 </p>
               </div>
-              <div className="text-right">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Total</p>
-                <p className="text-2xl font-bold text-brand-navy">
-                  {formatZAR(invoice.total_amount, { cents: true })}
-                </p>
+              <div className="flex flex-col items-end gap-2">
+                <div className="text-right">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Total</p>
+                  <p className="text-2xl font-bold text-brand-navy">
+                    {formatZAR(invoice.total_amount, { cents: true })}
+                  </p>
+                </div>
+                {/* PDF renders on submit; hidden while still a draft. */}
+                {invoice.state !== "draft" && <DownloadPdfButton path={invoice.pdf_storage_path} />}
               </div>
             </div>
 

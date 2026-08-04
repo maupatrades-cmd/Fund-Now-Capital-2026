@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabase";
+
 // C4 (Doctor Invoicing FNC) — shared types + state metadata for the partner
 // invoice lifecycle. SPEC S8 / S11 "Invoicing" / S7C.
 //
@@ -33,6 +35,7 @@ export type PartnerInvoice = {
   rejected_at: string | null;
   rejected_reason: string | null;
   notes: string | null;
+  pdf_storage_path: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -105,6 +108,24 @@ export function formatPeriodRange(
   end: string | null | undefined,
 ): string {
   return `${formatPeriodDate(start)} – ${formatPeriodDate(end)}`;
+}
+
+// Signed URL for a rendered partner-invoice PDF in the private `partner-invoices`
+// bucket. Both surfaces mint it with the caller's OWN session — owner (owner-all
+// RLS) or the owning partner ({partner_id}/ folder RLS) — so no service-role
+// secret ever reaches the browser (mirrors getInvoicePdfUrl for funder invoices).
+export async function getPartnerInvoicePdfUrl(path: string, expiresIn = 3600): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from("partner-invoices")
+    .createSignedUrl(path, expiresIn);
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message ?? "Could not create a download link for this PDF.");
+  }
+  // https-only allow-list; keep the full URL (the required ?token=… must survive).
+  if (!/^https:\/\//i.test(data.signedUrl)) {
+    throw new Error("Refusing to open a non-HTTPS PDF link.");
+  }
+  return data.signedUrl;
 }
 
 // A sensible default invoice period: the previous calendar month (the common

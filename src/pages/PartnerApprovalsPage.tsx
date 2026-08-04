@@ -6,6 +6,7 @@ import { formatZAR } from "@/lib/format";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PartnerInvoiceStateChip } from "@/components/partner-invoices/PartnerInvoiceStateChip";
 import { LineItemsTable } from "@/components/partner-invoices/LineItemsTable";
+import { DownloadPdfButton } from "@/components/partner-invoices/DownloadPdfButton";
 import {
   formatPeriodRange,
   formatPeriodDate,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/partnerInvoices";
 import {
   useOwnerPartnerInvoices,
+  usePartnerInvoice,
   usePartnerInvoiceLineItems,
   useApprovePartnerInvoice,
   useRejectPartnerInvoice,
@@ -167,6 +169,11 @@ function InvoiceReviewModal({
   onClose: () => void;
 }) {
   const { data: items, isLoading, isError: itemsError } = usePartnerInvoiceLineItems(invoice.id);
+  // The list row was captured when the modal opened, so its pdf_storage_path can
+  // be stale (the PDF renders async after submit). Read the LIVE row (which polls
+  // while the PDF is pending) so the Download button appears without a reload.
+  const { data: liveInvoice } = usePartnerInvoice(invoice.id);
+  const pdfPath = liveInvoice?.pdf_storage_path ?? invoice.pdf_storage_path;
   const [action, setAction] = useState<ActionKind>(null);
   const [reason, setReason] = useState("");
   const [reference, setReference] = useState("");
@@ -246,7 +253,10 @@ function InvoiceReviewModal({
         <div className="text-sm text-muted-foreground">
           Period {formatPeriodRange(invoice.invoice_period_start, invoice.invoice_period_end)}
         </div>
-        <PartnerInvoiceStateChip state={invoice.state} />
+        <div className="flex items-center gap-3">
+          {invoice.state !== "draft" && <DownloadPdfButton path={pdfPath} />}
+          <PartnerInvoiceStateChip state={invoice.state} />
+        </div>
       </div>
 
       {isLoading ? (
