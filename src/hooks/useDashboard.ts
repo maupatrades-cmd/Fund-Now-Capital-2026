@@ -31,8 +31,8 @@ type SubmissionRow = {
   submitted_at: string | null;
   created_at: string;
   deal:
-    | { reference: string | null; archived_at: string | null; client: Named }
-    | { reference: string | null; archived_at: string | null; client: Named }[]
+    | { id: string; reference: string | null; archived_at: string | null; client: Named }
+    | { id: string; reference: string | null; archived_at: string | null; client: Named }[]
     | null;
 };
 
@@ -73,7 +73,7 @@ async function fetchDashboard() {
     supabase
       .from("deal_funder_submissions")
       .select(
-        "id, status, submitted_at, created_at, deal:deals!inner(reference, archived_at, client:clients(business_name))",
+        "id, status, submitted_at, created_at, deal:deals!inner(id, reference, archived_at, client:clients(business_name))",
       )
       .is("deal.archived_at", null),
     supabase

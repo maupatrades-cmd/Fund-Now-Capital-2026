@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import {
   Banknote,
   Wallet,
@@ -8,6 +9,8 @@ import {
   Inbox,
   FileText,
   CircleAlert,
+  Plus,
+  UserPlus,
   type LucideIcon,
 } from "lucide-react";
 import { formatZAR, formatRelative, daysSince } from "@/lib/format";
@@ -34,9 +37,14 @@ export default function DashboardPage() {
   }
 
   const { kpis, pipeline, pipelineMax, actions, activity } = metrics;
+  const urgentCount = actions.stuckDeals.length + actions.awaitingDecision.length + actions.fundedNotInvoiced.length;
 
   return (
     <div className="space-y-6">
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-brand-navy p-6 text-white shadow-sm">
+        <div><p className="text-sm text-white/70">{new Date().toLocaleDateString("en-ZA", { weekday: "long", day: "numeric", month: "long" })}</p><h1 className="mt-1 text-2xl font-bold">Owner command centre</h1><p className="mt-1 text-sm text-white/75">{urgentCount === 0 ? "Everything is under control." : `${urgentCount} operational item${urgentCount === 1 ? "" : "s"} need attention.`}</p></div>
+        <div className="flex flex-wrap gap-2"><Link to="/leads/new" className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-brand-navy"><UserPlus className="h-4 w-4" />New lead</Link><Link to="/pipeline" className="inline-flex items-center gap-2 rounded-lg border border-white/30 px-3 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />Open pipeline</Link></div>
+      </section>
       {/* KPI cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiCard
@@ -113,9 +121,9 @@ export default function DashboardPage() {
                 const deal = Array.isArray(s.deal) ? s.deal[0] : s.deal;
                 return (
                   <li key={s.id} className="flex items-center justify-between gap-3 py-1">
-                    <span className="text-sm text-brand-navy truncate">
+                    <Link to={deal?.id ? `/deals/${deal.id}` : "/pipeline"} className="text-sm text-brand-navy truncate hover:text-brand-teal">
                       {deal?.reference ?? "Deal"} · {businessName(deal?.client ?? null)}
-                    </span>
+                    </Link>
                     <span className="text-xs text-muted-foreground shrink-0">
                       {daysSince(s.submitted_at ?? s.created_at)}d
                     </span>
@@ -223,9 +231,9 @@ function ActionGroup({
 function DealLine({ deal, meta }: { deal: DealRow; meta: string }) {
   return (
     <li className="flex items-center justify-between gap-3 py-1">
-      <span className="text-sm text-brand-navy truncate">
+      <Link to={`/deals/${deal.id}`} className="text-sm text-brand-navy truncate hover:text-brand-teal">
         {deal.reference ?? "Deal"} · {businessName(deal.client)}
-      </span>
+      </Link>
       <span className="text-xs text-muted-foreground shrink-0">{meta}</span>
     </li>
   );
