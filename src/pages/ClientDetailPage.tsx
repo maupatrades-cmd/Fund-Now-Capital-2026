@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, Pencil, Plus, Repeat2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useClient, one } from "@/hooks/useClients";
+import { useClient, useClientDeals, one } from "@/hooks/useClients";
+import { NewDealDialog } from "@/components/pipeline/NewDealDialog";
+import { stageLabel, type DealStage } from "@/lib/dealStages";
 import { ContactsManager } from "@/components/clients/ContactsManager";
 import { DocumentsPanel } from "@/components/clients/DocumentsPanel";
 import { StoryPanel } from "@/components/clients/StoryPanel";
@@ -18,7 +20,9 @@ export default function ClientDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: client, isLoading, isError, error } = useClient(id);
+  const deals = useClientDeals(id);
   const [tab, setTab] = useState<Tab>("overview");
+  const [newDealOpen, setNewDealOpen] = useState(false);
 
   if (isLoading) return <div className="text-sm text-muted-foreground">Loading client…</div>;
   if (isError || !client) {
@@ -45,18 +49,19 @@ export default function ClientDetailPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-brand-navy">{client.business_name}</h1>
             <Badge className={referred.className}>{referred.label}</Badge>
+            {(deals.data?.length ?? 0) > 1 && <Badge className="bg-violet-100 text-violet-700"><Repeat2 className="mr-1 h-3 w-3" />Repeat client</Badge>}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {one(client.industry)?.name || client.sector || "Industry not set"}
           </p>
         </div>
-        <button
+        <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setNewDealOpen(true)} className="flex items-center gap-2 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />New deal</button><button
           type="button"
           onClick={() => navigate(`/clients/${client.id}/edit`)}
           className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50"
         >
           <Pencil className="h-4 w-4" /> Edit
-        </button>
+        </button></div>
       </div>
 
       {/* Tabs */}
@@ -106,8 +111,16 @@ export default function ClientDetailPage() {
           <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
             <ContactsManager clientId={client.id} />
           </section>
+          <section className="rounded-xl border border-border bg-white p-5 shadow-sm lg:col-span-2">
+            <h3 className="mb-3 text-sm font-semibold text-brand-navy">Funding history</h3>
+            {deals.isLoading && <p className="text-sm text-muted-foreground">Loading deals...</p>}
+            {!deals.isLoading && (deals.data?.length ?? 0) === 0 && <p className="text-sm text-muted-foreground">No deals yet.</p>}
+            <div className="divide-y">{(deals.data ?? []).map((deal) => <Link key={deal.id} to={`/deals/${deal.id}`} className="flex items-center justify-between gap-3 py-3 text-sm hover:text-brand-teal"><span className="font-medium">{deal.reference ?? "Deal"}</span><span className="text-muted-foreground">{stageLabel(deal.stage as DealStage)} · {deal.amount_requested ? formatZAR(deal.amount_requested) : "Amount not set"}</span></Link>)}</div>
+          </section>
         </div>
       )}
+
+      {newDealOpen && <NewDealDialog defaultClientId={client.id} onClose={() => setNewDealOpen(false)} onCreated={(dealId) => navigate(`/deals/${dealId}`)} />}
 
       {tab === "story" && (
         <section className="rounded-xl border border-border bg-white p-5 shadow-sm">

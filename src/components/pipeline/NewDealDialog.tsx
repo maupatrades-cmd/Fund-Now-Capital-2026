@@ -22,9 +22,11 @@ const errCls = "mt-1 text-xs text-red-600";
 export function NewDealDialog({
   onClose,
   onCreated,
+  defaultClientId = "",
 }: {
   onClose: () => void;
   onCreated: (dealId: string) => void;
+  defaultClientId?: string;
 }) {
   const { data: clients } = useClientOptions();
   const create = useCreateDeal();
@@ -34,7 +36,7 @@ export function NewDealDialog({
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { clientId: "", amount: "", isPO: false },
+    defaultValues: { clientId: defaultClientId, amount: "", isPO: false },
   });
 
   const onSubmit = async (values: FormValues) => {
