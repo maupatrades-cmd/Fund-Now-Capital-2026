@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
@@ -28,6 +29,9 @@ const INVOICE_COLUMNS =
   "paid_at, paid_reference, rejected_at, rejected_reason, notes, pdf_storage_path, " +
   "created_by, created_at, updated_at";
 
+const PDF_POLL_INTERVAL_MS = 4000;
+const PDF_POLL_TIMEOUT_MS = 2 * 60 * 1000;
+
 // ---- reads -----------------------------------------------------------------
 
 // The signed-in partner's own invoices. Cache keyed by user id so a same-tab
@@ -35,8 +39,9 @@ const INVOICE_COLUMNS =
 // usePortalDeals / useProfileRole). RLS is the authoritative scope regardless.
 export function usePartnerInvoices() {
   const uid = useSession()?.user?.id ?? null;
-  return useQuery({
+  const query = useQuery({
     queryKey: ["partner-invoices", uid],
+    enabled: uid !== null,
     queryFn: async (): Promise<PartnerInvoice[]> => {
       const { data, error } = await supabase
         .from("partner_invoices")
@@ -46,6 +51,8 @@ export function usePartnerInvoices() {
       return (data ?? []) as unknown as PartnerInvoice[];
     },
   });
+
+  return { ...query, isLoading: query.isLoading || uid === null };
 }
 
 // Owner view: every partner invoice + the REAL partner name (owner privilege).
@@ -67,9 +74,13 @@ export function useOwnerPartnerInvoices() {
 // A single invoice (owner OR the owning partner — both satisfy RLS SELECT).
 export function usePartnerInvoice(id: string | undefined) {
   const uid = useSession()?.user?.id ?? null;
-  return useQuery({
+  const pollStartedAtRef = useRef<number | null>(null);
+  const pollInvoiceRef = useRef<string | null>(null);
+  const [pollGeneration, setPollGeneration] = useState(0);
+
+  const query = useQuery({
     queryKey: ["partner-invoice", id, uid],
-    enabled: !!id,
+    enabled: !!id && uid !== null,
     queryFn: async (): Promise<PartnerInvoice> => {
       const { data, error } = await supabase
         .from("partner_invoices")
@@ -83,15 +94,55 @@ export function usePartnerInvoice(id: string | undefined) {
     // Function writes pdf_storage_path a few seconds later), so at submit time the
     // cached row has a null path and nothing else would refetch it. Poll while a
     // PDF is expected but not yet written, so DownloadPdfButton flips from
-    // "generating" to a live link on its own. Self-stops once the path lands (or
-    // for draft/rejected invoices, which never get a PDF).
+    // "generating" to a live link on its own. Polling is deliberately bounded:
+    // an Edge Function rejection must not leave the browser polling forever.
     refetchInterval: (query) => {
       const d = query.state.data as PartnerInvoice | undefined;
       if (!d) return false;
       const expectsPdf = d.state === "submitted" || d.state === "approved" || d.state === "paid";
-      return expectsPdf && !d.pdf_storage_path ? 4000 : false;
+      if (!expectsPdf || d.pdf_storage_path) {
+        pollStartedAtRef.current = null;
+        pollInvoiceRef.current = null;
+        return false;
+      }
+
+      if (pollInvoiceRef.current !== d.id || pollStartedAtRef.current === null) {
+        pollInvoiceRef.current = d.id;
+        pollStartedAtRef.current = Date.now();
+      }
+
+      return Date.now() - pollStartedAtRef.current < PDF_POLL_TIMEOUT_MS
+        ? PDF_POLL_INTERVAL_MS
+        : false;
     },
   });
+
+  // `pollGeneration` is intentionally read so Retry creates a fresh query-options
+  // closure after resetting the refs, which restarts the bounded interval.
+  void pollGeneration;
+  const invoice = query.data;
+  const expectsPdf =
+    invoice?.state === "submitted" || invoice?.state === "approved" || invoice?.state === "paid";
+  const pdfPollingTimedOut = Boolean(
+    expectsPdf &&
+      !invoice?.pdf_storage_path &&
+      pollStartedAtRef.current !== null &&
+      Date.now() - pollStartedAtRef.current >= PDF_POLL_TIMEOUT_MS,
+  );
+
+  const retryPdf = async () => {
+    pollStartedAtRef.current = Date.now();
+    pollInvoiceRef.current = invoice?.id ?? id ?? null;
+    setPollGeneration((value) => value + 1);
+    await query.refetch();
+  };
+
+  return {
+    ...query,
+    isLoading: query.isLoading || uid === null,
+    pdfPollingTimedOut,
+    retryPdf,
+  };
 }
 
 // Enriched line items via the DEFINER RPC — funder name is audience-scoped

@@ -16,7 +16,14 @@ import {
 
 export default function PartnerInvoiceDetailPage() {
   const { invoiceId } = useParams();
-  const { data: invoice, isLoading, isError, error } = usePartnerInvoice(invoiceId);
+  const {
+    data: invoice,
+    isLoading,
+    isError,
+    error,
+    pdfPollingTimedOut,
+    retryPdf,
+  } = usePartnerInvoice(invoiceId);
   const { data: items, isError: itemsError } = usePartnerInvoiceLineItems(invoiceId);
   const submit = useSubmitPartnerInvoice();
   const submittingRef = useRef(false);
@@ -80,8 +87,24 @@ export default function PartnerInvoiceDetailPage() {
                     {formatZAR(invoice.total_amount, { cents: true })}
                   </p>
                 </div>
-                {/* PDF renders on submit; hidden while still a draft. */}
-                {invoice.state !== "draft" && <DownloadPdfButton path={invoice.pdf_storage_path} />}
+                {/* Rejected/draft invoices never receive a PDF. */}
+                {(invoice.state === "submitted" ||
+                  invoice.state === "approved" ||
+                  invoice.state === "paid") &&
+                  (pdfPollingTimedOut && !invoice.pdf_storage_path ? (
+                    <div className="max-w-xs text-right text-xs text-amber-700">
+                      <p>The PDF is taking longer than expected.</p>
+                      <button
+                        type="button"
+                        onClick={() => void retryPdf()}
+                        className="mt-1 font-semibold underline"
+                      >
+                        Retry PDF check
+                      </button>
+                    </div>
+                  ) : (
+                    <DownloadPdfButton path={invoice.pdf_storage_path} />
+                  ))}
               </div>
             </div>
 
