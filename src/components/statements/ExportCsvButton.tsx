@@ -2,11 +2,18 @@ import { useRef } from "react";
 import { Download } from "lucide-react";
 import { downloadCsv, type CsvColumn } from "@/lib/statements";
 
+// A rapid double-click fires two separate click events. Because downloadCsv is
+// synchronous, releasing the guard in a `finally` would clear it before the
+// second event is dispatched — so it must be released on a LATER task, after the
+// double-click window has closed. 300ms comfortably spans a normal double-click
+// without noticeably delaying a deliberate second export.
+const GUARD_RELEASE_MS = 300;
+
 /*
- * CSV export button with an in-flight guard (Fix #4 pattern). The synchronous
- * Blob build + click can't really race, but the useRef guard keeps the surface
- * consistent with every other action button in the app and prevents a double
- * download from a rapid double-click. Disabled when there's nothing to export.
+ * CSV export button with an in-flight guard (Fix #4 pattern). The guard is held
+ * across the double-click window (see GUARD_RELEASE_MS) so a rapid double-click
+ * produces a single download, keeping the surface consistent with every other
+ * action button in the app. Disabled when there's nothing to export.
  */
 export function ExportCsvButton<T>({
   filename,
@@ -27,7 +34,12 @@ export function ExportCsvButton<T>({
     try {
       downloadCsv(filename, rows, columns);
     } finally {
-      busy.current = false;
+      // Release on a later task so a second rapid click within the double-click
+      // window is ignored (downloadCsv is synchronous — releasing here directly
+      // would defeat the guard).
+      window.setTimeout(() => {
+        busy.current = false;
+      }, GUARD_RELEASE_MS);
     }
   }
 
