@@ -16,6 +16,9 @@ export type PipelineDeal = {
   gross_commission: string | null;
   stage_entered_at: string;
   created_at: string;
+  archived_at?: string | null;
+  archived_by?: string | null;
+  archive_reason?: string | null;
   referral_partner_id: string | null;
   client: { id: string; business_name: string } | { id: string; business_name: string }[] | null;
   submissions: { funder: { id: string; name: string } | { id: string; name: string }[] | null }[];
@@ -43,7 +46,26 @@ export function usePipeline() {
            client:clients(id, business_name),
            submissions:deal_funder_submissions(funder:funders(id, name))`,
         )
+        .is("archived_at", null)
         .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as PipelineDeal[];
+    },
+  });
+}
+
+export function useArchivedDeals() {
+  return useQuery({
+    queryKey: ["archived-deals"],
+    queryFn: async (): Promise<PipelineDeal[]> => {
+      const { data, error } = await supabase
+        .from("deals")
+        .select(`id, reference, stage, is_priority, amount_requested, gross_commission,
+          stage_entered_at, created_at, archived_at, archived_by, archive_reason,
+          referral_partner_id, client:clients(id, business_name),
+          submissions:deal_funder_submissions(funder:funders(id, name))`)
+        .not("archived_at", "is", null)
+        .order("archived_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as PipelineDeal[];
     },

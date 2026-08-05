@@ -31,8 +31,8 @@ type SubmissionRow = {
   submitted_at: string | null;
   created_at: string;
   deal:
-    | { reference: string | null; client: Named }
-    | { reference: string | null; client: Named }[]
+    | { reference: string | null; archived_at: string | null; client: Named }
+    | { reference: string | null; archived_at: string | null; client: Named }[]
     | null;
 };
 
@@ -67,13 +67,15 @@ async function fetchDashboard() {
       .from("deals")
       .select(
         "id, reference, stage, stage_entered_at, gross_commission, created_at, client:clients(business_name)",
-      ),
+      )
+      .is("archived_at", null),
     supabase.from("commission_records").select("gross_commission, status, created_at"),
     supabase
       .from("deal_funder_submissions")
       .select(
-        "id, status, submitted_at, created_at, deal:deals(reference, client:clients(business_name))",
-      ),
+        "id, status, submitted_at, created_at, deal:deals!inner(reference, archived_at, client:clients(business_name))",
+      )
+      .is("deal.archived_at", null),
     supabase
       .from("communications")
       .select("id, channel, subject, body, occurred_at, client:clients(business_name)")

@@ -19,6 +19,7 @@ import ContractorGate from "@/pages/ContractorGate";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
 import DealDetailPage from "@/pages/DealDetailPage";
+import ArchivedDealsPage from "@/pages/ArchivedDealsPage";
 import ClientsPage from "@/pages/ClientsPage";
 import ClientDetailPage from "@/pages/ClientDetailPage";
 import ClientFormPage from "@/pages/ClientFormPage";
@@ -147,6 +148,7 @@ function AppRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/deals/:id" element={<DealDetailPage />} />
+        <Route path="/deals/archived" element={<ArchivedDealsPage />} />
         <Route path="/invoices" element={<InvoicesPage />} />
         {/* Static path ranks above /invoices/:id in React Router v6. */}
         <Route path="/invoices/partner-approvals" element={<PartnerApprovalsPage />} />
