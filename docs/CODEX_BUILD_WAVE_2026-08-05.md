@@ -20,7 +20,7 @@ explicitly recorded.
 |---|---|---:|---|
 | Partner invoice reliability | `codex/partner-invoice-reliability` | `d4d0bcb` | PR #133 **MERGED** at `ee97476`; Greptile 5/5, no inline threads, Vercel Ready; no migration; canonical C4 follow-up |
 | Owner terms admin | `codex/owner-terms-admin` | `8843c36` | PR #134 **MERGED** at `096306d`; Greptile 5/5; migration `20260805100000_owner_terms_admin.sql` pending apply and smoke test; deferred owner UI for terms framework |
-| Deal soft archive | `codex/deal-archive` | `8d55664` | PR #135 REVIEW; finding rejected because existing deal trigger preserves before-values; ROADMAP Deferred Polish semantics |
+| Deal soft archive | `codex/deal-archive` | `c3fca7d` | PR #135 REVIEW; archived-child mutation finding fixed locally at UI and database layers; restore-history finding rejected because the existing deal trigger preserves before-values; currently non-mergeable against updated `main`; ROADMAP Deferred Polish semantics |
 | Owner task queue | `codex/general-tasks-queue` | `bd30b89` | PR #136 REVIEW; direct-write attribution finding fixed locally; business-operations first slice |
 | Repayment tracker | `codex/repayment-tracking` | `4ffe0d7` | PR #137 REVIEW; underpayment and rounding findings fixed locally; owner-only servicing first slice |
 | Global search v1 | `codex/global-search` | `4267a47` | PR #138 REVIEW; wildcard and request-volume findings fixed locally; bounded `ilike`, not final F1 full-text search |
