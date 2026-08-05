@@ -1,0 +1,21 @@
+-- GAMIFICATION (Sprint 5, Lane 5c) — part 1 of 3: activity enum.
+-- ============================================================================
+-- Badges + points-free milestones for contractors + partners.
+--
+-- ⚠️ RECONCILIATION NOTE (2026-08-04): the gamification BACKEND was found ALREADY
+-- APPLIED to the live database (a concurrent run of this lane applied the DDL
+-- directly, with no migration file committed to any branch). These three
+-- migration files REPRODUCE the live objects faithfully + idempotently so the
+-- repository matches live and a fresh `supabase db reset` reproduces it. They are
+-- NOT intended to be re-applied to the live project (it already has them).
+--
+-- This first migration adds ONLY the new activity_event_type value, in its own
+-- migration so the label is COMMITTED before part 3's award_badge() uses it (a
+-- new enum value cannot be used in the same transaction it is added).
+--
+-- Names match live: the ACTIVITY event is `BADGE_AWARDED` (added here); the
+-- NOTIFICATION event is `BADGE_EARNED`, which ALREADY EXISTS in
+-- notification_event_type (seeded with the A11 system) — so it is NOT added.
+-- ============================================================================
+
+alter type public.activity_event_type add value if not exists 'BADGE_AWARDED';

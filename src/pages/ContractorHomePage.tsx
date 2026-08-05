@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { FileText, ListChecks, PlusCircle } from "lucide-react";
 import PortalShell from "@/components/portal/PortalShell";
+import { BadgesCard } from "@/components/portal/BadgesCard";
 import ProgressionCard from "@/components/portal/ProgressionCard";
 import TrainingProgressCard from "@/components/training/TrainingProgressCard";
 
@@ -50,8 +51,11 @@ export default function ContractorHomePage() {
       <ProgressionCard />
 
       {/* TRAINING lane: module-progress card. Self-contained; stacks alongside
-          the progression (and future gamification) cards. */}
+          the progression + gamification cards. */}
       <TrainingProgressCard />
+
+      {/* Gamification: recently earned badges + link to the full collection. */}
+      <BadgesCard portal="contractor" />
 
       {/* Placeholder: submitted-leads snapshot grows here alongside other cards. */}
       <div className="rounded-xl border border-border bg-white p-8 text-center shadow-sm">

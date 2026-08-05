@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, LogOut, PlusCircle, ListChecks, Briefcase, FileText, ReceiptText, GraduationCap, Bell, TrendingUp } from "lucide-react";
+import { Home, LogOut, PlusCircle, ListChecks, Briefcase, FileText, ReceiptText, GraduationCap, Bell, TrendingUp, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
@@ -47,6 +47,8 @@ function navItems(portal: PortalKind) {
     ...(portal === "partner"
       ? [{ to: `${base}/invoices`, label: "Invoices", icon: ReceiptText, end: false }]
       : []),
+    // Gamification: badge collection (both portals).
+    { to: `${base}/badges`, label: "Badges", icon: Award, end: false },
     // Training is a contractor-only surface (TRAINING lane — Product Knowledge
     // modules). Partners have no training programme.
     ...(portal === "contractor"

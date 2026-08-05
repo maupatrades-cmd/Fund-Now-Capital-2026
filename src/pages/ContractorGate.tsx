@@ -7,6 +7,7 @@ import ContractorHomePage from "./ContractorHomePage";
 import ContractorSubmitLeadPage from "./contractor/SubmitLeadPage";
 import ContractorMyLeadsPage from "./contractor/MyLeadsPage";
 import ContractorDealsPage from "./contractor/ContractorDealsPage";
+import ContractorBadgesPage from "./contractor/ContractorBadgesPage";
 import ContractorTrainingPage from "./contractor/TrainingPage";
 import ContractorTrainingModulePage from "./contractor/TrainingModulePage";
 import ContractorProgressionPage from "./contractor/ProgressionPage";
@@ -61,6 +62,7 @@ export default function ContractorGate() {
         <Route path="submit-lead" element={<ContractorSubmitLeadPage />} />
         <Route path="leads" element={<ContractorMyLeadsPage />} />
         <Route path="deals" element={<ContractorDealsPage />} />
+        <Route path="badges" element={<ContractorBadgesPage />} />
         <Route path="training" element={<ContractorTrainingPage />} />
         <Route path="training/:moduleId" element={<ContractorTrainingModulePage />} />
         <Route path="progression" element={<ContractorProgressionPage />} />
