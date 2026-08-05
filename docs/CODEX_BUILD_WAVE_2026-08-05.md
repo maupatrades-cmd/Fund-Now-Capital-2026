@@ -7,7 +7,9 @@ explicitly recorded.
 ## Status legend
 
 - **LOCAL COMMITTED** — code exists only on its branch.
-- **PR REVIEW** — pushed and awaiting Greptile/CodeRabbit plus owner review.
+- **PR OPEN (DRAFT)** — pushed with a Vercel preview, but automated review
+  skipped until the PR is marked ready.
+- **PR REVIEW** — ready and awaiting Greptile/CodeRabbit plus owner review.
 - **MERGED** — owner merged; this does not mean its migration is live.
 - **APPLIED** — migration was dry-run, applied, and structurally verified.
 - **SMOKE-TESTED** — owner completed the feature workflow successfully.
@@ -16,21 +18,21 @@ explicitly recorded.
 
 | Build | Branch | Commit | Status / canonical boundary |
 |---|---|---:|---|
-| Partner invoice reliability | `codex/partner-invoice-reliability` | `d4d0bcb` | LOCAL COMMITTED; canonical C4 follow-up |
-| Owner terms admin | `codex/owner-terms-admin` | `562cdbb` | LOCAL COMMITTED; deferred owner UI for terms framework |
-| Deal soft archive | `codex/deal-archive` | `8d55664` | LOCAL COMMITTED; ROADMAP Deferred Polish semantics |
-| Owner task queue | `codex/general-tasks-queue` | `05b45eb` | LOCAL COMMITTED; business-operations first slice |
-| Repayment tracker | `codex/repayment-tracking` | `8fde87a` | LOCAL COMMITTED; owner-only servicing first slice |
-| Global search v1 | `codex/global-search` | `a29ca4b` | LOCAL COMMITTED; bounded `ilike`, not final F1 full-text search |
-| Repeat client v1 | `codex/repeat-client` | `6418b9f` | LOCAL COMMITTED; no canonical D8 `parent_deal_id` yet |
-| Owner command centre v1 | `codex/owner-home` | `291b6e0` | LOCAL COMMITTED; not full S10 vision horizons |
-| Data-quality worklist v1 | `codex/data-quality` | `a3b701e` | LOCAL COMMITTED; read-only F9 first slice |
-| Package readiness | `codex/deal-package-readiness` | `ef7f8aa` | LOCAL COMMITTED; manual E3 bridge |
-| Printable package cover | `codex/deal-package-cover` | `9da570f` | LOCAL COMMITTED; browser PDF, not server-versioned E3 package |
-| Contractor pipeline | `codex/contractor-pipeline` | `5f5cbfd` | LOCAL COMMITTED; D2 portal slice |
-| Doctor pipeline | `codex/doctor-pipeline` | `c028ed1` | LOCAL COMMITTED, STACKED on Contractor Pipeline |
-| Package dispatch log | `codex/deal-package-dispatch` | `71989c6` | LOCAL COMMITTED; manual E3 audit bridge |
-| Portal pipeline guidance | `codex/portal-pipeline-guidance` | `89a1840` | LOCAL COMMITTED, STACKED on both pipeline branches |
+| Partner invoice reliability | `codex/partner-invoice-reliability` | `d4d0bcb` | PR #133 REVIEW; Greptile 5/5, no inline threads, Vercel Ready; canonical C4 follow-up |
+| Owner terms admin | `codex/owner-terms-admin` | `562cdbb` | PR #134 OPEN (DRAFT); review skipped; deferred owner UI for terms framework |
+| Deal soft archive | `codex/deal-archive` | `8d55664` | PR #135 OPEN (DRAFT); review skipped; ROADMAP Deferred Polish semantics |
+| Owner task queue | `codex/general-tasks-queue` | `05b45eb` | PR #136 OPEN (DRAFT); review skipped; business-operations first slice |
+| Repayment tracker | `codex/repayment-tracking` | `8fde87a` | PR #137 OPEN (DRAFT); review skipped; owner-only servicing first slice |
+| Global search v1 | `codex/global-search` | `a29ca4b` | PR #138 OPEN (DRAFT); review skipped; bounded `ilike`, not final F1 full-text search |
+| Repeat client v1 | `codex/repeat-client` | `6418b9f` | PR #139 OPEN (DRAFT); review skipped; no canonical D8 `parent_deal_id` yet |
+| Owner command centre v1 | `codex/owner-home` | `291b6e0` | PR #140 OPEN (DRAFT); review skipped; not full S10 vision horizons |
+| Data-quality worklist v1 | `codex/data-quality` | `a3b701e` | PR #141 OPEN (DRAFT); review skipped; read-only F9 first slice |
+| Package readiness | `codex/deal-package-readiness` | `ef7f8aa` | PR #142 OPEN (DRAFT); review skipped; manual E3 bridge |
+| Printable package cover | `codex/deal-package-cover` | `9da570f` | PR #143 OPEN (DRAFT); review skipped; browser PDF, not server-versioned E3 package |
+| Contractor pipeline | `codex/contractor-pipeline` | `5f5cbfd` | PR #144 OPEN (DRAFT); review skipped; D2 portal slice |
+| Doctor pipeline | `codex/doctor-pipeline` | `c028ed1` | PR #145 OPEN (DRAFT), STACKED on #144; review skipped |
+| Package dispatch log | `codex/deal-package-dispatch` | `71989c6` | PR #146 OPEN (DRAFT); review skipped; manual E3 audit bridge |
+| Portal pipeline guidance | `codex/portal-pipeline-guidance` | `89a1840` | PR #147 OPEN (DRAFT), STACKED on #145; review skipped |
 
 ## Migration apply order after review and owner merge
 
@@ -83,6 +85,7 @@ fixes, which must be approved and resolved before merge:
    merges must be ordered with a rebase and full check after each earlier merge;
    the 15 branches are not safe for a blind bulk merge.
 
-GitHub PR/reviewer status is still **UNCONFIRMED FROM THE CODEX SANDBOX** because
-outbound GitHub access is blocked there. Confirm in GitHub or from the publish
-script output before changing any row above from LOCAL COMMITTED to PR REVIEW.
+GitHub status was confirmed through the read-only GitHub integration. The
+integration cannot change draft status, and the available browser session is
+not signed in. PRs #134–#147 must be marked ready before automated review can
+produce proposed fixes.
