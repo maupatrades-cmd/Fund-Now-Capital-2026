@@ -8,6 +8,8 @@ import ContractorSubmitLeadPage from "./contractor/SubmitLeadPage";
 import ContractorMyLeadsPage from "./contractor/MyLeadsPage";
 import ContractorDealsPage from "./contractor/ContractorDealsPage";
 import ContractorBadgesPage from "./contractor/ContractorBadgesPage";
+import ContractorProgressionPage from "./contractor/ProgressionPage";
+import ContractorStatementsPage from "./contractor/StatementsPage";
 import ContractorNotificationSettingsPage from "./contractor/NotificationSettingsPage";
 
 // Session + role guard for everything under /contractor/*. The contractor
@@ -59,6 +61,8 @@ export default function ContractorGate() {
         <Route path="leads" element={<ContractorMyLeadsPage />} />
         <Route path="deals" element={<ContractorDealsPage />} />
         <Route path="badges" element={<ContractorBadgesPage />} />
+        <Route path="progression" element={<ContractorProgressionPage />} />
+        <Route path="statements" element={<ContractorStatementsPage />} />
         <Route path="settings/notifications" element={<ContractorNotificationSettingsPage />} />
         <Route path="*" element={<Navigate to="/contractor" replace />} />
       </Routes>
