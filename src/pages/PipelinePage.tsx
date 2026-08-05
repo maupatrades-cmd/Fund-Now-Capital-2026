@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   DndContext,
   DragOverlay,
@@ -10,7 +10,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { Plus } from "lucide-react";
+import { Archive, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { DEAL_STAGES } from "@/lib/dealStages";
 import { formatZAR } from "@/lib/format";
@@ -125,6 +125,8 @@ export default function PipelinePage() {
           clients={clients ?? []}
           funders={funders ?? []}
         />
+        <div className="flex items-center gap-2">
+        <Link to="/deals/archived" className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-brand-navy hover:bg-white"><Archive className="h-4 w-4" /> Archived</Link>
         <button
           type="button"
           onClick={() => setNewOpen(true)}
@@ -132,6 +134,7 @@ export default function PipelinePage() {
         >
           <Plus className="h-4 w-4" /> New deal
         </button>
+        </div>
       </div>
 
       {isLoading && <p className="text-sm text-muted-foreground">Loading pipeline…</p>}

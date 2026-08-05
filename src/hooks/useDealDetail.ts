@@ -20,6 +20,9 @@ export type Deal = {
   stage_entered_at: string;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
+  archived_by: string | null;
+  archive_reason: string | null;
   client: { id: string; business_name: string; referral_partner_id: string | null } | { id: string; business_name: string; referral_partner_id: string | null }[] | null;
 };
 
@@ -35,6 +38,29 @@ export function useDeal(id: string | undefined) {
         .single();
       if (error) throw error;
       return data as Deal;
+    },
+  });
+}
+
+export function useSetDealArchived() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, archived, reason }: { id: string; archived: boolean; reason?: string }) => {
+      const { data, error } = await supabase.rpc("owner_set_deal_archived", {
+        p_deal_id: id,
+        p_archived: archived,
+        p_reason: reason ?? null,
+      });
+      if (error) throw error;
+      if (!data) throw new Error("Deal archive state was not changed.");
+    },
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ["deal", vars.id] });
+      void qc.invalidateQueries({ queryKey: ["pipeline"] });
+      void qc.invalidateQueries({ queryKey: ["archived-deals"] });
+      void qc.invalidateQueries({ queryKey: ["dashboard"] });
+      void qc.invalidateQueries({ queryKey: ["portal-deals"] });
+      invalidateActivity(qc);
     },
   });
 }

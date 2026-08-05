@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Star } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { DEAL_STAGES, stageLabel, type DealStage } from "@/lib/dealStages";
@@ -8,7 +8,7 @@ import { formatZAR, daysSince } from "@/lib/format";
 import { stageUrgency, URGENCY_BADGE } from "@/lib/deals";
 import { one } from "@/hooks/useDeals";
 import { useToggleDealPriority } from "@/hooks/useDeals";
-import { useDeal, useUpdateDeal, useReopenDeal } from "@/hooks/useDealDetail";
+import { useDeal, useUpdateDeal, useReopenDeal, useSetDealArchived } from "@/hooks/useDealDetail";
 import { useCelebrate } from "@/lib/celebration/ConfettiProvider";
 import { FunderSubmissions } from "@/components/deals/FunderSubmissions";
 import { CommissionPickerWidget } from "@/components/deal/CommissionPickerWidget";
@@ -25,6 +25,7 @@ export default function DealDetailPage() {
   const { celebrateOnce } = useCelebrate();
   const togglePriority = useToggleDealPriority();
   const reopen = useReopenDeal();
+  const setArchived = useSetDealArchived();
   const [notes, setNotes] = useState<string | null>(null);
   const [reopenTo, setReopenTo] = useState<string | null>(null);
 
@@ -97,6 +98,19 @@ export default function DealDetailPage() {
     }
   };
 
+  const changeArchived = async () => {
+    if (deal.archived_at) {
+      try { await setArchived.mutateAsync({ id: deal.id, archived: false }); toast.success("Deal restored to the pipeline"); }
+      catch (error) { toast.error((error as Error).message || "Could not restore deal"); }
+      return;
+    }
+    const reason = window.prompt("Why are you archiving this deal? Type a short reason.");
+    if (!reason?.trim()) return;
+    if (!window.confirm("Archive this deal? It will leave the pipeline and both portals, but its records will be preserved.")) return;
+    try { await setArchived.mutateAsync({ id: deal.id, archived: true, reason }); toast.success("Deal archived"); }
+    catch (error) { toast.error((error as Error).message || "Could not archive deal"); }
+  };
+
   return (
     <div className="max-w-5xl space-y-5">
       <BackLink />
@@ -123,8 +137,9 @@ export default function DealDetailPage() {
             )}
           </p>
         </div>
-        <button
+        <div className="flex flex-wrap gap-2"><button
           type="button"
+          disabled={Boolean(deal.archived_at) || togglePriority.isPending}
           onClick={() =>
             togglePriority.mutate(
               { id: deal.id, isPriority: !deal.is_priority },
@@ -135,7 +150,7 @@ export default function DealDetailPage() {
             )
           }
           className={
-            "flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium " +
+            "flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 " +
             (deal.is_priority
               ? "border-brand-teal bg-brand-teal/10 text-brand-teal"
               : "border-border text-brand-navy hover:bg-slate-50")
@@ -144,7 +159,10 @@ export default function DealDetailPage() {
           <Star className={"h-4 w-4 " + (deal.is_priority ? "fill-brand-teal" : "")} />
           {deal.is_priority ? "Priority" : "Mark priority"}
         </button>
+        <button type="button" onClick={() => void changeArchived()} disabled={setArchived.isPending} className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50 disabled:opacity-60">{deal.archived_at ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}{deal.archived_at ? "Restore deal" : "Archive deal"}</button></div>
       </div>
+
+      {deal.archived_at && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>Archived:</strong> {deal.archive_reason ?? "No reason recorded"}. This deal is preserved but hidden from operational and portal pipelines.</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Deal info */}
@@ -154,6 +172,7 @@ export default function DealDetailPage() {
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Stage</label>
               <select
+                disabled={Boolean(deal.archived_at)}
                 value={deal.stage}
                 onChange={(e) => changeStage(e.target.value)}
                 className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand-teal"
@@ -174,6 +193,7 @@ export default function DealDetailPage() {
         <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
           <h3 className="mb-3 text-sm font-semibold text-brand-navy">Notes</h3>
           <textarea
+            disabled={Boolean(deal.archived_at)}
             rows={5}
             value={notesValue}
             onChange={(e) => setNotes(e.target.value)}
@@ -183,7 +203,7 @@ export default function DealDetailPage() {
           <button
             type="button"
             onClick={saveNotes}
-            disabled={updateDeal.isPending}
+            disabled={Boolean(deal.archived_at) || updateDeal.isPending}
             className="mt-2 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60"
           >
             Save notes
