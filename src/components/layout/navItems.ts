@@ -18,6 +18,7 @@ import {
   Bell,
   ScrollText,
   ListTodo,
+  HandCoins,
   type LucideIcon,
 } from "lucide-react";
 
@@ -37,6 +38,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/documents", label: "Documents", icon: FolderOpen },
   { to: "/funders", label: "Funders", icon: Landmark },
   { to: "/invoices", label: "Invoices", icon: Receipt },
+  { to: "/repayments", label: "Repayments", icon: HandCoins },
   { to: "/invoices/partner-approvals", label: "Partner Invoices", icon: ReceiptText },
   { to: "/partner-earnings", label: "Partner Earnings", icon: Wallet },
   { to: "/statements", label: "Statements", icon: FileText },
