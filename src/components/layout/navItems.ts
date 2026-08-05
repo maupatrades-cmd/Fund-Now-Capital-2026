@@ -19,6 +19,7 @@ import {
   ScrollText,
   ListTodo,
   HandCoins,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -45,6 +46,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/calculator", label: "Calculator", icon: Calculator },
   { to: "/activity", label: "Activity", icon: Activity },
   { to: "/reports", label: "Reports", icon: BarChart3 },
+  { to: "/data-quality", label: "Data Quality", icon: ShieldCheck },
   { to: "/team", label: "Team", icon: UserCog },
   { to: "/settings/notifications", label: "Notifications", icon: Bell },
   { to: "/settings/industries", label: "Industries", icon: Factory },

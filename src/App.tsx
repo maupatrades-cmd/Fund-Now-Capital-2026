@@ -39,6 +39,7 @@ import PartnerEarningsPage from "@/pages/PartnerEarningsPage";
 import PartnerApprovalsPage from "@/pages/PartnerApprovalsPage";
 import ActivityPage from "@/pages/ActivityPage";
 import ReportsPage from "@/pages/ReportsPage";
+import DataQualityPage from "@/pages/DataQualityPage";
 import StatementsPage from "@/pages/StatementsPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import NotificationPreferencesPage from "@/pages/NotificationPreferencesPage";
@@ -174,6 +175,7 @@ function AppRoutes() {
         <Route path="/calculator" element={<CalculatorPage />} />
         <Route path="/activity" element={<ActivityPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/data-quality" element={<DataQualityPage />} />
         <Route path="/statements" element={<StatementsPage />} />
         <Route path="/team" element={<TeamPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
