@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { FileText, ListChecks, PlusCircle } from "lucide-react";
 import PortalShell from "@/components/portal/PortalShell";
+import ProgressionCard from "@/components/portal/ProgressionCard";
 import TrainingProgressCard from "@/components/training/TrainingProgressCard";
 
 // Contractor portal home. Branded PortalShell chrome (shared with the partner
@@ -8,11 +9,12 @@ import TrainingProgressCard from "@/components/training/TrainingProgressCard";
 // "Submit a new lead" CTA. Real screens (progression, earnings, training) grow
 // from here in later PRs.
 //
-// NOTE (coordination — ContractorHomePage collision zone): the TRAINING lane
-// (this card), PROGRESSION and GAMIFICATION all add a CARD to this page. Each
-// card is self-contained (own data hooks). Whichever lane merges last stacks
-// its card in the content column below — keep additions here so the merges stay
-// independent.
+// NOTE (coordination — ContractorHomePage collision zone): PROGRESSION (the
+// <ProgressionCard />), TRAINING (the <TrainingProgressCard />) and GAMIFICATION
+// (badges, later) all add a self-contained CARD here. Each owns its own data
+// hooks — no shared state — so whichever lane merges last just stacks its card
+// in the content column below. Keep additions in the content stack so the
+// merges stay independent.
 export default function ContractorHomePage() {
   // Note: the first-login T&C gate lives in ContractorGate (PortalTermsGate wraps
   // the whole /contractor subtree), so no acceptance check is needed on this page.
@@ -44,8 +46,11 @@ export default function ContractorHomePage() {
         </Link>
       </div>
 
-      {/* Training progress (TRAINING lane). Self-contained card; other lanes'
-          cards (progression, gamification) stack alongside it here. */}
+      {/* PROGRESSION lane: level + reimbursement + progress-to-next card. */}
+      <ProgressionCard />
+
+      {/* TRAINING lane: module-progress card. Self-contained; stacks alongside
+          the progression (and future gamification) cards. */}
       <TrainingProgressCard />
 
       {/* Placeholder: submitted-leads snapshot grows here alongside other cards. */}

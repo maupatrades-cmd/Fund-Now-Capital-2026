@@ -18,6 +18,7 @@ import {
   EyeOff,
   X,
   AlertTriangle,
+  TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,7 @@ import {
   type UserRole,
 } from "@/lib/team";
 import ApplicationsPanel from "@/components/team/ApplicationsPanel";
+import ContractorProgressionDialog from "@/components/team/ContractorProgressionDialog";
 import { useApplications } from "@/hooks/useApplications";
 
 const fieldCls =
@@ -345,6 +347,8 @@ function RowActions({
   onAuditWarning: (w: AuditWarning) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Owner-side progression dialog for this contractor (PROGRESSION lane).
+  const [progressionOpen, setProgressionOpen] = useState(false);
   // Fixed-position anchor so the menu renders through a portal (document.body)
   // and is never clipped by the table's overflow-x-auto container, even on the
   // last rows.
@@ -441,6 +445,16 @@ function RowActions({
                   onEdit();
                 }}
               />
+              {member.role === "contractor" && (
+                <MenuItem
+                  icon={TrendingUp}
+                  label="Progression & level"
+                  onClick={() => {
+                    setOpen(false);
+                    setProgressionOpen(true);
+                  }}
+                />
+              )}
               <MenuItem icon={Send} label="Resend invite" disabled={invite.isPending} onClick={onResend} />
               <MenuItem
                 icon={Ban}
@@ -455,6 +469,13 @@ function RowActions({
           </>,
           document.body,
         )}
+      {progressionOpen && (
+        <ContractorProgressionDialog
+          contractorId={member.id}
+          contractorName={member.full_name || member.email || "this contractor"}
+          onClose={() => setProgressionOpen(false)}
+        />
+      )}
     </>
   );
 }
