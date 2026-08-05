@@ -18,6 +18,11 @@ export default function TrainingProgressCard() {
   const progress = useTrainingProgress();
 
   const isLoading = modules.isLoading || progress.isLoading;
+  // Distinguish a real fetch failure from the legitimate no-modules state — on
+  // error both data values are undefined, so total === 0 would otherwise render
+  // the misleading "No modules published yet". The card links to
+  // /contractor/training, which carries the full error + retry UI.
+  const isError = modules.isError || progress.isError;
   const { completed, total, percent } = trainingCompletion(modules.data, progress.data);
 
   return (
@@ -31,17 +36,19 @@ export default function TrainingProgressCard() {
         </span>
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-brand-navy">Training Progress</div>
-          <div className="text-sm text-muted-foreground">
+          <div className={`text-sm ${isError ? "text-red-600" : "text-muted-foreground"}`}>
             {isLoading
               ? "Loading…"
-              : total === 0
-                ? "No modules published yet"
-                : `${completed} of ${total} modules complete`}
+              : isError
+                ? "Couldn't load training progress — tap to retry"
+                : total === 0
+                  ? "No modules published yet"
+                  : `${completed} of ${total} modules complete`}
           </div>
         </div>
       </div>
 
-      {!isLoading && total > 0 && (
+      {!isLoading && !isError && total > 0 && (
         <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
           <div
             className="h-full rounded-full bg-brand-teal transition-all"
