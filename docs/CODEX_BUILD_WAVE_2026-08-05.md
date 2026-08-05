@@ -19,7 +19,7 @@ explicitly recorded.
 | Build | Branch | Commit | Status / canonical boundary |
 |---|---|---:|---|
 | Partner invoice reliability | `codex/partner-invoice-reliability` | `d4d0bcb` | PR #133 **MERGED** at `ee97476`; Greptile 5/5, no inline threads, Vercel Ready; no migration; canonical C4 follow-up |
-| Owner terms admin | `codex/owner-terms-admin` | `8843c36` | PR #134 REVIEW; Greptile finding fixed locally plus accepted-history hardening; deferred owner UI for terms framework |
+| Owner terms admin | `codex/owner-terms-admin` | `8843c36` | PR #134 **MERGED** at `096306d`; Greptile 5/5; migration `20260805100000_owner_terms_admin.sql` pending apply and smoke test; deferred owner UI for terms framework |
 | Deal soft archive | `codex/deal-archive` | `8d55664` | PR #135 REVIEW; finding rejected because existing deal trigger preserves before-values; ROADMAP Deferred Polish semantics |
 | Owner task queue | `codex/general-tasks-queue` | `bd30b89` | PR #136 REVIEW; direct-write attribution finding fixed locally; business-operations first slice |
 | Repayment tracker | `codex/repayment-tracking` | `4ffe0d7` | PR #137 REVIEW; underpayment and rounding findings fixed locally; owner-only servicing first slice |
@@ -91,7 +91,8 @@ marked PRs #134–#147 ready through GitHub CLI, enabling automated review.
 ## Automated review checkpoint — 2026-08-05 23:55 SAST
 
 PR #133 passed Greptile 5/5 and Vercel, then was merged as `ee97476` on
-2026-08-06 SAST. PRs #134–#147 remain open. Greptile completed its first pass
+2026-08-06 SAST. PR #134 passed Greptile 5/5 and was merged as `096306d`;
+its Terms migration remains unapplied. PRs #135–#147 remain open. Greptile completed its first pass
 on all 15. Valid findings were fixed and pushed on nine branches; those commit
 hashes are recorded in the inventory. Vercel and CodeRabbit reran against the
 fix commits, while remaining Greptile rereviews must complete before further
@@ -99,5 +100,5 @@ merges. PR #135's restore-history finding was rejected: the existing `deals`
 activity trigger records changed fields plus before/after archive values, so a
 second RPC audit insert would duplicate the event.
 
-No migration has been applied. PR #133 was merged on 2026-08-06 SAST; all
-other wave PRs remain open.
+No migration has been applied. PRs #133 and #134 were merged on 2026-08-06
+SAST; all other wave PRs remain open.
