@@ -22,7 +22,7 @@ export function useOwnerTasks() {
 export function useCreateOwnerTask() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: async (task: { title: string; notes?: string; dueAt?: string; priority: OwnerTask["priority"] }) => {
-    const { error } = await supabase.from("owner_tasks").insert({ title: task.title.trim(), notes: task.notes?.trim() || null, due_at: task.dueAt || null, priority: task.priority });
+    const { error } = await supabase.rpc("owner_create_task", { p_title: task.title.trim(), p_notes: task.notes?.trim() || null, p_due_at: task.dueAt || null, p_priority: task.priority });
     if (error) throw error;
   }, onSuccess: () => { void qc.invalidateQueries({ queryKey: ["owner-tasks"] }); invalidateActivity(qc); }});
 }
