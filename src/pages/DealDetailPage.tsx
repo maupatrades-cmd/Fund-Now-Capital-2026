@@ -13,6 +13,7 @@ import { useCelebrate } from "@/lib/celebration/ConfettiProvider";
 import { FunderSubmissions } from "@/components/deals/FunderSubmissions";
 import { CommissionPickerWidget } from "@/components/deal/CommissionPickerWidget";
 import { DealInvoices } from "@/components/deals/DealInvoices";
+import { DealPackageReadiness } from "@/components/deals/DealPackageReadiness";
 import { CommunicationsLog } from "@/components/deals/CommunicationsLog";
 import { DealDocuments } from "@/components/deals/DealDocuments";
 import { StageHistory } from "@/components/deals/StageHistory";
@@ -190,6 +191,8 @@ export default function DealDetailPage() {
           </button>
         </section>
       </div>
+
+      <DealPackageReadiness clientId={deal.client_id} isPurchaseOrder={deal.is_purchase_order} amountRequested={deal.amount_requested} />
 
       {/* Funder submissions with embedded commission calculator */}
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
