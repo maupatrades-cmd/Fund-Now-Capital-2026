@@ -10,7 +10,9 @@ export function useGlobalSearch(term: string) {
     enabled: query.length >= 2,
     staleTime: 30_000,
     queryFn: async (): Promise<SearchResult[]> => {
-      const pattern = `%${query.replace(/[%_]/g, "")}%`;
+      const sanitizedQuery = query.replace(/[%_\\]/g, "").trim();
+      if (sanitizedQuery.length < 2) return [];
+      const pattern = `%${sanitizedQuery}%`;
       const [clients, leads, deals, funders] = await Promise.all([
         supabase.from("clients").select("id,business_name").ilike("business_name", pattern).limit(5),
         supabase.from("leads").select("id,business_name").ilike("business_name", pattern).limit(5),
