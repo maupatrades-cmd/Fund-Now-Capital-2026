@@ -211,34 +211,44 @@ export default function DealDetailPage() {
         </section>
       </div>
 
-      {/* Funder submissions with embedded commission calculator */}
-      <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
-        <FunderSubmissions dealId={deal.id} isPurchaseOrder={deal.is_purchase_order} />
-      </section>
+      {deal.archived_at ? (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 shadow-sm">
+          This archived deal is read-only. Restore it before changing submissions, commissions, invoices, or communications.
+        </section>
+      ) : (
+        <>
+          {/* Funder submissions with embedded commission calculator */}
+          <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+            <FunderSubmissions dealId={deal.id} isPurchaseOrder={deal.is_purchase_order} />
+          </section>
 
-      {/* Commission Calculation — owner-only picker (POTENTIAL → PENDING → LOCKED) */}
-      <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
-        <CommissionPickerWidget key={deal.id} dealId={deal.id} amountRequested={deal.amount_requested} />
-      </section>
+          {/* Commission Calculation — owner-only picker (POTENTIAL → PENDING → LOCKED) */}
+          <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+            <CommissionPickerWidget key={deal.id} dealId={deal.id} amountRequested={deal.amount_requested} />
+          </section>
 
-      {/* Invoices — generate/track FNC → funder invoices for this deal (C1.2) */}
-      <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
-        <DealInvoices
-          dealId={deal.id}
-          clientId={deal.client_id}
-          isPurchaseOrder={deal.is_purchase_order}
-          stage={deal.stage}
-        />
-      </section>
+          {/* Invoices — generate/track FNC → funder invoices for this deal (C1.2) */}
+          <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+            <DealInvoices
+              dealId={deal.id}
+              clientId={deal.client_id}
+              isPurchaseOrder={deal.is_purchase_order}
+              stage={deal.stage}
+            />
+          </section>
+        </>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
-          <CommunicationsLog
-            dealId={deal.id}
-            clientId={deal.client_id}
-            referralPartnerId={deal.referral_partner_id}
-          />
-        </section>
+        {!deal.archived_at && (
+          <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+            <CommunicationsLog
+              dealId={deal.id}
+              clientId={deal.client_id}
+              referralPartnerId={deal.referral_partner_id}
+            />
+          </section>
+        )}
         <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
           <DealDocuments clientId={deal.client_id} />
         </section>

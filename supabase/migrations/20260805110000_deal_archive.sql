@@ -93,9 +93,62 @@ revoke all on function public.contractor_list_own_deals() from public, anon;
 grant execute on function public.partner_list_own_deals() to authenticated, service_role;
 grant execute on function public.contractor_list_own_deals() to authenticated, service_role;
 
+-- Archived deals are immutable operational records. Enforce this below the UI
+-- so direct API calls cannot add, alter, or remove downstream deal activity.
+create or replace function public.prevent_archived_deal_child_mutation()
+returns trigger
+language plpgsql
+security definer
+set search_path to ''
+as $$
+declare
+  v_deal_id uuid;
+begin
+  v_deal_id := case when tg_op = 'DELETE' then old.deal_id else new.deal_id end;
+  if v_deal_id is not null and exists (
+    select 1 from public.deals where id = v_deal_id and archived_at is not null
+  ) then
+    raise exception 'Archived deals are read-only; restore the deal before changing operational records'
+      using errcode = '55000';
+  end if;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.prevent_archived_deal_child_mutation() from public, anon, authenticated;
+
+drop trigger if exists prevent_archived_deal_submission_mutation on public.deal_funder_submissions;
+create trigger prevent_archived_deal_submission_mutation
+before insert or update or delete on public.deal_funder_submissions
+for each row execute function public.prevent_archived_deal_child_mutation();
+
+drop trigger if exists prevent_archived_deal_commission_mutation on public.commission_records;
+create trigger prevent_archived_deal_commission_mutation
+before insert or update or delete on public.commission_records
+for each row execute function public.prevent_archived_deal_child_mutation();
+
+drop trigger if exists prevent_archived_deal_bonus_mutation on public.bonus_records;
+create trigger prevent_archived_deal_bonus_mutation
+before insert or update or delete on public.bonus_records
+for each row execute function public.prevent_archived_deal_child_mutation();
+
+drop trigger if exists prevent_archived_deal_invoice_mutation on public.funder_invoices;
+create trigger prevent_archived_deal_invoice_mutation
+before insert or update or delete on public.funder_invoices
+for each row execute function public.prevent_archived_deal_child_mutation();
+
+drop trigger if exists prevent_archived_deal_communication_mutation on public.communications;
+create trigger prevent_archived_deal_communication_mutation
+before insert or update or delete on public.communications
+for each row execute function public.prevent_archived_deal_child_mutation();
+
 do $$ begin
   if has_function_privilege('anon','public.owner_set_deal_archived(uuid,boolean,text)','execute') then raise exception 'assert: anon archive execute'; end if;
   if not exists (select 1 from pg_indexes where schemaname='public' and indexname='deals_active_created_idx') then raise exception 'assert: active deals index missing'; end if;
+  if (select count(*) from pg_trigger where tgname like 'prevent_archived_deal_%_mutation' and not tgisinternal) <> 5 then raise exception 'assert: archived deal mutation guards missing'; end if;
 end $$;
 
 notify pgrst, 'reload schema';
