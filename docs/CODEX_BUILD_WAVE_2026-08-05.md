@@ -61,3 +61,28 @@ The isolated Codex bundle clone had incomplete Node dependencies (`tsc` was not
 available). Initial commits received structural review and `git diff --check`,
 but not a successful TypeScript/Vite/oxlint run. They remain review candidates,
 not production-approved code, until this gate passes in the real repository.
+
+## Static audit checkpoint — 2026-08-05
+
+No migration has been applied and no feature in this wave is marked production
+ready. The first repository-to-canonical-doc review identified these proposed
+fixes, which must be approved and resolved before merge:
+
+1. **Terms evidence integrity:** a non-current Terms version can currently be
+   edited even if users already accepted it. Historical accepted wording must
+   remain immutable; only never-published, never-accepted drafts may be edited.
+2. **Repayment semantics:** the recorder accepts a partial amount but closes the
+   instalment to further writes. The product must either require full payment or
+   add an append-only payment ledger that deliberately supports partials.
+3. **Package contents:** the printable cover currently lists every current,
+   active client document. It must not present unaccepted/unverified or expired
+   documents as submission-ready, and the final E3 design still requires a
+   reproducible source-version snapshot.
+4. **Merge sequencing:** several branches modify the same shared route,
+   navigation, dashboard, or Deal Detail files. Review can run in parallel, but
+   merges must be ordered with a rebase and full check after each earlier merge;
+   the 15 branches are not safe for a blind bulk merge.
+
+GitHub PR/reviewer status is still **UNCONFIRMED FROM THE CODEX SANDBOX** because
+outbound GitHub access is blocked there. Confirm in GitHub or from the publish
+script output before changing any row above from LOCAL COMMITTED to PR REVIEW.
