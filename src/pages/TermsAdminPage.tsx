@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { Eye, FilePlus2, Loader2, Pencil, Radio, StopCircle } from "lucide-react";
+import { Eye, FilePlus2, Loader2, Pencil, Radio } from "lucide-react";
 import { toast } from "sonner";
 import { TermsMarkdown } from "@/components/terms/TermsMarkdown";
 import {
   usePublishTermsVersion,
-  useRetireTermsVersion,
   useSaveTermsDraft,
   useTermsVersionsAdmin,
 } from "@/hooks/useTermsAdmin";
@@ -33,7 +32,6 @@ export default function TermsAdminPage() {
   const versions = useTermsVersionsAdmin();
   const save = useSaveTermsDraft();
   const publish = usePublishTermsVersion();
-  const retire = useRetireTermsVersion();
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [preview, setPreview] = useState<TermsVersion | EditorState | null>(null);
 
@@ -64,16 +62,6 @@ export default function TermsAdminPage() {
       toast.success(`${version.version_number} is now live`);
     } catch (error) {
       toast.error((error as Error).message || "Could not publish this version");
-    }
-  };
-
-  const retireVersion = async (version: TermsVersion) => {
-    if (!window.confirm(`Retire ${version.version_number}? Portal access will have no active Terms gate until another version is published.`)) return;
-    try {
-      await retire.mutateAsync(version.id);
-      toast.success(`${version.version_number} retired`);
-    } catch (error) {
-      toast.error((error as Error).message || "Could not retire this version");
     }
   };
 
@@ -114,12 +102,11 @@ export default function TermsAdminPage() {
                   <td className="px-4 py-3 font-semibold text-brand-navy">{version.version_number}</td>
                   <td className="px-4 py-3 text-muted-foreground">{version.effective_date}</td>
                   <td className="px-4 py-3 text-muted-foreground">Doctor + Contractor</td>
-                  <td className="px-4 py-3"><span className={version.is_current ? "rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700" : "rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600"}>{version.is_current ? "Live" : "Draft / retired"}</span></td>
+                  <td className="px-4 py-3"><span className={version.is_current ? "rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700" : "rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600"}>{version.is_current ? "Live" : version.published_at ? "Historical" : "Draft"}</span></td>
                   <td className="px-4 py-3"><div className="flex justify-end gap-2">
                     <button title="Preview" onClick={() => setPreview(version)} className="rounded-lg border border-border p-2 text-brand-navy hover:bg-slate-50"><Eye className="h-4 w-4" /></button>
-                    {!version.is_current && <button title="Edit draft" onClick={() => edit(version)} className="rounded-lg border border-border p-2 text-brand-navy hover:bg-slate-50"><Pencil className="h-4 w-4" /></button>}
-                    {!version.is_current && <button title="Publish" disabled={publish.isPending} onClick={() => void publishVersion(version)} className="inline-flex items-center gap-1 rounded-lg bg-brand-teal px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"><Radio className="h-3.5 w-3.5" /> Publish</button>}
-                    {version.is_current && <button title="Retire" disabled={retire.isPending} onClick={() => void retireVersion(version)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 disabled:opacity-60"><StopCircle className="h-3.5 w-3.5" /> Retire</button>}
+                    {!version.is_current && !version.published_at && <button title="Edit draft" onClick={() => edit(version)} className="rounded-lg border border-border p-2 text-brand-navy hover:bg-slate-50"><Pencil className="h-4 w-4" /></button>}
+                    {!version.is_current && !version.published_at && <button title="Publish" disabled={publish.isPending} onClick={() => void publishVersion(version)} className="inline-flex items-center gap-1 rounded-lg bg-brand-teal px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"><Radio className="h-3.5 w-3.5" /> Publish</button>}
                   </div></td>
                 </tr>
               ))}

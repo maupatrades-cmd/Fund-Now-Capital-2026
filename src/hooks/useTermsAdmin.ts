@@ -63,15 +63,3 @@ export function usePublishTermsVersion() {
     onSuccess: invalidate,
   });
 }
-
-export function useRetireTermsVersion() {
-  const invalidate = useTermsAdminInvalidator();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await supabase.rpc("owner_retire_terms_version", { p_id: id });
-      if (error) throw error;
-      return data as TermsVersion;
-    },
-    onSuccess: invalidate,
-  });
-}

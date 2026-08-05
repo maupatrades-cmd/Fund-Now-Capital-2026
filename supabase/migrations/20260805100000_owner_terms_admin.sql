@@ -1,6 +1,15 @@
 -- Owner Terms administration: narrow write RPCs for the existing framework.
 -- The acceptance ledger remains immutable and is not exposed by these functions.
 
+alter table public.terms_versions
+  add column if not exists published_at timestamptz;
+
+-- The seeded live version predates this admin surface. Preserve it as already
+-- published so it can never become an editable draft after it is superseded.
+update public.terms_versions
+set published_at = coalesce(updated_at, created_at)
+where is_current and published_at is null;
+
 create or replace function public.owner_save_terms_version(
   p_id uuid,
   p_version_number text,
@@ -42,14 +51,20 @@ begin
       array['partner','contractor']::public.user_role[], false, v_uid
     ) returning * into v_row;
   else
-    update public.terms_versions
+    update public.terms_versions as tv
        set version_number = btrim(p_version_number),
            effective_date = p_effective_date,
            content_markdown = p_content_markdown
-     where id = p_id and not is_current
+     where id = p_id
+       and not is_current
+       and published_at is null
+       and not exists (
+         select 1 from public.terms_acceptances_ledger a
+         where a.terms_version_id = tv.id
+       )
      returning * into v_row;
     if not found then
-      raise exception 'Only a draft Terms version may be edited';
+      raise exception 'Only a never-published, never-accepted Terms draft may be edited';
     end if;
   end if;
 
@@ -80,41 +95,26 @@ begin
   if v_row.applies_to_roles is distinct from array['partner','contractor']::public.user_role[] then
     raise exception 'Platform Terms must apply to both partner and contractor roles';
   end if;
+  if v_row.published_at is not null then
+    raise exception 'A historical Terms version cannot be republished';
+  end if;
+  if v_row.effective_date > current_date then
+    raise exception 'Terms cannot be published before their effective date';
+  end if;
 
   update public.terms_versions set is_current = false where is_current and id <> p_id;
-  update public.terms_versions set is_current = true where id = p_id returning * into v_row;
-  return v_row;
-end;
-$$;
-
-create or replace function public.owner_retire_terms_version(p_id uuid)
-returns public.terms_versions
-language plpgsql
-security definer
-set search_path to ''
-as $$
-declare
-  v_uid uuid := auth.uid();
-  v_row public.terms_versions;
-begin
-  if v_uid is null or not exists (
-    select 1 from public.profiles
-    where id = v_uid and role = 'owner' and is_active
-  ) then
-    raise exception 'Only an active owner may retire Terms & Conditions' using errcode = '42501';
-  end if;
-  update public.terms_versions set is_current = false where id = p_id returning * into v_row;
-  if not found then raise exception 'Terms version not found'; end if;
+  update public.terms_versions
+     set is_current = true, published_at = now()
+   where id = p_id
+   returning * into v_row;
   return v_row;
 end;
 $$;
 
 revoke all on function public.owner_save_terms_version(uuid,text,date,text) from public, anon;
 revoke all on function public.owner_publish_terms_version(uuid) from public, anon;
-revoke all on function public.owner_retire_terms_version(uuid) from public, anon;
 grant execute on function public.owner_save_terms_version(uuid,text,date,text) to authenticated, service_role;
 grant execute on function public.owner_publish_terms_version(uuid) to authenticated, service_role;
-grant execute on function public.owner_retire_terms_version(uuid) to authenticated, service_role;
 
 do $$
 declare
@@ -123,8 +123,7 @@ declare
 begin
   foreach v_sig in array array[
     'public.owner_save_terms_version(uuid,text,date,text)',
-    'public.owner_publish_terms_version(uuid)',
-    'public.owner_retire_terms_version(uuid)'
+    'public.owner_publish_terms_version(uuid)'
   ] loop
     v_proc := to_regprocedure(v_sig);
     if v_proc is null then raise exception 'assert: missing %', v_sig; end if;
