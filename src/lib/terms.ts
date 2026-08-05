@@ -13,6 +13,7 @@ export type TermsVersion = {
   content_markdown: string;
   applies_to_roles: string[];
   is_current: boolean;
+  published_at: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

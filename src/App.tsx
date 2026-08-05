@@ -42,6 +42,7 @@ import NotificationPreferencesPage from "@/pages/NotificationPreferencesPage";
 import IndustriesPage from "@/pages/IndustriesPage";
 import FundersSettingsPage from "@/pages/FundersSettingsPage";
 import TeamPage from "@/pages/TeamPage";
+import TermsAdminPage from "@/pages/TermsAdminPage";
 import { ConfettiProvider } from "@/lib/celebration/ConfettiProvider";
 import { useProfileRole } from "@/hooks/useProfileRole";
 import { roleHome } from "@/lib/roles";
@@ -173,6 +174,7 @@ function AppRoutes() {
         <Route path="/settings/notifications" element={<NotificationPreferencesPage />} />
         <Route path="/settings/industries" element={<IndustriesPage />} />
         <Route path="/settings/funders" element={<FundersSettingsPage />} />
+        <Route path="/settings/terms" element={<TermsAdminPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

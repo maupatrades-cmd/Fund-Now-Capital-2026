@@ -16,6 +16,7 @@ import {
   FileText,
   UserCog,
   Bell,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -44,4 +45,5 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/settings/notifications", label: "Notifications", icon: Bell },
   { to: "/settings/industries", label: "Industries", icon: Factory },
   { to: "/settings/funders", label: "Funder rates", icon: Percent },
+  { to: "/settings/terms", label: "Terms", icon: ScrollText },
 ];
