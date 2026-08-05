@@ -19,20 +19,20 @@ explicitly recorded.
 | Build | Branch | Commit | Status / canonical boundary |
 |---|---|---:|---|
 | Partner invoice reliability | `codex/partner-invoice-reliability` | `d4d0bcb` | PR #133 REVIEW; Greptile 5/5, no inline threads, Vercel Ready; canonical C4 follow-up |
-| Owner terms admin | `codex/owner-terms-admin` | `562cdbb` | PR #134 OPEN (DRAFT); review skipped; deferred owner UI for terms framework |
-| Deal soft archive | `codex/deal-archive` | `8d55664` | PR #135 OPEN (DRAFT); review skipped; ROADMAP Deferred Polish semantics |
-| Owner task queue | `codex/general-tasks-queue` | `05b45eb` | PR #136 OPEN (DRAFT); review skipped; business-operations first slice |
-| Repayment tracker | `codex/repayment-tracking` | `8fde87a` | PR #137 OPEN (DRAFT); review skipped; owner-only servicing first slice |
-| Global search v1 | `codex/global-search` | `a29ca4b` | PR #138 OPEN (DRAFT); review skipped; bounded `ilike`, not final F1 full-text search |
-| Repeat client v1 | `codex/repeat-client` | `6418b9f` | PR #139 OPEN (DRAFT); review skipped; no canonical D8 `parent_deal_id` yet |
-| Owner command centre v1 | `codex/owner-home` | `291b6e0` | PR #140 OPEN (DRAFT); review skipped; not full S10 vision horizons |
-| Data-quality worklist v1 | `codex/data-quality` | `a3b701e` | PR #141 OPEN (DRAFT); review skipped; read-only F9 first slice |
-| Package readiness | `codex/deal-package-readiness` | `ef7f8aa` | PR #142 OPEN (DRAFT); review skipped; manual E3 bridge |
-| Printable package cover | `codex/deal-package-cover` | `9da570f` | PR #143 OPEN (DRAFT); review skipped; browser PDF, not server-versioned E3 package |
-| Contractor pipeline | `codex/contractor-pipeline` | `5f5cbfd` | PR #144 OPEN (DRAFT); review skipped; D2 portal slice |
-| Doctor pipeline | `codex/doctor-pipeline` | `c028ed1` | PR #145 OPEN (DRAFT), STACKED on #144; review skipped |
-| Package dispatch log | `codex/deal-package-dispatch` | `71989c6` | PR #146 OPEN (DRAFT); review skipped; manual E3 audit bridge |
-| Portal pipeline guidance | `codex/portal-pipeline-guidance` | `89a1840` | PR #147 OPEN (DRAFT), STACKED on #145; review skipped |
+| Owner terms admin | `codex/owner-terms-admin` | `8843c36` | PR #134 REVIEW; Greptile finding fixed locally plus accepted-history hardening; deferred owner UI for terms framework |
+| Deal soft archive | `codex/deal-archive` | `8d55664` | PR #135 REVIEW; finding rejected because existing deal trigger preserves before-values; ROADMAP Deferred Polish semantics |
+| Owner task queue | `codex/general-tasks-queue` | `bd30b89` | PR #136 REVIEW; direct-write attribution finding fixed locally; business-operations first slice |
+| Repayment tracker | `codex/repayment-tracking` | `4ffe0d7` | PR #137 REVIEW; underpayment and rounding findings fixed locally; owner-only servicing first slice |
+| Global search v1 | `codex/global-search` | `4267a47` | PR #138 REVIEW; wildcard and request-volume findings fixed locally; bounded `ilike`, not final F1 full-text search |
+| Repeat client v1 | `codex/repeat-client` | `e449ff6` | PR #139 REVIEW; stale history cache fixed locally; no canonical D8 `parent_deal_id` yet |
+| Owner command centre v1 | `codex/owner-home` | `291b6e0` | PR #140 REVIEW; no inline findings; not full S10 vision horizons |
+| Data-quality worklist v1 | `codex/data-quality` | `b68f556` | PR #141 REVIEW; exhaustive pagination and actionable deal amount fixed locally; read-only F9 first slice |
+| Package readiness | `codex/deal-package-readiness` | `3fdd851` | PR #142 REVIEW; fail-closed query state fixed locally; manual E3 bridge |
+| Printable package cover | `codex/deal-package-cover` | `4e1bb24` | PR #143 REVIEW; fail-closed query state and accepted/non-expired filter fixed locally; browser PDF, not server-versioned E3 package |
+| Contractor pipeline | `codex/contractor-pipeline` | `5f5cbfd` | PR #144 REVIEW; no inline findings; D2 portal slice |
+| Doctor pipeline | `codex/doctor-pipeline` | `c028ed1` | PR #145 REVIEW, STACKED on #144; no inline findings |
+| Package dispatch log | `codex/deal-package-dispatch` | `577a53c` | PR #146 REVIEW; timestamp, activity association and cross-deal draft findings fixed locally; manual E3 audit bridge |
+| Portal pipeline guidance | `codex/portal-pipeline-guidance` | `89a1840` | PR #147 REVIEW, STACKED on #145; no inline findings |
 
 ## Migration apply order after review and owner merge
 
@@ -85,7 +85,17 @@ fixes, which must be approved and resolved before merge:
    merges must be ordered with a rebase and full check after each earlier merge;
    the 15 branches are not safe for a blind bulk merge.
 
-GitHub status was confirmed through the read-only GitHub integration. The
-integration cannot change draft status, and the available browser session is
-not signed in. PRs #134–#147 must be marked ready before automated review can
-produce proposed fixes.
+GitHub status was confirmed through the read-only GitHub integration. The owner
+marked PRs #134–#147 ready through GitHub CLI, enabling automated review.
+
+## Automated review checkpoint — 2026-08-05 23:55 SAST
+
+All PRs #133–#147 are ready for review and have Vercel preview deployments.
+Greptile completed its first pass on all 15. Valid findings were fixed in local
+commits on nine branches; those commit hashes are recorded in the inventory and
+must be pushed before the findings can become outdated/resolved and previews can
+rerun. PR #135's restore-history finding was rejected: the existing `deals`
+activity trigger records changed fields plus before/after archive values, so a
+second RPC audit insert would duplicate the event.
+
+No migration has been applied and no PR has been merged.
