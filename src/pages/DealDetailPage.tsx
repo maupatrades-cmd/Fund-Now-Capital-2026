@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Archive, ArchiveRestore, ArrowLeft, Star } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, PackageOpen, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { DEAL_STAGES, stageLabel, type DealStage } from "@/lib/dealStages";
@@ -137,7 +137,7 @@ export default function DealDetailPage() {
             )}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2"><button
+        <div className="flex flex-wrap gap-2"><Link to={`/deals/${deal.id}/package`} className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50"><PackageOpen className="h-4 w-4"/>Package</Link><button
           type="button"
           disabled={Boolean(deal.archived_at) || togglePriority.isPending}
           onClick={() =>
