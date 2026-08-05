@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, LogOut, PlusCircle, ListChecks, Briefcase, FileText, ReceiptText, Bell } from "lucide-react";
+import { Home, LogOut, PlusCircle, ListChecks, Briefcase, FileText, ReceiptText, GraduationCap, Bell, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
@@ -34,6 +34,11 @@ function navItems(portal: PortalKind) {
     { to: `${base}/submit-lead`, label: "Submit Lead", icon: PlusCircle, end: false },
     { to: `${base}/leads`, label: "My Leads", icon: ListChecks, end: false },
     { to: `${base}/deals`, label: "My Deals", icon: Briefcase, end: false },
+    // "My Progress" is a contractor-only surface (Base→L3 progression). Partners
+    // have no level progression, so it never shows in the partner portal.
+    ...(portal === "contractor"
+      ? [{ to: `${base}/progression`, label: "My Progress", icon: TrendingUp, end: false }]
+      : []),
     // Statements is a monthly earnings roll-up for both portals (partner sees his
     // 50/50 split; contractor sees commission + reimbursements). Own take only.
     { to: `${base}/statements`, label: "Statements", icon: FileText, end: false },
@@ -41,6 +46,11 @@ function navItems(portal: PortalKind) {
     // invoicing is a separate, later concern — no invoices tab for contractors.
     ...(portal === "partner"
       ? [{ to: `${base}/invoices`, label: "Invoices", icon: ReceiptText, end: false }]
+      : []),
+    // Training is a contractor-only surface (TRAINING lane — Product Knowledge
+    // modules). Partners have no training programme.
+    ...(portal === "contractor"
+      ? [{ to: `${base}/training`, label: "Training", icon: GraduationCap, end: false }]
       : []),
     { to: `${base}/settings/notifications`, label: "Notifications", icon: Bell, end: false },
   ];
