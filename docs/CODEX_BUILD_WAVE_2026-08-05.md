@@ -33,6 +33,7 @@ explicitly recorded.
 | Doctor pipeline | `codex/doctor-pipeline` | `c028ed1` | PR #145 REVIEW, STACKED on #144; no inline findings |
 | Package dispatch log | `codex/deal-package-dispatch` | `577a53c` | PR #146 REVIEW; timestamp, activity association and cross-deal draft findings fixed locally; manual E3 audit bridge |
 | Portal pipeline guidance | `codex/portal-pipeline-guidance` | `89a1840` | PR #147 REVIEW, STACKED on #145; no inline findings |
+| Record deal funding | `agent/record-deal-funding` | pending | **LOCAL BUILD**; owner captures actual amount/date per funder submission, advances the deal to Funded, and unlocks the existing funder-invoice generator; no migration and no live-deal mutation |
 
 ## Migration apply order after review and owner merge
 

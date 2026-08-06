@@ -255,7 +255,11 @@ export default function DealDetailPage() {
 
       {/* Funder submissions with embedded commission calculator */}
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
-        <FunderSubmissions dealId={deal.id} isPurchaseOrder={deal.is_purchase_order} />
+        <FunderSubmissions
+          dealId={deal.id}
+          isPurchaseOrder={deal.is_purchase_order}
+          dealStage={deal.stage}
+        />
       </section>
 
       {/* Commission Calculation — owner-only picker (POTENTIAL → PENDING → LOCKED) */}

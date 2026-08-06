@@ -34,6 +34,7 @@ export const SUBMISSION_STATUSES = [
 ] as const;
 
 export function submissionStatusLabel(value: string): string {
+  if (value === "funded") return "Funded";
   return SUBMISSION_STATUSES.find((s) => s.value === value)?.label ?? value;
 }
 
@@ -42,6 +43,7 @@ export const SUBMISSION_STATUS_BADGE: Record<string, string> = {
   in_credit: "bg-brand-teal/10 text-brand-teal ring-brand-teal/20",
   approved: "bg-green-100 text-green-800 ring-green-600/20",
   quote_received: "bg-amber-100 text-amber-800 ring-amber-600/20",
+  funded: "bg-emerald-100 text-emerald-800 ring-emerald-600/20",
   declined: "bg-red-100 text-red-700 ring-red-600/20",
 };
 
