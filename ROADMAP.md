@@ -2,6 +2,11 @@
 
 This is the single source of truth for build order. It supersedes the per-part phase suggestions in Parts 1–6. Feature DETAILS live in `SPEC.md`. Core rules live in `CLAUDE.md`.
 
+> **2026-08-05 Codex wave:** 15 candidate builds are locally committed but are
+> not yet production truth. Review, merge, migration-apply and smoke-test status
+> is tracked in [`docs/CODEX_BUILD_WAVE_2026-08-05.md`](docs/CODEX_BUILD_WAVE_2026-08-05.md).
+> Always verify GitHub merge and live Supabase apply status separately.
+
 **Ordering principle:** dependencies first, money-adjacent systems get their audit/notification plumbing BEFORE they exist, Doctor's portal ships only when it has real data to show.
 
 **Legend:** ✅ done · 🔨 in progress · ⬜ not started · 🔒 blocked by earlier item
