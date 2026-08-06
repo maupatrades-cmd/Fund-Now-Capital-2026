@@ -27,12 +27,14 @@ export default function DealDetailPage() {
   const reopen = useReopenDeal();
   const setArchived = useSetDealArchived();
   const [notes, setNotes] = useState<string | null>(null);
+  const [amountRequested, setAmountRequested] = useState<string | null>(null);
   const [reopenTo, setReopenTo] = useState<string | null>(null);
 
   // Drop any local notes draft when navigating to a different deal so it can't
   // be saved back to the wrong record.
   useEffect(() => {
     setNotes(null);
+    setAmountRequested(null);
     setReopenTo(null);
   }, [id]);
 
@@ -52,6 +54,7 @@ export default function DealDetailPage() {
   const days = daysSince(deal.stage_entered_at);
   const urgency = stageUrgency(days);
   const notesValue = notes ?? deal.notes ?? "";
+  const amountRequestedValue = amountRequested ?? deal.amount_requested ?? "";
 
   const changeStage = (stage: string) => {
     if (stage === deal.stage) return;
@@ -109,6 +112,21 @@ export default function DealDetailPage() {
     if (!window.confirm("Archive this deal? It will leave the pipeline and both portals, but its records will be preserved.")) return;
     try { await setArchived.mutateAsync({ id: deal.id, archived: true, reason }); toast.success("Deal archived"); }
     catch (error) { toast.error((error as Error).message || "Could not archive deal"); }
+  };
+
+  const saveAmountRequested = async () => {
+    const amount = Number(amountRequestedValue);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter a funding amount greater than zero");
+      return;
+    }
+    try {
+      await updateDeal.mutateAsync({ id: deal.id, input: { amount_requested: amount } });
+      setAmountRequested(null);
+      toast.success("Funding amount saved");
+    } catch (e) {
+      toast.error((e as Error).message || "Could not save funding amount");
+    }
   };
 
   return (
@@ -182,7 +200,28 @@ export default function DealDetailPage() {
                 ))}
               </select>
             </div>
-            <Info label="Amount requested" value={deal.amount_requested != null ? formatZAR(deal.amount_requested) : "—"} />
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Amount requested</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={amountRequestedValue}
+                  onChange={(event) => setAmountRequested(event.target.value)}
+                  placeholder="Funding amount"
+                  className="min-w-0 flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand-teal"
+                />
+                <button
+                  type="button"
+                  disabled={Boolean(deal.archived_at) || updateDeal.isPending || amountRequestedValue === (deal.amount_requested ?? "")}
+                  onClick={() => void saveAmountRequested()}
+                  className="rounded-lg border border-brand-teal px-3 py-2 text-xs font-semibold text-brand-navy disabled:opacity-50"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
             <Info label="Gross commission" value={deal.gross_commission != null ? formatZAR(deal.gross_commission) : "—"} />
             <Info label="Deal type" value={deal.is_purchase_order ? "Purchase Order" : "Standard"} />
             <Info label="Referred by" value={deal.referral_partner_id ? "Referral partner" : "Self"} />
