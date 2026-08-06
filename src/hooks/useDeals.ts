@@ -126,8 +126,9 @@ export function useCreateDeal() {
       if (error) throw error;
       return data as { id: string };
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["pipeline"] });
+    onSuccess: (_data, variables) => {
+      void qc.invalidateQueries({ queryKey: ["pipeline"] });
+      void qc.invalidateQueries({ queryKey: ["client-deals", variables.clientId] });
       invalidateActivity(qc);
     },
   });

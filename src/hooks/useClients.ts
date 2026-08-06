@@ -120,6 +120,22 @@ export function useClient(id: string | undefined) {
   });
 }
 
+export type ClientDeal = { id: string; reference: string | null; stage: string; created_at: string; amount_requested: string | null };
+
+export function useClientDeals(clientId: string | undefined) {
+  return useQuery({
+    queryKey: ["client-deals", clientId],
+    enabled: !!clientId,
+    queryFn: async (): Promise<ClientDeal[]> => {
+      const { data, error } = await supabase.from("deals")
+        .select("id,reference,stage,created_at,amount_requested")
+        .eq("client_id", clientId!).order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as ClientDeal[];
+    },
+  });
+}
+
 export function useClientContacts(clientId: string | undefined) {
   return useQuery({
     queryKey: ["client-contacts", clientId],
