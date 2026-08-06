@@ -17,6 +17,7 @@ import {
   UserCog,
   Bell,
   ScrollText,
+  ListTodo,
   type LucideIcon,
 } from "lucide-react";
 
@@ -31,6 +32,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/leads", label: "Leads", icon: ClipboardList },
   { to: "/pipeline", label: "Pipeline", icon: GitBranch },
+  { to: "/tasks", label: "Tasks", icon: ListTodo },
   { to: "/clients", label: "Clients", icon: Users },
   { to: "/documents", label: "Documents", icon: FolderOpen },
   { to: "/funders", label: "Funders", icon: Landmark },
