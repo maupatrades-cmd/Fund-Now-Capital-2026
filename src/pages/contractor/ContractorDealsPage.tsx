@@ -1,10 +1,10 @@
 import PortalShell from "@/components/portal/PortalShell";
-import MyDealsList from "@/components/portal/MyDealsList";
+import PortalDealPipeline from "@/components/portal/PortalDealPipeline";
 
 export default function ContractorDealsPage() {
   return (
     <PortalShell portal="contractor">
-      <MyDealsList portal="contractor" />
+      <PortalDealPipeline portal="contractor" title="My contractor pipeline" />
     </PortalShell>
   );
 }
