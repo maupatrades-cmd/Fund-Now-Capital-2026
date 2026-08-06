@@ -34,6 +34,7 @@ import FunderFormPage from "@/pages/FunderFormPage";
 import CalculatorPage from "@/pages/CalculatorPage";
 import InvoicesPage from "@/pages/InvoicesPage";
 import InvoiceDetailPage from "@/pages/InvoiceDetailPage";
+import RepaymentsPage from "@/pages/RepaymentsPage";
 import PartnerEarningsPage from "@/pages/PartnerEarningsPage";
 import PartnerApprovalsPage from "@/pages/PartnerApprovalsPage";
 import ActivityPage from "@/pages/ActivityPage";
@@ -152,6 +153,7 @@ function AppRoutes() {
         <Route path="/deals/:id" element={<DealDetailPage />} />
         <Route path="/deals/archived" element={<ArchivedDealsPage />} />
         <Route path="/invoices" element={<InvoicesPage />} />
+        <Route path="/repayments" element={<RepaymentsPage />} />
         {/* Static path ranks above /invoices/:id in React Router v6. */}
         <Route path="/invoices/partner-approvals" element={<PartnerApprovalsPage />} />
         <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
