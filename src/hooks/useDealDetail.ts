@@ -115,6 +115,10 @@ export type DealSubmission = {
   responded_at: string | null;
   quote_amount: string | null;
   offered_commission: string | null;
+  amount_funded: string | null;
+  finance_charge_amount: string | null;
+  approved_at: string | null;
+  funded_at: string | null;
   notes: string | null;
   // Owner-only decline detail. decline_reason_category is partner-safe (shown in
   // the Phase-D portal); decline_notes_internal is never exposed to partners.
@@ -199,6 +203,84 @@ export function useDeleteSubmission() {
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ["deal-submissions", v.dealId] });
       qc.invalidateQueries({ queryKey: ["pipeline"] });
+      invalidateActivity(qc);
+    },
+  });
+}
+
+export function useRecordSubmissionFunding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      dealId,
+      submissionId,
+      funderId,
+      dealStage,
+      amountFunded,
+      fundedAt,
+      financeCharge,
+    }: {
+      dealId: string;
+      submissionId: string;
+      funderId: string;
+      dealStage: DealStage;
+      amountFunded: number;
+      fundedAt: string;
+      financeCharge: number | null;
+    }) => {
+      const { data: submissionRows, error: submissionError } = await supabase
+        .from("deal_funder_submissions")
+        .update({
+          status: "funded",
+          amount_funded: amountFunded,
+          funded_at: fundedAt,
+          finance_charge_amount: financeCharge,
+        })
+        .eq("id", submissionId)
+        .eq("deal_id", dealId)
+        .is("amount_funded", null)
+        .select("id");
+      if (submissionError) throw submissionError;
+      if (!submissionRows || submissionRows.length !== 1) {
+        // A prior attempt may have recorded the submission before a later deal
+        // update failed. Permit an exact retry, but never overwrite different
+        // financial facts.
+        const { data: existing, error: existingError } = await supabase
+          .from("deal_funder_submissions")
+          .select("amount_funded, funded_at")
+          .eq("id", submissionId)
+          .eq("deal_id", dealId)
+          .single();
+        if (existingError) throw existingError;
+        const exactRetry =
+          Number(existing.amount_funded) === amountFunded &&
+          existing.funded_at === fundedAt;
+        if (!exactRetry) {
+          throw new Error("Funding was already recorded or the submission could not be updated.");
+        }
+      }
+
+      // Never regress an invoiced deal. Earlier stages advance to Funded when
+      // the actual disbursement is recorded.
+      if (dealStage !== "funded" && dealStage !== "invoiced") {
+        const { data: dealRows, error: dealError } = await supabase
+          .from("deals")
+          .update({ stage: "funded", awarded_funder_id: funderId })
+          .eq("id", dealId)
+          .select("id");
+        if (dealError) throw dealError;
+        if (!dealRows || dealRows.length !== 1) {
+          throw new Error("Funding was recorded, but the deal could not be moved to Funded. Refresh and retry.");
+        }
+      }
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["deal-submissions", vars.dealId] });
+      qc.invalidateQueries({ queryKey: ["fundable-submissions", vars.dealId] });
+      qc.invalidateQueries({ queryKey: ["deal-invoices", vars.dealId] });
+      qc.invalidateQueries({ queryKey: ["deal", vars.dealId] });
+      qc.invalidateQueries({ queryKey: ["pipeline"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
       invalidateActivity(qc);
     },
   });

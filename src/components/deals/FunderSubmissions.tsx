@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Banknote, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { CommissionBreakdownView } from "@/components/deals/CommissionBreakdownView";
@@ -11,12 +11,14 @@ import {
   useDealSubmissions,
   useSaveSubmission,
   useDeleteSubmission,
+  useRecordSubmissionFunding,
   funderName,
   type DealSubmission,
   type SubmissionInput,
 } from "@/hooks/useDealDetail";
 import { SUBMISSION_STATUSES, submissionStatusLabel, SUBMISSION_STATUS_BADGE, DECLINE_REASONS } from "@/lib/deals";
 import { formatZAR } from "@/lib/format";
+import type { DealStage } from "@/lib/dealStages";
 
 const cls =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
@@ -51,26 +53,39 @@ const submissionSchema = z
   });
 type SubmissionValues = z.input<typeof submissionSchema>;
 
+const fundingSchema = z.object({
+  amount_funded: z.preprocess(
+    (v) => Number(v),
+    z.number().finite("Enter a valid amount").positive("Amount must be more than zero"),
+  ),
+  funded_at: z.string().min(1, "Choose the funding date"),
+  finance_charge_amount: nullableAmount,
+});
+type FundingValues = z.input<typeof fundingSchema>;
+
 export function FunderSubmissions({
   dealId,
   isPurchaseOrder,
+  dealStage,
 }: {
   dealId: string;
   isPurchaseOrder: boolean;
+  dealStage: DealStage;
 }) {
   const { data: submissions, isLoading } = useDealSubmissions(dealId);
   const del = useDeleteSubmission();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<DealSubmission | null>(null);
+  const [recordingFunding, setRecordingFunding] = useState<DealSubmission | null>(null);
 
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-brand-navy">Funder submissions</h3>
-        {!adding && !editing && (
+        {!adding && !editing && !recordingFunding && (
           <button
             type="button"
-            onClick={() => setAdding(true)}
+            onClick={() => { setRecordingFunding(null); setAdding(true); }}
             className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-teal hover:underline"
           >
             <Plus className="h-4 w-4" /> Add submission
@@ -89,6 +104,7 @@ export function FunderSubmissions({
                 <th className="px-3 py-2 font-semibold">Status</th>
                 <th className="px-3 py-2 font-semibold">Quote</th>
                 <th className="px-3 py-2 font-semibold">Offered comm.</th>
+                <th className="px-3 py-2 font-semibold">Funded</th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
@@ -107,24 +123,46 @@ export function FunderSubmissions({
                   <td className="px-3 py-2 text-muted-foreground">
                     {s.offered_commission != null ? formatZAR(s.offered_commission) : "—"}
                   </td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {s.amount_funded != null ? (
+                      <div>
+                        <span className="font-medium text-green-700">{formatZAR(s.amount_funded)}</span>
+                        {s.funded_at && <div className="text-xs">{new Date(s.funded_at).toLocaleDateString("en-ZA")}</div>}
+                      </div>
+                    ) : "—"}
+                  </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => { setAdding(false); setEditing(s); }}
-                        className="text-muted-foreground hover:text-brand-navy"
-                        aria-label="Edit submission"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => del.mutate({ id: s.id, dealId })}
-                        className="text-muted-foreground hover:text-red-600"
-                        aria-label="Delete submission"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {s.amount_funded == null && s.status !== "declined" && (
+                        <button
+                          type="button"
+                          onClick={() => { setAdding(false); setEditing(null); setRecordingFunding(s); }}
+                          className="inline-flex items-center gap-1 rounded-md border border-green-200 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-50"
+                          aria-label={`Record funding from ${funderName(s)}`}
+                        >
+                          <Banknote className="h-3.5 w-3.5" /> Record funding
+                        </button>
+                      )}
+                      {s.amount_funded == null && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => { setAdding(false); setRecordingFunding(null); setEditing(s); }}
+                            className="text-muted-foreground hover:text-brand-navy"
+                            aria-label="Edit submission"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => del.mutate({ id: s.id, dealId })}
+                            className="text-muted-foreground hover:text-red-600"
+                            aria-label="Delete submission"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -148,7 +186,111 @@ export function FunderSubmissions({
           />
         </div>
       )}
+
+      {recordingFunding && (
+        <div className="mt-3">
+          <RecordFundingForm
+            dealId={dealId}
+            dealStage={dealStage}
+            submission={recordingFunding}
+            onDone={() => setRecordingFunding(null)}
+            onCancel={() => setRecordingFunding(null)}
+          />
+        </div>
+      )}
     </div>
+  );
+}
+
+function RecordFundingForm({
+  dealId,
+  dealStage,
+  submission,
+  onDone,
+  onCancel,
+}: {
+  dealId: string;
+  dealStage: DealStage;
+  submission: DealSubmission;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const recordFunding = useRecordSubmissionFunding();
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Johannesburg",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<FundingValues>({
+    resolver: zodResolver(fundingSchema),
+    defaultValues: {
+      amount_funded: "",
+      funded_at: today,
+      finance_charge_amount: "",
+    },
+  });
+
+  const onSubmit = async (values: FundingValues) => {
+    try {
+      await recordFunding.mutateAsync({
+        dealId,
+        submissionId: submission.id,
+        funderId: submission.funder_id,
+        dealStage,
+        amountFunded: values.amount_funded as number,
+        fundedAt: new Date(`${values.funded_at as string}T12:00:00+02:00`).toISOString(),
+        financeCharge: (values.finance_charge_amount as number | null) ?? null,
+      });
+      toast.success("Funding recorded. This submission is now ready for invoice generation.");
+      onDone();
+    } catch (error) {
+      toast.error((error as Error).message || "Could not record funding");
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 rounded-lg border border-green-300 bg-green-50/60 p-4">
+      <div>
+        <h4 className="text-sm font-semibold text-brand-navy">Record actual funding from {funderName(submission)}</h4>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Enter the amount actually disbursed, not the requested or quoted amount. Saving unlocks invoice generation.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-brand-navy">Amount funded (R)</label>
+          <input type="number" min="0.01" step="0.01" className={cls} {...register("amount_funded")} />
+          {errors.amount_funded && <p className={errCls}>{errors.amount_funded.message}</p>}
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-brand-navy">Funding date</label>
+          <input type="date" className={cls} {...register("funded_at")} />
+          {errors.funded_at && <p className={errCls}>{errors.funded_at.message}</p>}
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-brand-navy">Finance charge (R, optional)</label>
+          <input type="number" min="0" step="0.01" className={cls} {...register("finance_charge_amount")} />
+          {errors.finance_charge_amount && <p className={errCls}>{errors.finance_charge_amount.message}</p>}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-60"
+        >
+          {isSubmitting ? "Recording…" : "Confirm funding"}
+        </button>
+        <button type="button" onClick={onCancel} className="rounded-lg border border-border bg-white px-4 py-2 text-sm text-brand-navy hover:bg-slate-50">
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
