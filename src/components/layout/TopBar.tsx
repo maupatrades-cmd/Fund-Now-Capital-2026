@@ -4,6 +4,7 @@ import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { NAV_ITEMS } from "./navItems";
+import { GlobalSearch } from "./GlobalSearch";
 
 function currentTitle(pathname: string): string {
   // Deal detail lives outside the nav; keep the header meaningful.
@@ -29,6 +30,7 @@ export function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
       </button>
 
       <h1 className="text-lg font-semibold text-brand-navy">{currentTitle(pathname)}</h1>
+      <GlobalSearch />
 
       <div className="ml-auto flex items-center gap-3">
         <NotificationBell />
