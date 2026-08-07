@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Pencil, CheckCircle2, XCircle, PlayCircle } from "lucide-react";
+import { ArrowLeft, Pencil, CheckCircle2, XCircle, PlayCircle, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { formatZAR } from "@/lib/format";
@@ -316,6 +316,7 @@ function QualificationPanel({ lead }: { lead: Lead }) {
       {confirmQualify && (
         <QualifyModal
           missing={missing}
+          soleProprietorName={lead.entity_type === "sole_prop" ? lead.business_name : null}
           pending={qualify.isPending}
           onClose={() => setConfirmQualify(false)}
           onConfirm={(override) => onQualify(override)}
@@ -330,18 +331,23 @@ function QualificationPanel({ lead }: { lead: Lead }) {
 
 function QualifyModal({
   missing,
+  soleProprietorName,
   pending,
   onClose,
   onConfirm,
 }: {
   missing: string[];
+  soleProprietorName: string | null;
   pending: boolean;
   onClose: () => void;
   onConfirm: (override: boolean) => void;
 }) {
   const gated = missing.length > 0;
   const [override, setOverride] = useState("");
-  const canProceed = !gated || override.trim().toUpperCase() === "OVERRIDE";
+  const [piiAcknowledged, setPiiAcknowledged] = useState(false);
+  const requiresPiiAcknowledgement = Boolean(soleProprietorName);
+  const documentGateSatisfied = !gated || override.trim().toUpperCase() === "OVERRIDE";
+  const canProceed = documentGateSatisfied && (!requiresPiiAcknowledgement || piiAcknowledged);
 
   const inputCls =
     "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-brand-navy outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
@@ -353,6 +359,31 @@ function QualifyModal({
         A new deal will be created at the "Qualifying" stage linked to this lead, and the lead's
         documents will move to the client.
       </p>
+
+      {requiresPiiAcknowledgement && (
+        <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50 p-3">
+          <div className="flex items-start gap-2">
+            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" aria-hidden="true" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-sky-900">Sole-proprietor privacy check</p>
+              <p className="text-sm text-sky-800">
+                The business name "{soleProprietorName}" may contain the owner's personal name.
+                Qualifying this lead copies it to the client and deal records, where authorised
+                referral partners may see it for servicing this funding application.
+              </p>
+            </div>
+          </div>
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-sky-900">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 rounded border-sky-300 text-brand-teal focus:ring-brand-teal"
+              checked={piiAcknowledged}
+              onChange={(event) => setPiiAcknowledged(event.target.checked)}
+            />
+            <span>I have checked the name and confirm it is appropriate to share with authorised parties.</span>
+          </label>
+        </div>
+      )}
 
       {gated && (
         <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
