@@ -14,6 +14,7 @@ import { FunderSubmissions } from "@/components/deals/FunderSubmissions";
 import { CommissionPickerWidget } from "@/components/deal/CommissionPickerWidget";
 import { DealInvoices } from "@/components/deals/DealInvoices";
 import { DealPackageReadiness } from "@/components/deals/DealPackageReadiness";
+import { DealPackageDispatches } from "@/components/deals/DealPackageDispatches";
 import { CommunicationsLog } from "@/components/deals/CommunicationsLog";
 import { DealDocuments } from "@/components/deals/DealDocuments";
 import { StageHistory } from "@/components/deals/StageHistory";
@@ -252,6 +253,9 @@ export default function DealDetailPage() {
       </div>
 
       <DealPackageReadiness clientId={deal.client_id} isPurchaseOrder={deal.is_purchase_order} amountRequested={deal.amount_requested} />
+
+      {/* The deal-specific key guarantees a draft can never survive navigation to another deal. */}
+      <DealPackageDispatches key={deal.id} dealId={deal.id} />
 
       {/* Funder submissions with embedded commission calculator */}
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">

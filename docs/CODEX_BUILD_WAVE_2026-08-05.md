@@ -19,31 +19,31 @@ explicitly recorded.
 | Build | Branch | Commit | Status / canonical boundary |
 |---|---|---:|---|
 | Partner invoice reliability | `codex/partner-invoice-reliability` | `d4d0bcb` | PR #133 **MERGED** at `ee97476`; Greptile 5/5, no inline threads, Vercel Ready; no migration; canonical C4 follow-up |
-| Owner terms admin | `codex/owner-terms-admin` | `8843c36` | PR #134 **MERGED** at `096306d`; Greptile 5/5; migration `20260805100000_owner_terms_admin.sql` pending apply and smoke test; deferred owner UI for terms framework |
-| Deal soft archive | `codex/deal-archive` | `c3fca7d` | PR #135 REVIEW; archived-child mutation finding fixed locally at UI and database layers; restore-history finding rejected because the existing deal trigger preserves before-values; currently non-mergeable against updated `main`; ROADMAP Deferred Polish semantics |
-| Owner task queue | `codex/general-tasks-queue` | `bd30b89` | PR #136 REVIEW; direct-write attribution finding fixed locally; business-operations first slice |
-| Repayment tracker | `codex/repayment-tracking` | `4ffe0d7` | PR #137 REVIEW; underpayment and rounding findings fixed locally; owner-only servicing first slice |
-| Global search v1 | `codex/global-search` | `4267a47` | PR #138 REVIEW; wildcard and request-volume findings fixed locally; bounded `ilike`, not final F1 full-text search |
-| Repeat client v1 | `codex/repeat-client` | `e449ff6` | PR #139 REVIEW; stale history cache fixed locally; no canonical D8 `parent_deal_id` yet |
-| Owner command centre v1 | `codex/owner-home` | `291b6e0` | PR #140 REVIEW; no inline findings; not full S10 vision horizons |
-| Data-quality worklist v1 | `codex/data-quality` | `b68f556` | PR #141 REVIEW; exhaustive pagination and actionable deal amount fixed locally; read-only F9 first slice |
-| Package readiness | `codex/deal-package-readiness` | `3fdd851` | PR #142 REVIEW; fail-closed query state fixed locally; manual E3 bridge |
-| Printable package cover | `codex/deal-package-cover` | `4e1bb24` | PR #143 REVIEW; fail-closed query state and accepted/non-expired filter fixed locally; browser PDF, not server-versioned E3 package |
-| Contractor pipeline | `codex/contractor-pipeline` | `5f5cbfd` | PR #144 REVIEW; no inline findings; D2 portal slice |
-| Doctor pipeline | `codex/doctor-pipeline` | `c028ed1` | PR #145 REVIEW, STACKED on #144; no inline findings |
-| Package dispatch log | `codex/deal-package-dispatch` | `577a53c` | PR #146 REVIEW; timestamp, activity association and cross-deal draft findings fixed locally; manual E3 audit bridge |
-| Portal pipeline guidance | `codex/portal-pipeline-guidance` | `89a1840` | PR #147 REVIEW, STACKED on #145; no inline findings |
-| Record deal funding | `agent/record-deal-funding` | pending | **LOCAL BUILD**; owner captures actual amount/date per funder submission, advances the deal to Funded, and unlocks the existing funder-invoice generator; no migration and no live-deal mutation |
+| Owner terms admin | `codex/owner-terms-admin` | `8843c36` | PR #134 **MERGED**; migration **APPLIED 2026-08-07** and structurally verified |
+| Deal soft archive | `codex/deal-archive` | `c3fca7d` | PR #135 **MERGED**; migration applied and verified |
+| Owner task queue | `codex/general-tasks-queue` | `bd30b89` | PR #136 **MERGED**; migration applied and verified |
+| Repayment tracker | `codex/repayment-tracking` | `4ffe0d7` | PR #137 **MERGED**; migration **APPLIED 2026-08-07** and structurally verified |
+| Global search v1 | `codex/global-search` | `4267a47` | PR #138 **MERGED** |
+| Repeat client v1 | `codex/repeat-client` | `e449ff6` | PR #139 **MERGED** |
+| Owner command centre v1 | `codex/owner-home` | `291b6e0` | PR #140 **MERGED** |
+| Data-quality worklist v1 | `codex/data-quality` | `b68f556` | PR #141 **MERGED** |
+| Package readiness | `codex/deal-package-readiness` | `3fdd851` | PR #142 **MERGED** |
+| Printable package cover | `codex/deal-package-cover` | `4e1bb24` | PR #143 **MERGED** |
+| Contractor pipeline | `codex/contractor-pipeline` | `5f5cbfd` | PR #144 **MERGED** |
+| Doctor pipeline | `codex/doctor-pipeline` | `c028ed1` | PR #145 **MERGED** |
+| Package dispatch log | `codex/deal-package-dispatch` | `577a53c` | PR #146 **OPEN**; final stale-draft fix carried by smoke-readiness work; migration remains unapplied until merge |
+| Portal pipeline guidance | `codex/portal-pipeline-guidance` | `89a1840` | PR #147 **MERGED** |
+| Record deal funding | `agent/record-deal-funding` | `cf842b8` | PR #151 **MERGED**; no migration and no automatic live-data mutation |
 
 ## Migration apply order after review and owner merge
 
 Apply each immediately after its own PR merge, never as one blind batch:
 
-1. `20260805100000_owner_terms_admin.sql`
-2. `20260805110000_deal_archive.sql`
-3. `20260805120000_owner_tasks.sql`
-4. `20260805130000_repayment_tracking.sql`
-5. `20260805140000_deal_package_dispatches.sql`
+1. ✅ `20260805100000_owner_terms_admin.sql` — applied and verified
+2. ✅ `20260805110000_deal_archive.sql` — applied and verified
+3. ✅ `20260805120000_owner_tasks.sql` — applied and verified
+4. ✅ `20260805130000_repayment_tracking.sql` — applied and verified
+5. ⏳ `20260805140000_deal_package_dispatches.sql` — apply only after its repaired code is merged
 
 For each: verify timestamp uniqueness; run a non-persisting `BEGIN`/`ROLLBACK`
 dry-run; inspect RLS, grants, role gates, audit writes and assertions; apply;

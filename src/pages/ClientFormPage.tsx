@@ -24,6 +24,11 @@ const nullableAmount = z.preprocess(
 
 const schema = z.object({
   business_name: z.string().trim().min(1, "Business name is required"),
+  short_code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((value) => !value || /^[A-Z0-9]{2,12}$/.test(value), "Use 2–12 letters or numbers"),
   cipc_number: z
     .string()
     .optional()
@@ -62,6 +67,7 @@ export default function ClientFormPage() {
   const c = existing.data;
   const defaults: FormValues = {
     business_name: c?.business_name ?? "",
+    short_code: c?.short_code ?? "",
     cipc_number: c?.cipc_number ?? "",
     industry_id: c?.industry_id ?? "",
     sub_industry_id: c?.sub_industry_id ?? "",
@@ -85,6 +91,7 @@ export default function ClientFormPage() {
       onSubmit={async (values) => {
         const input: ClientInput = {
           business_name: values.business_name!.trim(),
+          short_code: values.short_code?.trim() ? values.short_code.trim().toUpperCase() : null,
           cipc_number: values.cipc_number?.trim() ? values.cipc_number.trim() : null,
           // Legacy free-text sector is not edited here — preserve whatever's on the
           // record (owner reconciles it manually; deprecated once B2 lands).
@@ -223,6 +230,23 @@ function ClientForm({
           </label>
           <input id="business_name" className={inputCls} {...register("business_name")} />
           {errors.business_name && <p className={errCls}>{errors.business_name.message}</p>}
+        </div>
+
+        <div>
+          <label className={labelCls} htmlFor="short_code">
+            Invoice short code
+          </label>
+          <input
+            id="short_code"
+            maxLength={12}
+            placeholder="Example: MAMAMABASE"
+            className={`${inputCls} uppercase`}
+            {...register("short_code")}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Used in funder invoice payment references. Use 2–12 letters or numbers.
+          </p>
+          {errors.short_code && <p className={errCls}>{errors.short_code.message}</p>}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

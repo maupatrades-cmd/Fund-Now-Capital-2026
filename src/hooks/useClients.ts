@@ -23,6 +23,7 @@ export type ClientListRow = {
 export type Client = {
   id: string;
   business_name: string;
+  short_code: string | null;
   cipc_number: string | null;
   sector: string | null; // legacy free-text; deprecated in favour of industry_id (B1). Kept for manual reconciliation.
   sector_notes: string | null;
@@ -52,6 +53,7 @@ export type ClientContact = {
 
 export type ClientInput = {
   business_name: string;
+  short_code: string | null;
   cipc_number: string | null;
   sector: string | null;
   sector_notes: string | null;
