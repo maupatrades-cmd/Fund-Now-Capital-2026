@@ -361,7 +361,15 @@ function GenerateInvoiceModal({
         </dl>
       ) : (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          {preview.reason}
+          <p>{preview.reason}</p>
+          {!client?.short_code && (
+            <Link
+              to={`/clients/${clientId}/edit`}
+              className="mt-2 inline-flex font-semibold text-brand-teal underline"
+            >
+              Set the client invoice short code
+            </Link>
+          )}
         </div>
       )}
 
