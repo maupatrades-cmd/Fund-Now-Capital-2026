@@ -41,7 +41,7 @@ const FONT = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans
 // ---- Locked contact block (Section 9) ----
 const LEGAL_NAME = "Fund Now Capital (Pty) Ltd";
 const CIPC = "2026/066284/07";
-const PHONE = "010 102 0534";
+const PHONE = "071 208 5218";
 const CONTACT_EMAIL = "hello@fundnowcapital.africa";
 const WEBSITE_LABEL = "www.fundnowcapital.africa";
 const WEBSITE_URL = "https://www.fundnowcapital.africa";
