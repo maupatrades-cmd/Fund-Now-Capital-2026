@@ -31,8 +31,12 @@ export default function MyLeadsView({ portal }: { portal: PortalKind }) {
   const [files, setFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   // Documents already stored on the open lead, so a re-attach never duplicates a
-  // file that succeeded on a previous submission or attempt.
-  const existingSignatures = useLeadDocumentSignatures(targetLeadId, portal).data;
+  // file that succeeded on a previous submission or attempt. Attaching is blocked
+  // until this resolves (signaturesReady) so the dedup guard can't be bypassed
+  // by a still-loading or errored query — the mutation itself does no dedup.
+  const signaturesQuery = useLeadDocumentSignatures(targetLeadId, portal);
+  const existingSignatures = signaturesQuery.data;
+  const signaturesReady = signaturesQuery.isSuccess;
 
   const closeAttach = () => {
     if (attach.isPending) return;
@@ -76,12 +80,13 @@ export default function MyLeadsView({ portal }: { portal: PortalKind }) {
   };
 
   const uploadFiles = async () => {
-    if (!targetLeadId || files.length === 0 || attach.isPending) return;
-    // Belt-and-braces: signatures may have loaded after selection. Never upload a
-    // file that is already stored on the lead (would create a duplicate row).
-    const toUpload = existingSignatures
-      ? files.filter((f) => !existingSignatures.has(docSignature(f.name, f.size)))
-      : files;
+    // `!existingSignatures` blocks upload until the existing-doc check has
+    // resolved, so a fast user can't attach a previously-succeeded file before
+    // we know it's a duplicate.
+    if (!targetLeadId || files.length === 0 || attach.isPending || !existingSignatures) return;
+    // Signatures may have loaded after selection. Never upload a file that is
+    // already stored on the lead (would create a duplicate row).
+    const toUpload = files.filter((f) => !existingSignatures.has(docSignature(f.name, f.size)));
     if (toUpload.length === 0) {
       setFiles([]);
       setFileError("Those files are already attached to this lead.");
@@ -216,10 +221,29 @@ export default function MyLeadsView({ portal }: { portal: PortalKind }) {
             already attached to this lead are skipped automatically.
           </p>
 
+          {signaturesQuery.isLoading && (
+            <p className="text-xs text-muted-foreground">
+              Checking which documents are already attached…
+            </p>
+          )}
+          {signaturesQuery.isError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+              Couldn't check which documents are already attached, so attaching is paused to avoid
+              duplicates.{" "}
+              <button
+                type="button"
+                onClick={() => void signaturesQuery.refetch()}
+                className="font-medium underline"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={attach.isPending}
+            disabled={attach.isPending || !signaturesReady}
             className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-slate-50 px-4 py-5 text-sm font-medium text-brand-navy hover:border-brand-teal hover:bg-brand-teal/5 disabled:opacity-50"
           >
             <Paperclip className="h-4 w-4 text-brand-teal" /> Choose files
@@ -271,7 +295,7 @@ export default function MyLeadsView({ portal }: { portal: PortalKind }) {
             <button
               type="button"
               onClick={() => void uploadFiles()}
-              disabled={files.length === 0 || attach.isPending}
+              disabled={files.length === 0 || attach.isPending || !signaturesReady}
               className="rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               {attach.isPending ? "Attaching…" : `Attach${files.length > 0 ? ` (${files.length})` : ""}`}
