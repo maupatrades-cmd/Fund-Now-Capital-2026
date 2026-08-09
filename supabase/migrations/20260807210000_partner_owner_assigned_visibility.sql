@@ -90,6 +90,77 @@ begin
 end;
 $$;
 
+-- Notify the partner when the owner assigns or reassigns a deal to their
+-- organisation. set_deal_attribution already writes DEAL_ATTRIBUTION_SET to
+-- activity_logs; this trigger adds the missing recipient notification at the
+-- write boundary without adding writes to the STABLE list function above.
+create or replace function public.notify_partner_deal_assignment()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_recipient uuid;
+  v_reference text;
+begin
+  if new.attribution_type is distinct from 'Bright_Destiny_Partner'
+     or new.attributed_to_id is null then
+    return null;
+  end if;
+
+  if tg_op = 'UPDATE'
+     and old.attribution_type is not distinct from new.attribution_type
+     and old.attributed_to_id is not distinct from new.attributed_to_id then
+    return null;
+  end if;
+
+  select p.id
+    into v_recipient
+  from public.profiles p
+  where p.referral_partner_id = new.attributed_to_id
+    and p.role = 'partner'
+    and p.is_active
+  order by p.created_at
+  limit 1;
+
+  -- Never fall back to the owner for a partner-specific notification.
+  if v_recipient is null then
+    return null;
+  end if;
+
+  select d.reference
+    into v_reference
+  from public.deals d
+  where d.id = new.deal_id;
+
+  perform public.emit_in_app_notification(
+    v_recipient,
+    'LEAD_CREATED_FOR_YOU',
+    'Deal assigned to you',
+    coalesce(v_reference, 'A deal') || ' was assigned to your partner account.',
+    '/deals/' || new.deal_id::text,
+    jsonb_build_object(
+      'deal_id', new.deal_id,
+      'referral_partner_id', new.attributed_to_id,
+      'source', 'deal_attribution'
+    )
+  );
+
+  return null;
+end;
+$$;
+
+revoke all on function public.notify_partner_deal_assignment()
+  from public, anon, authenticated;
+
+drop trigger if exists notify_partner_deal_assignment on public.deal_attributions;
+create trigger notify_partner_deal_assignment
+  after insert or update of attribution_type, attributed_to_id
+  on public.deal_attributions
+  for each row
+  execute function public.notify_partner_deal_assignment();
+
 revoke all on function public.partner_list_own_deals() from public, anon;
 grant execute on function public.partner_list_own_deals() to authenticated, service_role;
 
@@ -117,6 +188,24 @@ begin
 
   if has_function_privilege('anon', 'public.partner_list_own_deals()', 'execute') then
     raise exception 'partner_list_own_deals must not be executable by anon';
+  end if;
+
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgrelid = 'public.deal_attributions'::regclass
+      and tgname = 'notify_partner_deal_assignment'
+      and not tgisinternal
+  ) then
+    raise exception 'Partner deal-assignment notification trigger was not created';
+  end if;
+
+  if has_function_privilege(
+       'authenticated',
+       'public.notify_partner_deal_assignment()',
+       'execute'
+     ) then
+    raise exception 'notify_partner_deal_assignment must not be directly executable by authenticated';
   end if;
 end;
 $$;
