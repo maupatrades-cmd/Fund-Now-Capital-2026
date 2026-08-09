@@ -6,6 +6,13 @@ Canonical reference for Fund Now Capital's Product Knowledge Training Module —
 the mandatory training program every contractor completes as part of onboarding
 and ongoing progression. Locked business truth.
 
+## Current Business Facts
+
+- FNC's current network is described as **49+ active funders, plus 7 venture-capital and 8 private-equity relationships**. Do not reuse the older "26+ funders" statement.
+- Public training describes funder categories and capabilities. Real funder identities remain owner-only unless the owner explicitly approves disclosure for a role and deal.
+- Current FNC contact number: **071 208 5218**.
+- The detailed Lead Referrer and Contractor source materials supplied on 2026-08-06 are approved curriculum inputs. Canonical role boundaries and legal/compliance rules control if source wording conflicts.
+
 ## Real Business Context
 
 Contractors represent Fund Now Capital in the market. They speak to real
@@ -28,7 +35,7 @@ and legal protection.
 - **Certified** — passing assessment issues a "Certified FNC Contractor" credential
 - **Auditable** — every module completion, assessment attempt, score written to audit_log
 
-## 6 Training Modules
+## Contractor Platform Modules
 
 ### Module 1: Fund Now Capital Overview
 
@@ -88,6 +95,25 @@ and legal protection.
 - How to view Potential/Confirmed earnings
 - How to view training + certification status
 - How to view reimbursement + payment history
+
+The longer Contractor Training Material is delivered through these six platform
+modules as lessons, scenarios and assessments. This keeps the CRM progression
+model stable while preserving the supplied product, values, fraud, documentation,
+pipeline, career and final-assessment content.
+
+## Role Tracks
+
+- **Lead Referrer:** company overview, product identification, good-lead signals,
+  fraud flags, POPIA/confidentiality, structured lead submission, handover
+  boundaries, values and assessment. Lead Referrers do not handle documents,
+  quote fees, contact funders or contact clients after handover.
+- **Contractor:** the complete six-module curriculum, including product knowledge,
+  qualification, documentation, compliance, pipeline execution and CRM operation.
+- **Partner/Doctor:** contractor baseline plus governance, team oversight, mandate
+  controls, deal-quality review, escalation, restricted funder engagement,
+  economics visibility rules and compliance reporting.
+
+The detailed delivery and assessment plan is in `docs/training-programs.md`.
 
 ## Assessment Engine
 
@@ -158,6 +184,9 @@ submission. Contractors are activated after document verification (see
 
 - Training content stored in Supabase Storage as versioned assets
 - Text, images, video (real: mobile-friendly for contractors in the field)
+- Short videos should normally be 3-8 minutes and may use owner-approved YouTube
+  links. Store the title, URL, duration, transcript/summary, role assignment,
+  module, version and approval status; never embed an unreviewed external video.
 - Content updates versioned (real: contractors trained on Version 1.0 don't
   need to re-take when Version 1.1 lands, but material changes trigger refresher)
 
