@@ -76,6 +76,7 @@ declare
   v_uid       uuid := auth.uid();
   v_partner   uuid := public.current_partner_id();
   v_is_contr  boolean;
+  v_active    boolean;
   v_key       text := public.payee_enc_key();
   v_old       public.payee_payment_profiles;
   v_id        uuid;
@@ -92,12 +93,22 @@ begin
     raise exception 'The owner (FNC) does not maintain a payee payment profile';
   end if;
 
-  select (role = 'contractor'::public.user_role and is_active) into v_is_contr
+  select is_active, (role = 'contractor'::public.user_role) into v_active, v_is_contr
     from public.profiles where id = v_uid;
 
-  if v_partner is null and not coalesce(v_is_contr, false) then
-    raise exception 'Only an active partner or contractor can save a payment profile';
+  -- A suspended/deactivated caller may not touch banking details, whether they
+  -- are a partner or a contractor. current_partner_id() only filters role =
+  -- 'partner' and ignores is_active, so the partner path needs this explicitly.
+  if not coalesce(v_active, false) then
+    raise exception 'Your account is not active';
   end if;
+  if v_partner is null and not coalesce(v_is_contr, false) then
+    raise exception 'Only a partner or contractor can save a payment profile';
+  end if;
+
+  -- Serialise concurrent first-saves for the same subject so two racing INSERTs
+  -- can't trip the partial unique index with a raw unique_violation.
+  perform pg_advisory_xact_lock(hashtext('payee_profile:' || coalesce(v_partner, v_uid)::text));
 
   -- Load the caller's existing row (one per subject, enforced by unique indexes).
   if v_partner is not null then
@@ -111,6 +122,13 @@ begin
   if p_banking_proof_storage_path is not null
      and p_banking_proof_storage_path not like 'payee/' || v_uid::text || '/%' then
     raise exception 'Banking proof path must be under your own folder';
+  end if;
+
+  -- Friendly branch-code validation (the table CHECK enforces ^[0-9]{6}$ as a
+  -- backstop, but raises an opaque constraint error).
+  if nullif(btrim(coalesce(p_branch_code, '')), '') is not null
+     and p_branch_code !~ '^[0-9]{6}$' then
+    raise exception 'Branch code must be exactly 6 digits';
   end if;
 
   -- Encrypt only the secrets provided; otherwise keep what is already stored.
@@ -225,6 +243,12 @@ declare
   v_role    text;
 begin
   if v_uid is null then raise exception 'Not authenticated'; end if;
+
+  -- A suspended/deactivated caller may not submit banking details (mirrors the
+  -- is_active gate in save; current_partner_id() ignores is_active).
+  if not exists (select 1 from public.profiles where id = v_uid and is_active) then
+    raise exception 'Your account is not active';
+  end if;
 
   if v_partner is not null then
     select * into v_row from public.payee_payment_profiles where referral_partner_id = v_partner for update;
