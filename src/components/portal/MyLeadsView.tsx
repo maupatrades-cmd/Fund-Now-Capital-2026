@@ -3,11 +3,14 @@ import { Link } from "react-router-dom";
 import { FileUp, ListChecks, Paperclip, PlusCircle, X } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Modal } from "@/components/ui/modal";
 import { formatZAR } from "@/lib/format";
 import { formatFileSize } from "@/lib/documents";
 import {
   MAX_FILE_BYTES,
+  docSignature,
   useAttachLeadDocuments,
+  useLeadDocumentSignatures,
   usePortalLeads,
   leadStatus,
   STATUS_BADGE,
@@ -27,6 +30,9 @@ export default function MyLeadsView({ portal }: { portal: PortalKind }) {
   const [targetLeadId, setTargetLeadId] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
+  // Documents already stored on the open lead, so a re-attach never duplicates a
+  // file that succeeded on a previous submission or attempt.
+  const existingSignatures = useLeadDocumentSignatures(targetLeadId, portal).data;
 
   const closeAttach = () => {
     if (attach.isPending) return;
@@ -37,11 +43,17 @@ export default function MyLeadsView({ portal }: { portal: PortalKind }) {
 
   const chooseFiles = (incoming: FileList | null) => {
     if (!incoming) return;
-    setFileError(null);
+    let sizeError: string | null = null;
+    let skippedExisting = 0;
     const next = [...files];
     for (const file of Array.from(incoming)) {
       if (file.size > MAX_FILE_BYTES) {
-        setFileError(`"${file.name}" is larger than 10MB and was not added.`);
+        sizeError = `"${file.name}" is larger than 10MB and was not added.`;
+        continue;
+      }
+      // Already stored on the lead → skip, so a retry can't duplicate it.
+      if (existingSignatures?.has(docSignature(file.name, file.size))) {
+        skippedExisting += 1;
         continue;
       }
       const alreadySelected = next.some(
@@ -53,12 +65,29 @@ export default function MyLeadsView({ portal }: { portal: PortalKind }) {
       if (!alreadySelected) next.push(file);
     }
     setFiles(next);
+    const skipMsg =
+      skippedExisting === 0
+        ? null
+        : skippedExisting === 1
+          ? "1 file is already attached to this lead and was skipped."
+          : `${skippedExisting} files are already attached to this lead and were skipped.`;
+    setFileError(sizeError ?? skipMsg);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const uploadFiles = async () => {
     if (!targetLeadId || files.length === 0 || attach.isPending) return;
-    const result = await attach.mutateAsync({ leadId: targetLeadId, files });
+    // Belt-and-braces: signatures may have loaded after selection. Never upload a
+    // file that is already stored on the lead (would create a duplicate row).
+    const toUpload = existingSignatures
+      ? files.filter((f) => !existingSignatures.has(docSignature(f.name, f.size)))
+      : files;
+    if (toUpload.length === 0) {
+      setFiles([]);
+      setFileError("Those files are already attached to this lead.");
+      return;
+    }
+    const result = await attach.mutateAsync({ leadId: targetLeadId, files: toUpload });
     if (result.attachedCount > 0) {
       toast.success(
         result.attachedCount === 1
@@ -181,102 +210,74 @@ export default function MyLeadsView({ portal }: { portal: PortalKind }) {
       )}
 
       {targetLeadId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="attach-documents-title"
-        >
+        <Modal title="Attach lead documents" onClose={closeAttach} maxWidth="max-w-lg">
+          <p className="text-sm text-muted-foreground">
+            Add paperwork that was missed or failed during submission. Up to 10MB per file. Files
+            already attached to this lead are skipped automatically.
+          </p>
+
           <button
             type="button"
-            className="absolute inset-0 bg-black/40"
-            onClick={closeAttach}
-            aria-label="Close attach documents dialog"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={attach.isPending}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-slate-50 px-4 py-5 text-sm font-medium text-brand-navy hover:border-brand-teal hover:bg-brand-teal/5 disabled:opacity-50"
+          >
+            <Paperclip className="h-4 w-4 text-brand-teal" /> Choose files
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(event) => chooseFiles(event.target.files)}
           />
-          <div className="relative w-full max-w-lg rounded-xl bg-white p-5 shadow-xl">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 id="attach-documents-title" className="text-lg font-semibold text-brand-navy">
-                  Attach lead documents
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Add paperwork that was missed or failed during submission. Up to 10MB per file.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeAttach}
-                disabled={attach.isPending}
-                className="rounded p-1 text-muted-foreground hover:bg-slate-100"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+          {fileError && <p className="text-xs text-red-600">{fileError}</p>}
 
+          {files.length > 0 && (
+            <ul className="max-h-48 space-y-2 overflow-y-auto">
+              {files.map((file, index) => (
+                <li
+                  key={`${file.name}-${file.size}-${file.lastModified}`}
+                  className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
+                >
+                  <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-brand-navy">{file.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {formatFileSize(file.size)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
+                    disabled={attach.isPending}
+                    className="rounded p-1 text-muted-foreground hover:bg-slate-100 hover:text-red-600"
+                    aria-label={`Remove ${file.name}`}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={closeAttach}
               disabled={attach.isPending}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-slate-50 px-4 py-5 text-sm font-medium text-brand-navy hover:border-brand-teal hover:bg-brand-teal/5 disabled:opacity-50"
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-brand-navy disabled:opacity-50"
             >
-              <Paperclip className="h-4 w-4 text-brand-teal" /> Choose files
+              Cancel
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(event) => chooseFiles(event.target.files)}
-            />
-            {fileError && <p className="mt-2 text-xs text-red-600">{fileError}</p>}
-
-            {files.length > 0 && (
-              <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto">
-                {files.map((file, index) => (
-                  <li
-                    key={`${file.name}-${file.size}-${file.lastModified}`}
-                    className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
-                  >
-                    <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate text-brand-navy">{file.name}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {formatFileSize(file.size)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
-                      disabled={attach.isPending}
-                      className="rounded p-1 text-muted-foreground hover:bg-slate-100 hover:text-red-600"
-                      aria-label={`Remove ${file.name}`}
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeAttach}
-                disabled={attach.isPending}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-brand-navy disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void uploadFiles()}
-                disabled={files.length === 0 || attach.isPending}
-                className="rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {attach.isPending ? "Attaching…" : `Attach${files.length > 0 ? ` (${files.length})` : ""}`}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => void uploadFiles()}
+              disabled={files.length === 0 || attach.isPending}
+              className="rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {attach.isPending ? "Attaching…" : `Attach${files.length > 0 ? ` (${files.length})` : ""}`}
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
