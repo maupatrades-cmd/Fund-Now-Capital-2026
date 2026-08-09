@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, LogOut, PlusCircle, ListChecks, Briefcase, FileText, ReceiptText, GraduationCap, Bell, TrendingUp, Award } from "lucide-react";
+import { Home, LogOut, PlusCircle, ListChecks, Briefcase, FileText, ReceiptText, GraduationCap, Bell, TrendingUp, Award, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
@@ -54,6 +54,8 @@ function navItems(portal: PortalKind) {
     ...(portal === "contractor"
       ? [{ to: `${base}/training`, label: "Training", icon: GraduationCap, end: false }]
       : []),
+    // Payment details (Build 3.2) — banking profile for payouts, both portals.
+    { to: `${base}/settings/payment`, label: "Payment", icon: Wallet, end: false },
     { to: `${base}/settings/notifications`, label: "Notifications", icon: Bell, end: false },
   ];
 }
