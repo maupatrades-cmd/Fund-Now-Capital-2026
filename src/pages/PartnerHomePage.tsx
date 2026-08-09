@@ -1,29 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import { Handshake, ListChecks, PlusCircle } from "lucide-react";
-import { EmptyState } from "@/components/ui/empty-state";
 import PortalShell from "@/components/portal/PortalShell";
-import { BadgesCard } from "@/components/portal/BadgesCard";
+import { BrightDestinyPartnerDashboard } from "@/components/portal/BrightDestinyPartnerDashboard";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
 
 /*
- * Partner Portal home. Branded PortalShell chrome (shared with the contractor
- * portal) with the "Submit Lead" / "My Leads" nav, a personal welcome, a
- * top-level "Submit a new lead" CTA, and a placeholder the real referred-deals
- * surface (S11) will grow from. FNC branding only; partner logo storage is
- * C4/S11.2 territory.
- *
- * Data shown is limited to the partner's own referral_partners.name, reachable
- * through their own profiles row — both RLS-scoped to the signed-in partner
- * (POPIA: no client data, no funder identity, no commission figures here).
+ * Partner Portal home. PortalShell keeps Fund Now Capital as the platform
+ * identity while this page adds the approved Bright Destiny secondary brand.
+ * Operational rows still come only from the existing caller-scoped partner
+ * hooks, with anonymised funder labels and no FNC-internal commission figures.
  */
 
-// The signed-in partner's display name: referral_partners.name via the
-// profiles.referral_partner_id link (verified live schema), falling back to
-// the profile's full_name, then the email's local part. The query key carries
-// the user id so a different account signing in on the same tab can never be
-// served the previous partner's cached name (Macroscope PR #100 finding).
+// The query key carries the user id so a different account signing in on the
+// same tab can never be served the previous partner's cached organisation name.
 function usePartnerName(user: { id: string; email?: string } | undefined) {
   const uid = user?.id;
   return useQuery({
@@ -57,51 +46,16 @@ function usePartnerName(user: { id: string; email?: string } | undefined) {
 
 export default function PartnerHomePage() {
   const session = useSession();
-  // isPending (not isLoading) so the name placeholder also covers the brief
-  // window where the session is still resolving and the query is disabled.
   const { data: partnerName, isPending } = usePartnerName(session?.user);
-
-  // Note: the first-login T&C gate lives in PartnerGate (PortalTermsGate wraps the
-  // whole /partner subtree), so no acceptance check is needed on this page.
+  const organisationName = partnerName ?? "Partner business";
 
   return (
     <PortalShell portal="partner">
-      {/* Welcome */}
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold text-brand-navy">
-          {isPending ? "Welcome" : `Welcome, ${partnerName ?? "Partner"}`}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Many funders. More approvals. Refer a business that needs funding and track it here.
-        </p>
-      </div>
-
-      {/* Top-level CTA: submit a new lead. */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Link
-          to="/partner/submit-lead"
-          className="inline-flex items-center gap-2 rounded-lg bg-brand-teal px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-teal/90"
-        >
-          <PlusCircle className="h-4 w-4" />
-          Submit a new lead
-        </Link>
-        <Link
-          to="/partner/leads"
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-brand-navy hover:bg-slate-50"
-        >
-          <ListChecks className="h-4 w-4" />
-          My leads
-        </Link>
-      </div>
-
-      {/* Gamification: recently earned badges + link to the full collection. */}
-      <BadgesCard portal="partner" />
-
-      {/* Placeholder: referred deals land here in a later release. */}
-      <EmptyState
-        icon={Handshake}
-        title="Your referred deals will appear here soon"
-        description="As your referrals move through funding, you'll track their progress right here."
+      <BrightDestinyPartnerDashboard
+        displayName={partnerName ?? "Partner"}
+        organisationName={organisationName}
+        showBrightDestinyBrand={/bright\s+destin/i.test(organisationName)}
+        identityLoading={isPending}
       />
     </PortalShell>
   );
