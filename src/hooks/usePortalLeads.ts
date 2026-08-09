@@ -130,6 +130,12 @@ export { MAX_FILE_BYTES };
 // Stable identity for a document by name + byte size. attachFile mints a fresh
 // id/path per call, so this name+size signature is what lets the recovery flow
 // recognise a file that was already stored and avoid a duplicate documents row.
+//
+// Known limitation: two genuinely different files that share BOTH a name and an
+// exact byte size collide, so the second is treated as already-attached and
+// skipped (the dialog surfaces a "skipped" notice). This is rare and
+// non-destructive; distinguishing them would need a content hash, which isn't
+// worth the added upload cost here.
 export function docSignature(name: string, size: number | null | undefined): string {
   return `${name}::${size ?? ""}`;
 }
