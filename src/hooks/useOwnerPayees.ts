@@ -61,10 +61,15 @@ export function useOwnerPayees() {
 }
 
 // Decrypted detail for one profile (owner-only, verification screen).
+// gcTime/staleTime: 0 so the decrypted banking/tax numbers are dropped from the
+// React Query cache the moment the modal closes (no observers) — they never
+// linger in memory past the review.
 export function useOwnerPayeeDetail(profileId: string | null) {
   return useQuery({
     queryKey: ["owner-payee-detail", profileId],
     enabled: !!profileId,
+    gcTime: 0,
+    staleTime: 0,
     queryFn: async (): Promise<OwnerPayeeDetail | null> => {
       const { data, error } = await supabase.rpc("get_payee_payment_profile_owner", {
         p_profile_id: profileId,

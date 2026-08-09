@@ -189,6 +189,12 @@ function PayeeDetailModal({ profileId, onClose }: { profileId: string; onClose: 
         </div>
       )}
 
+      {!isLoading && !isError && !detail && (
+        <div className="rounded-lg border border-border bg-slate-50 p-3 text-sm text-muted-foreground">
+          This payment profile could not be found.
+        </div>
+      )}
+
       {detail && (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
