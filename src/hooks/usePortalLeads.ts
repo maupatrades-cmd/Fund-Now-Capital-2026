@@ -127,6 +127,82 @@ export function useSubmitLead(portal: PortalKind) {
 
 export { MAX_FILE_BYTES };
 
+// Stable identity for a document by name + byte size. attachFile mints a fresh
+// id/path per call, so this name+size signature is what lets the recovery flow
+// recognise a file that was already stored and avoid a duplicate documents row.
+export function docSignature(name: string, size: number | null | undefined): string {
+  return `${name}::${size ?? ""}`;
+}
+
+// The submitter's own documents already attached to a lead, as a set of
+// name+size signatures. RLS (documents_lead_submitter_read) scopes this to the
+// caller's own lead and to non-PII 'other'-type rows — exactly the documents a
+// submitter can re-upload — so the recovery dialog can dedup against them.
+export function useLeadDocumentSignatures(leadId: string | null, portal: PortalKind) {
+  return useQuery({
+    queryKey: ["portal-lead-documents", portal, leadId],
+    enabled: !!leadId,
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await supabase
+        .from("documents")
+        .select("filename, file_size_bytes")
+        .eq("lead_id", leadId!);
+      if (error) throw error;
+      return new Set(
+        (data ?? []).map((row) =>
+          docSignature(row.filename as string, row.file_size_bytes as number | null),
+        ),
+      );
+    },
+  });
+}
+
+export type AttachLeadDocumentsInput = {
+  leadId: string;
+  files: File[];
+};
+
+export type AttachLeadDocumentsResult = {
+  attachedCount: number;
+  failedCount: number;
+  failedFiles: File[];
+};
+
+// Recovery path for a partial-success submission. The lead already exists, so
+// this mutation only retries document attachment and can never duplicate the
+// lead or its owner notification. Database and Storage RLS remain authoritative:
+// the signed-in submitter can attach files only to a lead attributed to them.
+export function useAttachLeadDocuments(portal: PortalKind) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ leadId, files }: AttachLeadDocumentsInput): Promise<AttachLeadDocumentsResult> => {
+      let attachedCount = 0;
+      const failedFiles: File[] = [];
+
+      for (const file of files) {
+        try {
+          await attachFile(leadId, file, portal);
+          attachedCount += 1;
+        } catch (error) {
+          failedFiles.push(file);
+          console.warn(
+            `Lead document recovery failed (lead=${leadId} at=${new Date().toISOString()}):`,
+            (error as Error).message,
+          );
+        }
+      }
+
+      return { attachedCount, failedCount: failedFiles.length, failedFiles };
+    },
+    onSuccess: (_result, variables) => {
+      void qc.invalidateQueries({ queryKey: ["portal-leads", portal] });
+      // Refresh the existing-document signatures so a file just stored is treated
+      // as already-attached if the dialog is reopened (no duplicate on retry).
+      void qc.invalidateQueries({ queryKey: ["portal-lead-documents", portal, variables.leadId] });
+    },
+  });
+}
+
 // ---- List (own submissions) ------------------------------------------------
 
 export type PortalLeadRow = {
