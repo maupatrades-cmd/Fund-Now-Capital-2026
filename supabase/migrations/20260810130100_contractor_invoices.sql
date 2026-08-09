@@ -220,6 +220,33 @@ begin
 end $$;
 
 -- ===========================================================================
+-- 8b. contractor_invoiceable_commissions — the SINGLE source of truth for "which
+--    of a contractor''s commissions are invoiceable in this window". Used by BOTH
+--    the eligibility guard and the line-item insert in the generate RPC, so the
+--    two can never desync (a future edit to one copy but not the other could burn
+--    a CI number on an empty invoice, or invoice commissions the gate didn''t
+--    sanction). Internal — the generate RPC holds the per-contractor advisory
+--    lock; execute is revoked from every API role.
+-- ===========================================================================
+create or replace function public.contractor_invoiceable_commissions(
+  p_contractor_id uuid, p_start date, p_end date
+) returns table (commission_record_id uuid, deal_id uuid, amount numeric(14,2))
+ language sql stable security definer set search_path = '' as $$
+  select cr.id, cr.deal_id, cr.contractor_share
+    from public.commission_records cr
+   where cr.contractor_id = p_contractor_id
+     and cr.deal_funder_submission_id is null
+     and cr.attribution_type = 'FNC_Contractor'
+     and cr.contractor_share > 0
+     and cr.status = 'payable'
+     and coalesce(cr.payable_at, cr.earned_at, cr.created_at)::date between p_start and p_end
+     and not exists (
+       select 1 from public.contractor_invoice_line_items li
+       join public.contractor_invoices ci on ci.id = li.invoice_id
+        where li.commission_record_id = cr.id and ci.state <> 'rejected');
+$$;
+
+-- ===========================================================================
 -- 9. contractor_generate_invoice — draft from the caller''s PAYABLE contractor
 --    tier commissions in [start, end]. Advisory-locked per contractor; consumes
 --    a CI number only when at least one commission is eligible.
@@ -239,17 +266,7 @@ begin
   perform pg_advisory_xact_lock(hashtext('contractor_invoice_gen:' || v_uid::text));
 
   if not exists (
-    select 1 from public.commission_records cr
-     where cr.contractor_id = v_uid
-       and cr.deal_funder_submission_id is null
-       and cr.attribution_type = 'FNC_Contractor'
-       and cr.contractor_share > 0
-       and cr.status = 'payable'
-       and coalesce(cr.payable_at, cr.earned_at, cr.created_at)::date between p_period_start and p_period_end
-       and not exists (
-         select 1 from public.contractor_invoice_line_items li
-         join public.contractor_invoices ci on ci.id = li.invoice_id
-          where li.commission_record_id = cr.id and ci.state <> 'rejected')
+    select 1 from public.contractor_invoiceable_commissions(v_uid, p_period_start, p_period_end)
   ) then
     return jsonb_build_object('was_created', false, 'reason', 'no_eligible_commissions', 'count', 0);
   end if;
@@ -263,18 +280,8 @@ begin
   returning id into v_inv;
 
   insert into public.contractor_invoice_line_items (invoice_id, commission_record_id, deal_id, amount)
-  select v_inv, cr.id, cr.deal_id, cr.contractor_share
-    from public.commission_records cr
-   where cr.contractor_id = v_uid
-     and cr.deal_funder_submission_id is null
-     and cr.attribution_type = 'FNC_Contractor'
-     and cr.contractor_share > 0
-     and cr.status = 'payable'
-     and coalesce(cr.payable_at, cr.earned_at, cr.created_at)::date between p_period_start and p_period_end
-     and not exists (
-       select 1 from public.contractor_invoice_line_items li
-       join public.contractor_invoices ci on ci.id = li.invoice_id
-        where li.commission_record_id = cr.id and ci.state <> 'rejected');
+  select v_inv, e.commission_record_id, e.deal_id, e.amount
+    from public.contractor_invoiceable_commissions(v_uid, p_period_start, p_period_end) e;
 
   update public.contractor_invoices
      set total_amount = (select coalesce(sum(amount), 0)
@@ -480,6 +487,8 @@ grant  execute on function public.assert_active_contractor()                to a
 -- Internal only.
 revoke all on function public.log_contractor_invoice_activity(public.activity_event_type, uuid, uuid, text)
   from public, anon, authenticated;
+revoke all on function public.contractor_invoiceable_commissions(uuid, date, date)
+  from public, anon, authenticated;
 
 -- ===========================================================================
 -- 16. Notification preferences — seed the contractor-invoice events ON for every
@@ -531,8 +540,9 @@ begin
   if has_table_privilege('anon','public.contractor_invoices','select') then
     raise exception 'assert FAIL: anon can SELECT contractor_invoices'; end if;
   foreach v_fn in array array[
-    'contractor_generate_invoice','contractor_submit_invoice','contractor_remove_line_item',
-    'owner_approve_contractor_invoice','owner_reject_contractor_invoice','list_contractor_invoice_line_items'
+    'contractor_invoiceable_commissions','contractor_generate_invoice','contractor_submit_invoice',
+    'contractor_remove_line_item','owner_approve_contractor_invoice','owner_reject_contractor_invoice',
+    'list_contractor_invoice_line_items'
   ] loop
     if not exists (select 1 from pg_proc pr join pg_namespace n on n.oid=pr.pronamespace
                     where n.nspname='public' and pr.proname=v_fn) then
@@ -542,6 +552,10 @@ begin
   if has_function_privilege('authenticated',
        'public.log_contractor_invoice_activity(public.activity_event_type,uuid,uuid,text)','execute') then
     raise exception 'assert FAIL: authenticated can execute the internal log writer';
+  end if;
+  if has_function_privilege('authenticated',
+       'public.contractor_invoiceable_commissions(uuid,date,date)','execute') then
+    raise exception 'assert FAIL: authenticated can execute the internal eligibility helper';
   end if;
 
   -- ---- Direct-insert behavioural (synthetic, rolled back) ----
