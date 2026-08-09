@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
@@ -174,8 +174,122 @@ function usePartnerInvoiceInvalidator() {
     }
     // Marking paid settles commissions → the owner partner-earnings view moves.
     qc.invalidateQueries({ queryKey: ["partner-earnings"] });
+    qc.invalidateQueries({ queryKey: ["partner-invoice-eligibility"] });
     invalidateActivity(qc);
   };
+}
+
+type EligibilityEarning = {
+  id: string;
+  partner_share: string | number;
+  status: "earned" | "outstanding" | "payable";
+  payable_at: string | null;
+  earned_at: string | null;
+  created_at: string;
+};
+
+export type PartnerInvoiceEligibility = {
+  selectedCount: number;
+  selectedAmount: number;
+  readyCount: number;
+  readyAmount: number;
+  readyStart: string | null;
+  readyEnd: string | null;
+  awaitingFunderCount: number;
+  awaitingInvoiceCount: number;
+  alreadyIncludedCount: number;
+};
+
+const ELIGIBILITY_PAGE_SIZE = 1000;
+
+// PostgREST caps a single response at db-max-rows (default 1000). Without paging,
+// a long-lived partner's ready commission could be silently truncated — the
+// preview would under-count and wrongly disable "Generate draft" even though the
+// authoritative server RPC (uncapped SQL) would succeed. Page through explicit
+// ranges so the preview stays consistent with that RPC.
+async function fetchAllRows<Row>(
+  buildPage: (from: number, to: number) => PromiseLike<{ data: Row[] | null; error: unknown }>,
+): Promise<Row[]> {
+  const all: Row[] = [];
+  for (let from = 0; ; from += ELIGIBILITY_PAGE_SIZE) {
+    const { data, error } = await buildPage(from, from + ELIGIBILITY_PAGE_SIZE - 1);
+    if (error) throw error;
+    const batch = data ?? [];
+    all.push(...batch);
+    if (batch.length < ELIGIBILITY_PAGE_SIZE) break;
+  }
+  return all;
+}
+
+// Read-only eligibility preview for the signed-in partner. Existing RLS scopes
+// every query. This requests only the partner's take and lifecycle dates — never
+// internal gross, tier, retention, or real funder names.
+export function usePartnerInvoiceEligibility(periodStart: string, periodEnd: string) {
+  const uid = useSession()?.user?.id ?? null;
+  const query = useQuery({
+    queryKey: ["partner-invoice-eligibility", uid],
+    enabled: !!uid,
+    queryFn: async () => {
+      const [earnings, activeInvoices] = await Promise.all([
+        fetchAllRows<EligibilityEarning>((from, to) =>
+          supabase
+            .from("commission_records")
+            .select("id, partner_share, status, payable_at, earned_at, created_at")
+            .in("status", ["earned", "outstanding", "payable"])
+            .range(from, to),
+        ),
+        fetchAllRows<{ id: string }>((from, to) =>
+          supabase.from("partner_invoices").select("id").neq("state", "rejected").range(from, to),
+        ),
+      ]);
+
+      const activeInvoiceIds = activeInvoices.map((row) => row.id);
+      let includedCommissionIds = new Set<string>();
+      if (activeInvoiceIds.length > 0) {
+        const lineItems = await fetchAllRows<{ commission_record_id: string }>((from, to) =>
+          supabase
+            .from("partner_invoice_line_items")
+            .select("commission_record_id")
+            .in("invoice_id", activeInvoiceIds)
+            .range(from, to),
+        );
+        includedCommissionIds = new Set(lineItems.map((row) => row.commission_record_id));
+      }
+
+      return {
+        earnings,
+        includedCommissionIds,
+      };
+    },
+  });
+
+  const summary = useMemo<PartnerInvoiceEligibility | undefined>(() => {
+    if (!query.data) return undefined;
+
+    const { earnings, includedCommissionIds } = query.data;
+    const payable = earnings.filter((row) => row.status === "payable");
+    const ready = payable.filter((row) => !includedCommissionIds.has(row.id));
+    const dated = ready
+      .map((row) => ({ row, date: (row.payable_at ?? row.earned_at ?? row.created_at).slice(0, 10) }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const selected = dated.filter(({ date }) => date >= periodStart && date <= periodEnd);
+    const amount = (rows: typeof dated) =>
+      rows.reduce((sum, { row }) => sum + Number(row.partner_share ?? 0), 0);
+
+    return {
+      selectedCount: selected.length,
+      selectedAmount: amount(selected),
+      readyCount: dated.length,
+      readyAmount: amount(dated),
+      readyStart: dated.at(0)?.date ?? null,
+      readyEnd: dated.at(-1)?.date ?? null,
+      awaitingFunderCount: earnings.filter((row) => row.status === "outstanding").length,
+      awaitingInvoiceCount: earnings.filter((row) => row.status === "earned").length,
+      alreadyIncludedCount: payable.filter((row) => includedCommissionIds.has(row.id)).length,
+    };
+  }, [periodEnd, periodStart, query.data]);
+
+  return { ...query, summary };
 }
 
 type RpcResult = Record<string, unknown>;

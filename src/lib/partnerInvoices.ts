@@ -128,15 +128,25 @@ export async function getPartnerInvoicePdfUrl(path: string, expiresIn = 3600): P
   return data.signedUrl;
 }
 
-// A sensible default invoice period: the previous calendar month (the common
-// "invoice last month's settled commissions" cadence). Returned as YYYY-MM-DD.
+function localIsoDate(dt: Date): string {
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(
+    dt.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+// Default to the current calendar month. Commission becomes invoiceable when
+// FNC receives the funder's payment, so the previous-month default can hide
+// newly-payable money and make the partner guess which period to use.
 export function defaultInvoicePeriod(now = new Date()): { start: string; end: string } {
-  const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const start = new Date(firstOfThisMonth.getFullYear(), firstOfThisMonth.getMonth() - 1, 1);
-  const end = new Date(firstOfThisMonth.getFullYear(), firstOfThisMonth.getMonth(), 0); // last day prev month
-  const iso = (dt: Date) =>
-    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(
-      dt.getDate(),
-    ).padStart(2, "0")}`;
-  return { start: iso(start), end: iso(end) };
+  return {
+    start: localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)),
+    end: localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  };
+}
+
+export function previousInvoicePeriod(now = new Date()): { start: string; end: string } {
+  return {
+    start: localIsoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+    end: localIsoDate(new Date(now.getFullYear(), now.getMonth(), 0)),
+  };
 }

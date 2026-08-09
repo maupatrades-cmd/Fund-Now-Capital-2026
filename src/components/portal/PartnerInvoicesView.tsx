@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { FilePlus2, ChevronRight, ReceiptText } from "lucide-react";
+import { FilePlus2, ChevronRight, CircleCheck, Clock3, ReceiptText } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { formatZAR } from "@/lib/format";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -11,9 +11,14 @@ import {
   formatPeriodRange,
   formatPeriodDate,
   PARTNER_INVOICE_STATES,
+  previousInvoicePeriod,
   type PartnerInvoiceState,
 } from "@/lib/partnerInvoices";
-import { usePartnerInvoices, useGeneratePartnerInvoice } from "@/hooks/usePartnerInvoices";
+import {
+  useGeneratePartnerInvoice,
+  usePartnerInvoiceEligibility,
+  usePartnerInvoices,
+} from "@/hooks/usePartnerInvoices";
 
 const primaryBtn =
   "inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60";
@@ -150,6 +155,12 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
   const [start, setStart] = useState(defaults.start);
   const [end, setEnd] = useState(defaults.end);
   const submittingRef = useRef(false);
+  const eligibility = usePartnerInvoiceEligibility(start, end);
+
+  const setPeriod = (period: { start: string; end: string }) => {
+    setStart(period.start);
+    setEnd(period.end);
+  };
 
   const create = async () => {
     if (submittingRef.current) return; // synchronous double-submit guard (FIX #4)
@@ -165,7 +176,11 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
         onClose();
         navigate(`/partner/invoices/${res.invoice_id as string}`);
       } else {
-        toast.info("No commissions are ready to invoice for that period yet.");
+        toast.info(
+          eligibility.summary?.readyCount
+            ? "Commission is ready, but it falls outside the selected period. Choose ‘Use ready period’."
+            : "No commission is ready to invoice yet. See the status explanation in this window.",
+        );
       }
     } catch (e) {
       toast.error((e as Error).message || "Could not generate the invoice");
@@ -180,6 +195,28 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
         Pick the period to invoice. We'll gather every commission that became ready to pay in that
         window into a draft you can review before submitting.
       </p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={secondaryBtn} onClick={() => setPeriod(defaultInvoicePeriod())}>
+          Current month
+        </button>
+        <button type="button" className={secondaryBtn} onClick={() => setPeriod(previousInvoicePeriod())}>
+          Previous month
+        </button>
+        {eligibility.summary?.readyStart && eligibility.summary.readyEnd && (
+          <button
+            type="button"
+            className={secondaryBtn}
+            onClick={() =>
+              setPeriod({
+                start: eligibility.summary!.readyStart!,
+                end: eligibility.summary!.readyEnd!,
+              })
+            }
+          >
+            Use ready period
+          </button>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="mb-1 block text-xs font-medium text-brand-navy">Period start</label>
@@ -190,8 +227,18 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
           <input type="date" className={inputCls} value={end} onChange={(e) => setEnd(e.target.value)} />
         </div>
       </div>
+      <EligibilitySummary
+        isLoading={eligibility.isLoading}
+        error={eligibility.error as Error | null}
+        summary={eligibility.summary}
+      />
       <div className="flex items-center gap-2">
-        <button type="button" className={primaryBtn} disabled={generate.isPending} onClick={create}>
+        <button
+          type="button"
+          className={primaryBtn}
+          disabled={generate.isPending || eligibility.isLoading || !eligibility.summary?.selectedCount}
+          onClick={create}
+        >
           {generate.isPending ? "Generating…" : "Generate draft"}
         </button>
         <button type="button" className={secondaryBtn} onClick={onClose}>
@@ -199,5 +246,62 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
         </button>
       </div>
     </Modal>
+  );
+}
+
+function EligibilitySummary({
+  isLoading,
+  error,
+  summary,
+}: {
+  isLoading: boolean;
+  error: Error | null;
+  summary: ReturnType<typeof usePartnerInvoiceEligibility>["summary"];
+}) {
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground">Checking commission eligibility…</p>;
+  }
+  if (error) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        Couldn't check invoice eligibility: {error.message}
+      </div>
+    );
+  }
+  if (!summary) return null;
+
+  if (summary.selectedCount > 0) {
+    return (
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+        <div className="flex items-center gap-2 font-semibold">
+          <CircleCheck className="h-4 w-4" />
+          {summary.selectedCount} commission{summary.selectedCount === 1 ? "" : "s"} ready —{" "}
+          {formatZAR(summary.selectedAmount, { cents: true })}
+        </div>
+        <p className="mt-1">Generate the draft, review its line items, then submit it to FNC.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+      <div className="flex items-center gap-2 font-semibold">
+        <Clock3 className="h-4 w-4" />
+        Nothing is ready in the selected period
+      </div>
+      {summary.readyCount > 0 ? (
+        <p className="mt-1">
+          {summary.readyCount} commission{summary.readyCount === 1 ? " is" : "s are"} ready outside
+          this period ({formatZAR(summary.readyAmount, { cents: true })}). Choose{" "}
+          <strong>Use ready period</strong>.
+        </p>
+      ) : (
+        <ul className="mt-2 list-disc space-y-1 pl-5">
+          <li>{summary.awaitingFunderCount} awaiting the funder's payment</li>
+          <li>{summary.awaitingInvoiceCount} funded but not yet on an issued funder invoice</li>
+          <li>{summary.alreadyIncludedCount} already included in another partner invoice</li>
+        </ul>
+      )}
+    </div>
   );
 }
