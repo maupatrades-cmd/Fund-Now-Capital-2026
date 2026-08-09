@@ -127,6 +127,49 @@ export function useSubmitLead(portal: PortalKind) {
 
 export { MAX_FILE_BYTES };
 
+export type AttachLeadDocumentsInput = {
+  leadId: string;
+  files: File[];
+};
+
+export type AttachLeadDocumentsResult = {
+  attachedCount: number;
+  failedCount: number;
+  failedFiles: File[];
+};
+
+// Recovery path for a partial-success submission. The lead already exists, so
+// this mutation only retries document attachment and can never duplicate the
+// lead or its owner notification. Database and Storage RLS remain authoritative:
+// the signed-in submitter can attach files only to a lead attributed to them.
+export function useAttachLeadDocuments(portal: PortalKind) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ leadId, files }: AttachLeadDocumentsInput): Promise<AttachLeadDocumentsResult> => {
+      let attachedCount = 0;
+      const failedFiles: File[] = [];
+
+      for (const file of files) {
+        try {
+          await attachFile(leadId, file, portal);
+          attachedCount += 1;
+        } catch (error) {
+          failedFiles.push(file);
+          console.warn(
+            `Lead document recovery failed (lead=${leadId} at=${new Date().toISOString()}):`,
+            (error as Error).message,
+          );
+        }
+      }
+
+      return { attachedCount, failedCount: failedFiles.length, failedFiles };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["portal-leads", portal] });
+    },
+  });
+}
+
 // ---- List (own submissions) ------------------------------------------------
 
 export type PortalLeadRow = {
