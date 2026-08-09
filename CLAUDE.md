@@ -1,7 +1,7 @@
 # Fund Now Capital CRM — CLAUDE.md (v2)
 
 ## Read these files first
-Every Claude Code session MUST read these files before starting work: CLAUDE.md, SPEC.md, ROADMAP.md, AUDIT.md, CONTRACTOR.md, ONBOARDING.md, TIERS.md, PICKER.md, TRAINING.md.
+Every Claude Code session MUST read these files before starting work: **`docs/FNC-CONSOLIDATION-DOC-2026-08-09.md` (owner-signed master consolidation — read FIRST; pulls together every locked business/legal/product/engineering decision and the reading-precedence order)**, CLAUDE.md, SPEC.md, ROADMAP.md, AUDIT.md, CONTRACTOR.md, ONBOARDING.md, TIERS.md, PICKER.md, TRAINING.md, and `docs/lead-referrer-role.md` (owner-locked Lead Referrer role). The consolidation document records decisions that are LOCKED — do not re-litigate them (see its Section 2).
 
 ## What this is
 Internal CRM for **Fund Now Capital**, a South African SME funding brokerage owned by Thapelo Maupa (she/her). Owner-first tool now; referral-partner portal for **Doctor (Bright Destiny)** launches in **Phase D**. Client-facing portal deliberately deferred (Part 7).

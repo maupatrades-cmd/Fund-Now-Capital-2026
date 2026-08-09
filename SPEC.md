@@ -2,6 +2,12 @@
 
 Build-ready distillation of master spec Parts 2–6. Build ORDER lives in `ROADMAP.md`. Core rules live in `CLAUDE.md`. **Where this file and CLAUDE.md conflict, CLAUDE.md wins.**
 
+> **Read `docs/FNC-CONSOLIDATION-DOC-2026-08-09.md` first.** The owner-signed master
+> consolidation document records every locked business, legal, product, and engineering
+> decision as of 2026-08-09 and the reading-precedence order, and defines the Lead
+> Referrer role (also in `docs/lead-referrer-role.md`). Decisions in its Section 2 are
+> LOCKED — do not re-litigate them.
+
 ---
 
 ## S1. INDUSTRY CLASSIFICATION (Part 2 — Roadmap B1)

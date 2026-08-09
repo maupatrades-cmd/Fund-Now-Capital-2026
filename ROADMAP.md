@@ -2,6 +2,12 @@
 
 This is the single source of truth for build order. It supersedes the per-part phase suggestions in Parts 1–6. Feature DETAILS live in `SPEC.md`. Core rules live in `CLAUDE.md`.
 
+> **Read `docs/FNC-CONSOLIDATION-DOC-2026-08-09.md` first.** The owner-signed master
+> consolidation document pulls together every locked business, legal, product, and
+> engineering decision as of 2026-08-09, states the reading-precedence order, and
+> records the Lead Referrer role (also in `docs/lead-referrer-role.md`). Decisions in
+> its Section 2 are LOCKED — do not re-litigate them.
+
 > **2026-08-05 Codex wave:** 15 candidate builds are locally committed but are
 > not yet production truth. Review, merge, migration-apply and smoke-test status
 > is tracked in [`docs/CODEX_BUILD_WAVE_2026-08-05.md`](docs/CODEX_BUILD_WAVE_2026-08-05.md).
