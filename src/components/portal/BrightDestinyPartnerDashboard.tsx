@@ -39,6 +39,16 @@ function shortDate(value: string): string {
   return new Intl.DateTimeFormat("en-ZA", { day: "2-digit", month: "short" }).format(date);
 }
 
+function todayLabel(): string {
+  return new Intl.DateTimeFormat("en-ZA", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  })
+    .format(new Date())
+    .toLocaleUpperCase("en-ZA");
+}
+
 function MetricCard({
   label,
   value,
@@ -68,13 +78,9 @@ function MetricCard({
 
 export function BrightDestinyPartnerDashboard({
   displayName,
-  organisationName,
-  showBrightDestinyBrand,
   identityLoading,
 }: {
   displayName: string;
-  organisationName: string;
-  showBrightDestinyBrand: boolean;
   identityLoading: boolean;
 }) {
   const leads = usePortalLeads("partner");
@@ -100,57 +106,41 @@ export function BrightDestinyPartnerDashboard({
   }).length;
   const metric = (value: number) => (loading || loadError ? "—" : String(value));
   const maxStageCount = Math.max(...PIPELINE_STAGES.map((stage) => stageCounts[stage]), 1);
+  const recentDeals = [...dealRows]
+    .sort((a, b) => b.submitted_at.localeCompare(a.submitted_at))
+    .slice(0, 5);
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-2xl bg-[#0b1520] shadow-lg">
-        <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_minmax(260px,380px)] lg:items-center">
+      <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-[#102c45] to-[#173b5a] shadow-lg">
+        <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
           <div>
-            <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#dca423]">
-              <span>Doctor Partner Portal</span>
-              <span aria-hidden="true" className="h-px w-8 bg-[#dca423]/60" />
-              <span className="text-slate-300">Powered by Fund Now Capital</span>
-            </div>
-            <h1 className="mt-4 text-3xl font-bold text-white sm:text-4xl">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#f1b91d]">{todayLabel()}</p>
+            <h1 className="mt-3 font-serif text-3xl font-semibold text-white sm:text-4xl">
               {identityLoading ? "Welcome" : `Welcome back, ${displayName}`}
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-              Track your own leads and deals through Fund Now Capital. Funding decisions, documents
-              and progress stay connected to your partner book.
+              {loading || loadError
+                ? "Your Fund Now Capital partner pipeline is loading."
+                : `${dealsInFlight} ${dealsInFlight === 1 ? "deal is" : "deals are"} currently moving through your funding pipeline.`}
             </p>
-            <div className="mt-6 flex flex-wrap gap-3">
+          </div>
+
+          <div className="flex flex-wrap gap-3 lg:justify-end">
               <Link
                 to="/partner/submit-lead"
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#f8d640] to-[#b26f11] px-4 py-2.5 text-sm font-bold text-[#13283d] transition hover:brightness-105"
+                className="inline-flex items-center gap-2 rounded-xl border border-[#dca423]/60 px-5 py-3 text-sm font-bold text-[#ffd438] transition hover:bg-[#dca423]/10"
               >
                 <PlusCircle className="h-4 w-4" />
-                Submit a new lead
+                New lead
               </Link>
               <Link
                 to="/partner/deals"
-                className="inline-flex items-center gap-2 rounded-xl border border-[#dca423]/50 px-4 py-2.5 text-sm font-semibold text-[#f8d640] transition hover:bg-[#dca423]/10"
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#ffd438] to-[#c9830d] px-5 py-3 text-sm font-bold text-[#10283f] transition hover:brightness-105"
               >
                 Open pipeline
                 <ArrowRight className="h-4 w-4" />
               </Link>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-[#dca423]/25 bg-black/30 p-3">
-            {showBrightDestinyBrand ? (
-              <img
-                src="/partners/bright-destiny-logo.webp"
-                alt="Bright Destiny Finance Partners"
-                className="h-32 w-full object-cover object-center sm:h-36"
-              />
-            ) : (
-              <div className="flex min-h-32 items-center justify-center px-6 text-center">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#dca423]">Partner business</p>
-                  <p className="mt-3 text-2xl font-bold text-white">{organisationName}</p>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </section>
@@ -172,10 +162,10 @@ export function BrightDestinyPartnerDashboard({
       )}
 
       <section aria-label="Partner summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="My leads" value={metric(leadRows.length)} note="Submitted through your portal" icon={ListChecks} />
-        <MetricCard label="Deals in flight" value={metric(dealsInFlight)} note="Still moving through funding" icon={BriefcaseBusiness} />
-        <MetricCard label="Under review" value={metric(underReview)} note="Leads being qualified" icon={Clock3} />
         <MetricCard label="Funded deals" value={metric(stageCounts.Funded)} note="Completed on your partner book" icon={CheckCircle2} />
+        <MetricCard label="Deals in flight" value={metric(dealsInFlight)} note="Still moving through funding" icon={BriefcaseBusiness} />
+        <MetricCard label="Leads under review" value={metric(underReview)} note="Being qualified by Fund Now" icon={Clock3} />
+        <MetricCard label="Total leads" value={metric(leadRows.length)} note="Submitted through your portal" icon={ListChecks} />
       </section>
 
       <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.8fr)]">
@@ -252,7 +242,7 @@ export function BrightDestinyPartnerDashboard({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {dealRows.slice(0, 5).map((deal) => {
+                {recentDeals.map((deal) => {
                   const status = dealStatus(deal.current_stage);
                   return (
                     <tr key={deal.deal_id}>
