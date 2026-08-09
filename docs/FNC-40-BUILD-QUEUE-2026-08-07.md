@@ -45,24 +45,27 @@ PR #152 supplied the package-dispatch readiness migration. The later partner/own
 
 ## Live progress ledger
 
-> **Wave 0 reconciliation — 2026-08-09 (evening).** Verified against live GitHub + the
-> live database. Builds **2, 4, 7, 17** were merged to `main` and their migrations applied
-> live (`pr154_shared_payee_payment_profiles`, `pr155_funder_invoice_dispatch_ledger`,
-> `pr156_contractor_payable_cascade`, `partner_owner_assigned_visibility`) — they now need
-> only their role smoke + cross-role leak tests before "Complete". Builds **1, 16, 18** had
-> remote branches but **no PR**; each was rebased onto current `main`, re-verified
-> (build + lint), and opened as its own draft PR (#159, #158, #160). No build below is
-> "Complete" per the legend — merged/applied is not the same as smoke-tested.
+> **Wave 0 reconciliation — 2026-08-09.** Verified against live GitHub + the live
+> database. Builds **2, 4, 7, 17** merged with migrations applied live
+> (`pr154_shared_payee_payment_profiles`, `pr155_funder_invoice_dispatch_ledger`,
+> `pr156_contractor_payable_cascade`, `partner_owner_assigned_visibility`). Builds
+> **1, 16, 18** had remote branches but **no PR**; each was rebased onto `main`,
+> re-verified (build + lint), opened as its own PR (#159, #158, #160) and **merged**
+> — all three are UI-only (no migration). Review fixes landed before merge (#159
+> row-cap pagination; #160 re-attach dedup + shared Modal); a follow-up PR **#162**
+> closes two residual #160 review findings (dedup load/error race + name+size
+> false-skip). **No build below is "Complete" per the legend** — merged is not the
+> same as smoke-tested; every row still owes its role smoke + cross-role leak test.
 
 | Build | Status | Branch / PR | Verification |
 |---:|---|---|---|
-| 1 | DRAFT PR OPEN — REVIEW + SMOKE PENDING | `codex/partner-invoice-eligibility` · **PR #159** (rebased onto `main`) | Lint ✅ · TypeScript ✅ · production bundle ✅ · rebased on latest `main` 2026-08-09 · draft PR open · browser smoke pending |
+| 1 | MERGED — SMOKE/LEAK TEST PENDING | `codex/partner-invoice-eligibility` · **PR #159 (merged)** | Lint ✅ · TypeScript ✅ · production bundle ✅ · Gitar approved (row-cap pagination finding resolved) · no migration · browser smoke pending |
 | 2 | MERGED + MIGRATION APPLIED LIVE — SMOKE/LEAK TEST PENDING | `codex/shared-payee-payment-profile` · **PR #154 (merged)** | Migration `pr154_shared_payee_payment_profiles` applied live ✅ · schema/privacy review ✅ · role smoke + cross-role leak test pending |
 | 4 | MERGED + MIGRATION APPLIED LIVE — SMOKE/LEAK TEST PENDING | `codex/funder-invoice-dispatch-ledger` · **PR #155 (merged)** | Migration `pr155_funder_invoice_dispatch_ledger` applied live ✅ · append-only ledger + owner queue/result RPCs + retry chain + redacted activity evidence ✅ · smoke pending |
 | 7 | MERGED + MIGRATION APPLIED LIVE — SMOKE/LEAK TEST PENDING | `codex/contractor-payable-cascade` · **PR #156 (merged)** | Migration `pr156_contractor_payable_cascade` applied live ✅ · locked tier amount remains authoritative; same-deal invoice validation, advisory locks, void reconciliation ✅ · smoke pending |
-| 16 | DRAFT PR OPEN — REVIEW + SMOKE PENDING | `codex/sole-trader-pii-warning` · **PR #158** (rebased onto `main`) | Lint ✅ · TypeScript ✅ · production bundle ✅ · rebased on latest `main` 2026-08-09 · draft PR open · browser smoke pending |
+| 16 | MERGED — SMOKE/LEAK TEST PENDING | `codex/sole-trader-pii-warning` · **PR #158 (merged)** | Lint ✅ · TypeScript ✅ · production bundle ✅ · Gitar approved + CodeRabbit "no actionable comments" · no migration · browser smoke pending |
 | 17 | MERGED + MIGRATION APPLIED LIVE — SMOKE/LEAK TEST PENDING | `agent/partner-owner-assigned-visibility` · **PR #153 (merged)** | Migration `partner_owner_assigned_visibility` applied live ✅ · fixes the confirmed partner visibility gap without widening cross-partner access · cross-role leak test pending |
-| 18 | DRAFT PR OPEN — REVIEW + SMOKE PENDING | `codex/portal-lead-document-recovery` · **PR #160** (rebased onto `main`) | Lint ✅ · TypeScript ✅ · production bundle ✅ · rebased on latest `main` 2026-08-09 · no migration required · draft PR open · browser smoke pending |
+| 18 | MERGED — SMOKE/LEAK TEST PENDING | `codex/portal-lead-document-recovery` · **PR #160 (merged)** + follow-up **PR #162** | Lint ✅ · TypeScript ✅ · production bundle ✅ · no migration · re-attach dedup + shared Modal landed pre-merge; 2 residual review findings (dedup load/error race, name+size false-skip) addressed in #162 · browser smoke pending |
 
 All builds not shown in this ledger remain **QUEUED**. Update this table after every material state change; never mark a build complete merely because a branch or PR exists — and never merely because it is merged or its migration is applied. "Complete" requires the smoke test and cross-role leak test in the legend.
 
