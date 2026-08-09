@@ -83,6 +83,17 @@ export async function getBankingProofUrl(path: string, expiresIn = 3600): Promis
   return data.signedUrl;
 }
 
+// Best-effort delete of a proof object (the subject's DELETE storage policy scopes
+// it to their own folder). Used to clean up an orphan when a save fails after the
+// upload, and to drop the previous proof once a replacement is saved. Never throws
+// — an orphaned object is a housekeeping issue, not a user-facing failure.
+export async function removeBankingProof(path: string): Promise<void> {
+  const { error } = await supabase.storage.from(PROOF_BUCKET).remove([path]);
+  if (error) {
+    console.warn(`Banking-proof cleanup failed (at=${new Date().toISOString()}):`, error.message);
+  }
+}
+
 export type SavePayeeInput = {
   account_holder_name: string | null;
   bank_name: string | null;

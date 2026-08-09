@@ -10,6 +10,7 @@ import {
   useSubmitPayeeProfile,
   uploadBankingProof,
   getBankingProofUrl,
+  removeBankingProof,
   PAYEE_MAX_PROOF_BYTES,
   type PayeeAccountType,
   type PayeeVatStatus,
@@ -86,6 +87,9 @@ export default function PaymentSettingsView({ portal }: { portal: PortalKind }) 
   const [vatNumber, setVatNumber] = useState("");
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofError, setProofError] = useState<string | null>(null);
+  // Covers the whole save flow — including the proof upload that happens BEFORE
+  // the mutation is pending — so the buttons can't be double-clicked mid-upload.
+  const [working, setWorking] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync the form to the loaded/refreshed profile (keyed on the row version so a
@@ -105,12 +109,15 @@ export default function PaymentSettingsView({ portal }: { portal: PortalKind }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncKey]);
 
-  const busy = save.isPending || submit.isPending;
+  const busy = working || save.isPending || submit.isPending;
 
   const chooseProof = (list: FileList | null) => {
     const file = list?.[0];
     if (!file) return;
     if (file.size > PAYEE_MAX_PROOF_BYTES) {
+      // Drop any previously-selected file so an invalid replacement can't be
+      // silently uploaded in its place.
+      setProofFile(null);
       setProofError(`"${file.name}" is larger than 10MB.`);
       return;
     }
@@ -140,8 +147,9 @@ export default function PaymentSettingsView({ portal }: { portal: PortalKind }) 
       toast.error("A VAT number is required when VAT status is Registered.");
       return false;
     }
+    const oldProofPath = profile?.banking_proof_storage_path ?? null;
+    let proofPath: string | null = null;
     try {
-      let proofPath: string | null = null;
       if (proofFile) {
         if (!uid) {
           toast.error("Your session is still loading — try again in a moment.");
@@ -160,24 +168,40 @@ export default function PaymentSettingsView({ portal }: { portal: PortalKind }) 
         vat_number: vatStatus === "registered" ? vatNumber.trim() || null : null,
         banking_proof_storage_path: proofPath,
       });
+      // A replacement proof was saved — drop the now-unreferenced previous object.
+      if (proofPath && oldProofPath && oldProofPath !== proofPath) {
+        await removeBankingProof(oldProofPath);
+      }
       return true;
     } catch (e) {
+      // The save failed after the upload — remove the orphaned new object.
+      if (proofPath) await removeBankingProof(proofPath);
       toast.error((e as Error).message || "Could not save your payment details");
       return false;
     }
   };
 
   const onSaveDraft = async () => {
-    if (await doSave()) toast.success("Payment details saved");
+    if (working) return;
+    setWorking(true);
+    try {
+      if (await doSave()) toast.success("Payment details saved");
+    } finally {
+      setWorking(false);
+    }
   };
 
   const onSubmit = async () => {
-    if (!(await doSave())) return;
+    if (working) return;
+    setWorking(true);
     try {
+      if (!(await doSave())) return;
       await submit.mutateAsync();
       toast.success("Submitted for verification");
     } catch (e) {
       toast.error((e as Error).message || "Could not submit for verification");
+    } finally {
+      setWorking(false);
     }
   };
 
@@ -227,8 +251,9 @@ export default function PaymentSettingsView({ portal }: { portal: PortalKind }) 
 
       <div className="grid gap-4 rounded-xl border border-border bg-white p-4 shadow-sm sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <label className={labelCls}>Account holder name</label>
+          <label htmlFor="payee-holder-name" className={labelCls}>Account holder name</label>
           <input
+            id="payee-holder-name"
             className={inputCls}
             value={holderName}
             onChange={(e) => setHolderName(e.target.value)}
@@ -238,8 +263,9 @@ export default function PaymentSettingsView({ portal }: { portal: PortalKind }) 
         </div>
 
         <div>
-          <label className={labelCls}>Bank</label>
+          <label htmlFor="payee-bank-name" className={labelCls}>Bank</label>
           <input
+            id="payee-bank-name"
             className={inputCls}
             value={bankName}
             onChange={(e) => setBankName(e.target.value)}
@@ -248,8 +274,9 @@ export default function PaymentSettingsView({ portal }: { portal: PortalKind }) 
           />
         </div>
         <div>
-          <label className={labelCls}>Branch code</label>
+          <label htmlFor="payee-branch-code" className={labelCls}>Branch code</label>
           <input
+            id="payee-branch-code"
             className={inputCls}
             value={branchCode}
             onChange={(e) => setBranchCode(e.target.value)}
@@ -260,8 +287,9 @@ export default function PaymentSettingsView({ portal }: { portal: PortalKind }) 
         </div>
 
         <div>
-          <label className={labelCls}>Account type</label>
+          <label htmlFor="payee-account-type" className={labelCls}>Account type</label>
           <select
+            id="payee-account-type"
             className={inputCls}
             value={accountType}
             onChange={(e) => setAccountType(e.target.value as PayeeAccountType | "")}
@@ -276,8 +304,9 @@ export default function PaymentSettingsView({ portal }: { portal: PortalKind }) 
           </select>
         </div>
         <div>
-          <label className={labelCls}>Account number</label>
+          <label htmlFor="payee-account-number" className={labelCls}>Account number</label>
           <input
+            id="payee-account-number"
             className={inputCls}
             value={accountNumber}
             onChange={(e) => setAccountNumber(e.target.value)}
@@ -293,8 +322,9 @@ export default function PaymentSettingsView({ portal }: { portal: PortalKind }) 
         </div>
 
         <div>
-          <label className={labelCls}>VAT status</label>
+          <label htmlFor="payee-vat-status" className={labelCls}>VAT status</label>
           <select
+            id="payee-vat-status"
             className={inputCls}
             value={vatStatus}
             onChange={(e) => setVatStatus(e.target.value as PayeeVatStatus)}
@@ -309,8 +339,9 @@ export default function PaymentSettingsView({ portal }: { portal: PortalKind }) 
         </div>
         {vatStatus === "registered" && (
           <div>
-            <label className={labelCls}>VAT number</label>
+            <label htmlFor="payee-vat-number" className={labelCls}>VAT number</label>
             <input
+              id="payee-vat-number"
               className={inputCls}
               value={vatNumber}
               onChange={(e) => setVatNumber(e.target.value)}
@@ -322,8 +353,9 @@ export default function PaymentSettingsView({ portal }: { portal: PortalKind }) 
         )}
 
         <div className="sm:col-span-2">
-          <label className={labelCls}>Tax number (optional)</label>
+          <label htmlFor="payee-tax-number" className={labelCls}>Tax number (optional)</label>
           <input
+            id="payee-tax-number"
             className={inputCls}
             value={taxNumber}
             onChange={(e) => setTaxNumber(e.target.value)}
