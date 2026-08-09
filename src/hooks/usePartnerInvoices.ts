@@ -200,6 +200,27 @@ export type PartnerInvoiceEligibility = {
   alreadyIncludedCount: number;
 };
 
+const ELIGIBILITY_PAGE_SIZE = 1000;
+
+// PostgREST caps a single response at db-max-rows (default 1000). Without paging,
+// a long-lived partner's ready commission could be silently truncated — the
+// preview would under-count and wrongly disable "Generate draft" even though the
+// authoritative server RPC (uncapped SQL) would succeed. Page through explicit
+// ranges so the preview stays consistent with that RPC.
+async function fetchAllRows<Row>(
+  buildPage: (from: number, to: number) => PromiseLike<{ data: Row[] | null; error: unknown }>,
+): Promise<Row[]> {
+  const all: Row[] = [];
+  for (let from = 0; ; from += ELIGIBILITY_PAGE_SIZE) {
+    const { data, error } = await buildPage(from, from + ELIGIBILITY_PAGE_SIZE - 1);
+    if (error) throw error;
+    const batch = data ?? [];
+    all.push(...batch);
+    if (batch.length < ELIGIBILITY_PAGE_SIZE) break;
+  }
+  return all;
+}
+
 // Read-only eligibility preview for the signed-in partner. Existing RLS scopes
 // every query. This requests only the partner's take and lifecycle dates — never
 // internal gross, tier, retention, or real funder names.
@@ -209,30 +230,34 @@ export function usePartnerInvoiceEligibility(periodStart: string, periodEnd: str
     queryKey: ["partner-invoice-eligibility", uid],
     enabled: !!uid,
     queryFn: async () => {
-      const [earningsResult, invoicesResult] = await Promise.all([
-        supabase
-          .from("commission_records")
-          .select("id, partner_share, status, payable_at, earned_at, created_at")
-          .in("status", ["earned", "outstanding", "payable"]),
-        supabase.from("partner_invoices").select("id").neq("state", "rejected"),
+      const [earnings, activeInvoices] = await Promise.all([
+        fetchAllRows<EligibilityEarning>((from, to) =>
+          supabase
+            .from("commission_records")
+            .select("id, partner_share, status, payable_at, earned_at, created_at")
+            .in("status", ["earned", "outstanding", "payable"])
+            .range(from, to),
+        ),
+        fetchAllRows<{ id: string }>((from, to) =>
+          supabase.from("partner_invoices").select("id").neq("state", "rejected").range(from, to),
+        ),
       ]);
 
-      if (earningsResult.error) throw earningsResult.error;
-      if (invoicesResult.error) throw invoicesResult.error;
-
-      const activeInvoiceIds = (invoicesResult.data ?? []).map((row) => row.id);
+      const activeInvoiceIds = activeInvoices.map((row) => row.id);
       let includedCommissionIds = new Set<string>();
       if (activeInvoiceIds.length > 0) {
-        const { data, error } = await supabase
-          .from("partner_invoice_line_items")
-          .select("commission_record_id")
-          .in("invoice_id", activeInvoiceIds);
-        if (error) throw error;
-        includedCommissionIds = new Set((data ?? []).map((row) => row.commission_record_id));
+        const lineItems = await fetchAllRows<{ commission_record_id: string }>((from, to) =>
+          supabase
+            .from("partner_invoice_line_items")
+            .select("commission_record_id")
+            .in("invoice_id", activeInvoiceIds)
+            .range(from, to),
+        );
+        includedCommissionIds = new Set(lineItems.map((row) => row.commission_record_id));
       }
 
       return {
-        earnings: (earningsResult.data ?? []) as EligibilityEarning[],
+        earnings,
         includedCommissionIds,
       };
     },
