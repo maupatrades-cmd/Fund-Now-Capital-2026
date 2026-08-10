@@ -41,6 +41,13 @@ begin
   -- Trail points STRICTLY BACKWARD: only rejected invoices generated before this
   -- one. Prevents two rejected invoices sharing commissions from mutually listing
   -- each other as "replaced".
+  -- INVARIANT this ordering depends on: a shared commission can reach a LATER
+  -- invoice only AFTER the earlier one is rejected (the no-double guard frees it),
+  -- and line items are inserted ONLY atomically at generation — there is no
+  -- add-line-item RPC. If a future build lets an existing draft acquire a freed
+  -- commission, generated_at ceases to be monotonic with attachment order and a
+  -- genuine predecessor would be silently omitted; key the order on the
+  -- successor's line added_at / the other invoice's rejected_at instead.
   select generated_at into v_gen from public.partner_invoices where id = p_invoice_id;
 
   return query
