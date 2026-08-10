@@ -93,6 +93,12 @@ security definer
 set search_path = ''
 as $$
 begin
+  if new.status = 'submitted'
+     and (tg_op = 'INSERT' or old.status is distinct from 'submitted') then
+    new.submitted_at := now();
+  elsif new.status <> 'submitted' then
+    new.submitted_at := null;
+  end if;
   if new.deal_id is not null and not exists (
     select 1 from public.deals d where d.id = new.deal_id and d.client_id = new.client_id
   ) then
