@@ -168,6 +168,32 @@ create trigger block_settled_commission_delete
   for each row execute function public.block_settled_commission_delete();
 
 -- ===========================================================================
+-- 3c. TRUNCATE guards — row-level DELETE triggers do NOT fire on TRUNCATE, so a
+--     raw `truncate` (owner/superuser via SQL) could still wipe all evidence at
+--     once. Statement-level BEFORE TRUNCATE triggers close that manual-edit gap.
+--     (These tables' rows are only ever written by the DEFINER RPCs; a truncate
+--     is never a legitimate operation on them.)
+-- ===========================================================================
+create or replace function public.block_evidence_truncate()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  raise exception 'Table %.% holds payout evidence and cannot be truncated. Correct rows via a reversal.',
+    tg_table_schema, tg_table_name using errcode = 'restrict_violation';
+end $$;
+
+drop trigger if exists block_evidence_truncate on public.partner_invoices;
+create trigger block_evidence_truncate before truncate on public.partner_invoices
+  for each statement execute function public.block_evidence_truncate();
+
+drop trigger if exists block_evidence_truncate on public.contractor_invoices;
+create trigger block_evidence_truncate before truncate on public.contractor_invoices
+  for each statement execute function public.block_evidence_truncate();
+
+drop trigger if exists block_evidence_truncate on public.commission_records;
+create trigger block_evidence_truncate before truncate on public.commission_records
+  for each statement execute function public.block_evidence_truncate();
+
+-- ===========================================================================
 -- 4. Assertions — structural + a rolled-back behavioural check that a paid
 --    partner invoice rejects an evidence edit. (contractor paid_proof_path +
 --    settled-commission paths are exercised at the smoke test once real money
@@ -194,6 +220,9 @@ begin
     raise exception 'assert FAIL: contractor paid-invoice DELETE guard not attached'; end if;
   if not exists (select 1 from pg_trigger where tgname='block_settled_commission_delete') then
     raise exception 'assert FAIL: settled-commission DELETE guard not attached'; end if;
+  if (select count(*) from pg_trigger where tgname='block_evidence_truncate') <> 3 then
+    raise exception 'assert FAIL: expected 3 TRUNCATE guards, found %',
+      (select count(*) from pg_trigger where tgname='block_evidence_truncate'); end if;
 
   -- Behavioural: a paid partner invoice must reject an evidence edit.
   begin
