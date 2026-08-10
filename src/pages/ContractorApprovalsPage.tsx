@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, XCircle, Eye, ReceiptText } from "lucide-react";
+import { CheckCircle2, XCircle, Eye, ReceiptText, Banknote, ExternalLink } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { formatZAR } from "@/lib/format";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -10,17 +10,23 @@ import { ContractorInvoicePdfButton } from "@/components/contractor-invoices/Con
 import {
   formatPeriodRange,
   formatPeriodDate,
-  CONTRACTOR_INVOICE_STATES,
+  getContractorEftProofUrl,
+  uploadContractorEftProof,
+  deleteContractorEftProof,
   type OwnerContractorInvoiceRow,
   type ContractorInvoiceState,
+  CONTRACTOR_INVOICE_STATES,
 } from "@/lib/contractorInvoices";
 import {
   useOwnerContractorInvoices,
   useContractorInvoiceLineItems,
   useApproveContractorInvoice,
   useRejectContractorInvoice,
+  useMarkContractorInvoicePaid,
 } from "@/hooks/useContractorInvoices";
 
+const primaryBtn =
+  "inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60";
 const successBtn =
   "inline-flex items-center gap-1.5 rounded-lg bg-brand-green px-4 py-2 text-sm font-semibold text-white hover:bg-brand-green/90 disabled:opacity-60";
 const dangerBtn =
@@ -31,6 +37,10 @@ const inputCls =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
 
 type Filter = "all" | ContractorInvoiceState;
+
+// EFT proof upload bounds (also enforced server-side on the bucket).
+const MAX_PROOF_BYTES = 10 * 1024 * 1024; // 10 MB
+const PROOF_TYPES = /^(application\/pdf|image\/)/;
 
 // Owner review surface for contractor invoices (Build 8 RPCs). The owner sees the
 // real contractor name here and the neutral line-item detail (contractor take;
@@ -152,7 +162,7 @@ export default function ContractorApprovalsPage() {
   );
 }
 
-type ActionKind = "reject" | null;
+type ActionKind = "reject" | "pay" | null;
 
 function InvoiceReviewModal({
   invoice,
@@ -164,15 +174,35 @@ function InvoiceReviewModal({
   const { data: items, isLoading, isError: itemsError } = useContractorInvoiceLineItems(invoice.id);
   const [action, setAction] = useState<ActionKind>(null);
   const [reason, setReason] = useState("");
+  const [reference, setReference] = useState("");
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const approve = useApproveContractorInvoice();
   const reject = useRejectContractorInvoice();
+  const markPaid = useMarkContractorInvoicePaid();
   const busyRef = useRef(false);
 
-  // Never let the owner approve while the line items are silently unavailable —
-  // approving requires a clean line-item load.
+  // Never let the owner take a financial action while the line items are silently
+  // unavailable — approve/pay require a clean line-item load.
   const canFinancialAct = !itemsError && !isLoading;
   const contractorName = invoice.contractor?.full_name ?? "Contractor";
+
+  const viewProof = async (path: string) => {
+    const popup = window.open("about:blank", "_blank");
+    try {
+      const url = await getContractorEftProofUrl(path);
+      if (popup) {
+        popup.opener = null;
+        popup.location.href = url;
+      } else {
+        window.location.href = url;
+      }
+    } catch (e) {
+      popup?.close();
+      toast.error((e as Error).message || "Could not open the proof file");
+    }
+  };
 
   const runApprove = async () => {
     if (busyRef.current) return; // synchronous double-submit guard
@@ -210,7 +240,52 @@ function InvoiceReviewModal({
     }
   };
 
-  const pending = approve.isPending || reject.isPending;
+  const runPay = async () => {
+    if (busyRef.current) return;
+    if (!canFinancialAct) {
+      toast.error("Load the invoice's line items before marking it paid.");
+      return;
+    }
+    if (!reference.trim()) {
+      toast.error("An EFT payment reference is required.");
+      return;
+    }
+    busyRef.current = true;
+    let proofPath: string | null = null;
+    try {
+      // Upload the optional proof-of-payment first, so the RPC records its path
+      // atomically with the paid transition.
+      if (proofFile) {
+        setUploading(true);
+        proofPath = await uploadContractorEftProof(invoice.id, proofFile);
+        setUploading(false);
+      }
+      const res = await markPaid.mutateAsync({
+        invoiceId: invoice.id,
+        paidReference: reference.trim(),
+        paidProofPath: proofPath,
+      });
+      // Idempotent no-op: the invoice was already paid, so the RPC did NOT record
+      // this proof. Clean up the orphaned upload and tell the owner it was ignored.
+      if (res?.changed === false) {
+        if (proofPath) await deleteContractorEftProof(proofPath);
+        toast.info(`Invoice ${invoice.invoice_number} was already marked paid — the uploaded proof was not attached.`);
+      } else {
+        toast.success(`Invoice ${invoice.invoice_number} marked paid`);
+      }
+      onClose();
+    } catch (e) {
+      // The RPC failed after the file was uploaded → the path was never recorded.
+      // Remove the orphaned object so it doesn't linger in the private bucket.
+      if (proofPath) await deleteContractorEftProof(proofPath);
+      toast.error((e as Error).message || "Could not mark the invoice paid");
+    } finally {
+      setUploading(false);
+      busyRef.current = false;
+    }
+  };
+
+  const pending = approve.isPending || reject.isPending || markPaid.isPending || uploading;
 
   return (
     <Modal title={`${contractorName} · ${invoice.invoice_number}`} onClose={onClose} maxWidth="max-w-2xl">
@@ -242,16 +317,27 @@ function InvoiceReviewModal({
           <span className="font-medium">Rejected:</span> {invoice.rejected_reason}
         </div>
       )}
-      {invoice.state === "approved" && (
+      {invoice.state === "approved" && action === null && (
         <div className="rounded-lg border border-brand-teal/30 bg-brand-teal/5 p-3 text-sm text-brand-navy">
-          Approved {formatPeriodDate(invoice.approved_at)} — awaiting payment. Recording the EFT
-          payment and settling the contractor's commission arrives in the next build.
+          Approved {formatPeriodDate(invoice.approved_at)} — awaiting payment. Once you've paid the
+          contractor by EFT, record it below to settle their commission.
         </div>
       )}
       {invoice.state === "paid" && (
         <div className="rounded-lg border border-brand-green/30 bg-brand-green/5 p-3 text-sm text-brand-navy">
-          Paid {formatPeriodDate(invoice.paid_at)}
-          {invoice.paid_reference ? ` — reference ${invoice.paid_reference}` : ""}.
+          <p>
+            Paid {formatPeriodDate(invoice.paid_at)}
+            {invoice.paid_reference ? ` — reference ${invoice.paid_reference}` : ""}.
+          </p>
+          {invoice.paid_proof_path && (
+            <button
+              type="button"
+              onClick={() => void viewProof(invoice.paid_proof_path!)}
+              className="mt-1 inline-flex items-center gap-1 font-medium text-brand-teal hover:underline"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> View proof of payment
+            </button>
+          )}
         </div>
       )}
 
@@ -269,6 +355,57 @@ function InvoiceReviewModal({
             onChange={(e) => setReason(e.target.value)}
             placeholder="Explain what needs to change so the contractor can re-invoice."
           />
+        </div>
+      )}
+
+      {/* Mark-paid sub-form: EFT reference (required) + optional proof upload */}
+      {action === "pay" && (
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-brand-navy" htmlFor="ci-pay-reference">
+              EFT payment reference (required)
+            </label>
+            <input
+              id="ci-pay-reference"
+              type="text"
+              className={inputCls}
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="e.g. FNC-2026-08-15"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-brand-navy" htmlFor="ci-pay-proof">
+              Proof of payment (optional)
+            </label>
+            <input
+              id="ci-pay-proof"
+              type="file"
+              accept="application/pdf,image/*"
+              className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border file:border-border file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-brand-navy hover:file:bg-slate-50"
+              onChange={(e) => {
+                // The accept attribute is only a picker hint — validate type + size
+                // client-side (the bucket also enforces both server-side).
+                const f = e.target.files?.[0] ?? null;
+                if (f && !PROOF_TYPES.test(f.type)) {
+                  toast.error("Attach a PDF or an image file.");
+                  e.target.value = "";
+                  setProofFile(null);
+                  return;
+                }
+                if (f && f.size > MAX_PROOF_BYTES) {
+                  toast.error("The proof file must be 10 MB or smaller.");
+                  e.target.value = "";
+                  setProofFile(null);
+                  return;
+                }
+                setProofFile(f);
+              }}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Marking paid settles the contractor's commission and notifies them. Kept private to you.
+            </p>
+          </div>
         </div>
       )}
 
@@ -295,6 +432,31 @@ function InvoiceReviewModal({
               {reject.isPending ? "Rejecting…" : "Confirm rejection"}
             </button>
             <button type="button" className={secondaryBtn} onClick={() => setAction(null)}>
+              Back
+            </button>
+          </>
+        )}
+        {invoice.state === "approved" && action === null && (
+          <button
+            type="button"
+            className={primaryBtn}
+            onClick={() => setAction("pay")}
+            disabled={pending || !canFinancialAct}
+          >
+            <Banknote className="h-4 w-4" /> Mark paid
+          </button>
+        )}
+        {invoice.state === "approved" && action === "pay" && (
+          <>
+            <button type="button" className={primaryBtn} onClick={() => void runPay()} disabled={pending}>
+              {uploading ? "Uploading…" : markPaid.isPending ? "Saving…" : "Confirm payment"}
+            </button>
+            <button
+              type="button"
+              className={secondaryBtn}
+              onClick={() => setAction(null)}
+              disabled={pending}
+            >
               Back
             </button>
           </>
