@@ -26,6 +26,7 @@ returns table (
   rejected_reason  text,
   shared_line_count int
 ) language plpgsql stable security definer set search_path = '' as $$
+declare v_gen timestamptz;
 begin
   if not public.is_owner() then
     if not exists (
@@ -36,6 +37,11 @@ begin
       raise exception 'Not authorised to view this invoice';
     end if;
   end if;
+
+  -- Trail points STRICTLY BACKWARD: only rejected invoices generated before this
+  -- one. Prevents two rejected invoices sharing commissions from mutually listing
+  -- each other as "replaced".
+  select generated_at into v_gen from public.partner_invoices where id = p_invoice_id;
 
   return query
     select other.id, other.invoice_number, other.rejected_at, other.rejected_reason,
@@ -48,6 +54,7 @@ begin
      where li.invoice_id = p_invoice_id
        and other.id <> p_invoice_id
        and other.state = 'rejected'
+       and other.generated_at < v_gen
      group by other.id, other.invoice_number, other.rejected_at, other.rejected_reason
      order by other.rejected_at desc nulls last;
 end $$;
@@ -63,7 +70,7 @@ returns table (
   rejected_reason  text,
   shared_line_count int
 ) language plpgsql stable security definer set search_path = '' as $$
-declare v_uid uuid := (select auth.uid());
+declare v_uid uuid := (select auth.uid()); v_gen timestamptz;
 begin
   if not public.is_owner() then
     if not exists (
@@ -73,6 +80,9 @@ begin
       raise exception 'Not authorised to view this invoice';
     end if;
   end if;
+
+  -- Trail points STRICTLY BACKWARD (see the partner RPC).
+  select generated_at into v_gen from public.contractor_invoices where id = p_invoice_id;
 
   return query
     select other.id, other.invoice_number, other.rejected_at, other.rejected_reason,
@@ -85,6 +95,7 @@ begin
      where li.invoice_id = p_invoice_id
        and other.id <> p_invoice_id
        and other.state = 'rejected'
+       and other.generated_at < v_gen
      group by other.id, other.invoice_number, other.rejected_at, other.rejected_reason
      order by other.rejected_at desc nulls last;
 end $$;
