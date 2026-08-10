@@ -34,6 +34,7 @@ export type ContractorInvoice = {
   approved_by: string | null;
   paid_at: string | null;
   paid_reference: string | null;
+  paid_proof_path: string | null;
   rejected_at: string | null;
   rejected_reason: string | null;
   notes: string | null;
@@ -141,6 +142,34 @@ export function previousInvoicePeriod(now = new Date()): { start: string; end: s
     start: localIsoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
     end: localIsoDate(new Date(now.getFullYear(), now.getMonth(), 0)),
   };
+}
+
+// Owner-only signed URL for an EFT proof-of-payment file in the private
+// `contractor-invoice-proofs` bucket. Minted with the owner's own session (the
+// owner-all bucket RLS backs it) — no service-role secret in the browser.
+export async function getContractorEftProofUrl(path: string, expiresIn = 3600): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from("contractor-invoice-proofs")
+    .createSignedUrl(path, expiresIn);
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message ?? "Could not create a link for this proof file.");
+  }
+  if (!/^https:\/\//i.test(data.signedUrl)) {
+    throw new Error("Refusing to open a non-HTTPS link.");
+  }
+  return data.signedUrl;
+}
+
+// Upload an EFT proof-of-payment file to the private bucket (owner only, per the
+// owner-all bucket RLS) and return its storage path. Path namespaces by invoice.
+export async function uploadContractorEftProof(invoiceId: string, file: File): Promise<string> {
+  const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, "_").slice(-80);
+  const path = `${invoiceId}/${Date.now()}-${safeName}`;
+  const { error } = await supabase.storage
+    .from("contractor-invoice-proofs")
+    .upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
+  if (error) throw new Error(error.message || "Could not upload the proof file.");
+  return path;
 }
 
 // Render + download a contractor-invoice PDF on demand. The Edge Function
