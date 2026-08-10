@@ -89,7 +89,21 @@ begin
           'Settled commission evidence is immutable (record %). Correct via a reversal (void).',
           old.id using errcode = 'restrict_violation';
       end if;
-    elsif new.status <> 'void' then
+    elsif new.status = 'void' then
+      -- A reversal must NOT double as a rewrite: the settled figures + linkage
+      -- are preserved on the void row so the audit trail stays intact.
+      if new.settled_at            is distinct from old.settled_at
+         or new.partner_invoice_id    is distinct from old.partner_invoice_id
+         or new.contractor_invoice_id is distinct from old.contractor_invoice_id
+         or new.partner_share         is distinct from old.partner_share
+         or new.contractor_share      is distinct from old.contractor_share
+         or new.owner_share           is distinct from old.owner_share
+         or new.gross_commission      is distinct from old.gross_commission then
+        raise exception
+          'A settled→void reversal must not rewrite settled evidence (record %).',
+          old.id using errcode = 'restrict_violation';
+      end if;
+    else
       raise exception
         'A settled commission can only be reversed to void, not moved to % (record %).',
         new.status, old.id using errcode = 'restrict_violation';
@@ -102,6 +116,56 @@ drop trigger if exists enforce_settled_commission_immutable on public.commission
 create trigger enforce_settled_commission_immutable
   before update on public.commission_records
   for each row execute function public.enforce_settled_commission_immutable();
+
+-- ===========================================================================
+-- 3b. DELETE guards — append-only means paid invoices + settled commissions can
+--     never be deleted either (a DELETE would destroy the very evidence these
+--     triggers freeze). Corrections go through a reversal, not a delete.
+-- ===========================================================================
+create or replace function public.block_paid_partner_invoice_delete()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if old.state = 'paid' then
+    raise exception 'A paid invoice cannot be deleted (invoice %). Reverse it, do not delete.',
+      old.invoice_number using errcode = 'restrict_violation';
+  end if;
+  return old;
+end $$;
+
+drop trigger if exists block_paid_partner_invoice_delete on public.partner_invoices;
+create trigger block_paid_partner_invoice_delete
+  before delete on public.partner_invoices
+  for each row execute function public.block_paid_partner_invoice_delete();
+
+create or replace function public.block_paid_contractor_invoice_delete()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if old.state = 'paid' then
+    raise exception 'A paid invoice cannot be deleted (invoice %). Reverse it, do not delete.',
+      old.invoice_number using errcode = 'restrict_violation';
+  end if;
+  return old;
+end $$;
+
+drop trigger if exists block_paid_contractor_invoice_delete on public.contractor_invoices;
+create trigger block_paid_contractor_invoice_delete
+  before delete on public.contractor_invoices
+  for each row execute function public.block_paid_contractor_invoice_delete();
+
+create or replace function public.block_settled_commission_delete()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if old.status = 'settled' then
+    raise exception 'A settled commission cannot be deleted (record %). Reverse it (void), do not delete.',
+      old.id using errcode = 'restrict_violation';
+  end if;
+  return old;
+end $$;
+
+drop trigger if exists block_settled_commission_delete on public.commission_records;
+create trigger block_settled_commission_delete
+  before delete on public.commission_records
+  for each row execute function public.block_settled_commission_delete();
 
 -- ===========================================================================
 -- 4. Assertions — structural + a rolled-back behavioural check that a paid
@@ -124,6 +188,12 @@ begin
     raise exception 'assert FAIL: contractor immutability trigger not attached'; end if;
   if not exists (select 1 from pg_trigger where tgname='enforce_settled_commission_immutable') then
     raise exception 'assert FAIL: settled-commission immutability trigger not attached'; end if;
+  if not exists (select 1 from pg_trigger where tgname='block_paid_partner_invoice_delete') then
+    raise exception 'assert FAIL: partner paid-invoice DELETE guard not attached'; end if;
+  if not exists (select 1 from pg_trigger where tgname='block_paid_contractor_invoice_delete') then
+    raise exception 'assert FAIL: contractor paid-invoice DELETE guard not attached'; end if;
+  if not exists (select 1 from pg_trigger where tgname='block_settled_commission_delete') then
+    raise exception 'assert FAIL: settled-commission DELETE guard not attached'; end if;
 
   -- Behavioural: a paid partner invoice must reject an evidence edit.
   begin
