@@ -17,6 +17,8 @@ import PartnerPaymentSettingsPage from "@/pages/partner/PaymentSettingsPage";
 import PartnerBadgesPage from "@/pages/partner/PartnerBadgesPage";
 import PartnerStatementsPage from "@/pages/partner/StatementsPage";
 import ContractorGate from "@/pages/ContractorGate";
+import ClientGate from "@/pages/client/ClientGate";
+import ClientHomePage from "@/pages/client/ClientHomePage";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
 import DealDetailPage from "@/pages/DealDetailPage";
@@ -142,6 +144,10 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/partner" replace />} />
       </Route>
       <Route path="/contractor/*" element={<ContractorGate />} />
+      <Route path="/client" element={<ClientGate />}>
+        <Route index element={<ClientHomePage />} />
+        <Route path="*" element={<Navigate to="/client" replace />} />
+      </Route>
 
       {/*
         Authenticated app — owner-only, shared sidebar/top-bar layout.
