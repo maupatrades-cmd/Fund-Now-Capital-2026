@@ -38,6 +38,8 @@ begin
   end loop;
   return d;
 end $$;
+-- Helper is trigger-internal only; no API surface (mirrors current_sast_date()).
+revoke all on function public.add_business_days(date, int) from public, anon;
 
 -- ===========================================================================
 -- 3. Stamp due_date on the approved transition (BEFORE UPDATE, both tables).
@@ -139,6 +141,9 @@ begin
       '/invoices/contractor-approvals', jsonb_build_object('contractor_invoice_id', r.id));
   end loop;
 end $$;
+-- SECURITY DEFINER, RLS-bypassing system sweep: cron/postgres only, never an API
+-- surface (mirrors check_overdue_invoices / check_followups_due / check_document_expiries).
+revoke all on function public.check_overdue_payouts() from public, anon, authenticated;
 
 -- Daily at 04:35 UTC / 06:35 SAST (after the funder overdue sweep at 04:30).
 select cron.unschedule(jobid) from cron.job where jobname = 'payout-overdue-sweep';
@@ -182,5 +187,8 @@ begin
   -- business-day helper sanity: Fri (2026-08-14) + 1 business day = Mon 2026-08-17
   if public.add_business_days(date '2026-08-14', 1) <> date '2026-08-17' then
     raise exception 'assert FAIL: add_business_days skipped weekend wrong'; end if;
+  -- grant matrix: the RLS-bypassing sweep must never be API-callable by end users.
+  if has_function_privilege('authenticated', 'public.check_overdue_payouts()', 'execute') then
+    raise exception 'assert FAIL: check_overdue_payouts must not be executable by authenticated'; end if;
   raise notice 'Build 12: payout due dates + overdue sweep created; asserts passed.';
 end $$;
