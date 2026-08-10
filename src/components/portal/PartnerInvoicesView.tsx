@@ -21,11 +21,11 @@ import {
 } from "@/hooks/usePartnerInvoices";
 
 const primaryBtn =
-  "inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60";
+  "inline-flex items-center gap-1.5 rounded-lg bg-[#DCA423] px-4 py-2 text-sm font-semibold text-white hover:bg-[#B26F11] disabled:opacity-60";
 const secondaryBtn =
-  "rounded-lg border border-border px-4 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50";
+  "rounded-lg border border-[#E2E6EC] px-4 py-2 text-sm font-medium text-[#13283D] hover:bg-slate-50";
 const inputCls =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
+  "w-full rounded-lg border border-[#E2E6EC] bg-white px-3 py-2 text-sm outline-none focus:border-[#DCA423] focus:ring-2 focus:ring-[#DCA423]/20";
 
 type Filter = "all" | PartnerInvoiceState;
 
@@ -45,7 +45,7 @@ export default function PartnerInvoicesView() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-brand-navy">My Invoices</h1>
+          <h1 className="text-xl font-bold text-[#13283D]">My Invoices</h1>
           <p className="text-sm text-muted-foreground">
             Invoice Fund Now Capital for the commission you've earned.
           </p>
@@ -66,7 +66,7 @@ export default function PartnerInvoicesView() {
             className={
               "rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors " +
               (filter === f
-                ? "bg-brand-navy text-white"
+                ? "bg-[#13283D] text-white"
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200")
             }
           >
@@ -95,10 +95,10 @@ export default function PartnerInvoicesView() {
       )}
 
       {!isLoading && !isError && rows.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-border bg-white">
+        <div className="overflow-x-auto rounded-xl border border-[#E2E6EC] bg-white">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <tr className="border-b border-[#E2E6EC] text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-4 py-3 font-medium">Number</th>
                 <th className="px-4 py-3 font-medium">Period</th>
                 <th className="px-4 py-3 text-right font-medium">Amount</th>
@@ -110,8 +110,8 @@ export default function PartnerInvoicesView() {
             </thead>
             <tbody>
               {rows.map((inv) => (
-                <tr key={inv.id} className="border-b border-border/60 hover:bg-slate-50">
-                  <td className="px-4 py-3 font-semibold text-brand-navy">
+                <tr key={inv.id} className="border-b border-[#E2E6EC]/60 hover:bg-slate-50">
+                  <td className="px-4 py-3 font-semibold text-[#13283D]">
                     <Link to={`/partner/invoices/${inv.id}`} className="hover:text-brand-teal">
                       {inv.invoice_number}
                     </Link>
@@ -119,7 +119,7 @@ export default function PartnerInvoicesView() {
                   <td className="px-4 py-3 text-muted-foreground">
                     {formatPeriodRange(inv.invoice_period_start, inv.invoice_period_end)}
                   </td>
-                  <td className="px-4 py-3 text-right font-medium text-brand-navy">
+                  <td className="px-4 py-3 text-right font-medium text-[#13283D]">
                     {formatZAR(inv.total_amount, { cents: true })}
                   </td>
                   <td className="px-4 py-3">
@@ -219,11 +219,11 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="mb-1 block text-xs font-medium text-brand-navy">Period start</label>
+          <label className="mb-1 block text-xs font-medium text-[#13283D]">Period start</label>
           <input type="date" className={inputCls} value={start} onChange={(e) => setStart(e.target.value)} />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-brand-navy">Period end</label>
+          <label className="mb-1 block text-xs font-medium text-[#13283D]">Period end</label>
           <input type="date" className={inputCls} value={end} onChange={(e) => setEnd(e.target.value)} />
         </div>
       </div>

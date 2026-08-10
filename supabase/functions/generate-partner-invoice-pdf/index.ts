@@ -20,11 +20,11 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { BD_LOGO_JPEG } from "./logo.ts";
+import { BD_LOGO_PNG } from "./logo.ts";
 
-// Decode the embedded JPEG to raw bytes once, at module load.
+// Decode the embedded PNG to raw bytes once, at module load.
 const LOGO_BYTES: Uint8Array = Uint8Array.from(
-  atob(BD_LOGO_JPEG.split(",")[1]),
+  atob(BD_LOGO_PNG.split(",")[1]),
   (c) => c.charCodeAt(0),
 );
 
@@ -37,13 +37,13 @@ const FNC_BILL_TO = {
 };
 
 type RGB = [number, number, number];
-const NAVY: RGB = [26, 58, 82]; // #1a3a52
-const TEAL: RGB = [45, 168, 184]; // #2da8b8
-const INK: RGB = [30, 51, 70];
-const MUTED: RGB = [138, 160, 179];
+const NAVY: RGB = [19, 40, 61]; // #13283D
+const AMBER: RGB = [220, 164, 35]; // #DCA423
+const INK: RGB = [28, 39, 51]; // #1C2733
+const MUTED: RGB = [107, 118, 132]; // #6B7684
 const WHITE: RGB = [255, 255, 255];
-const FOOT: RGB = [200, 214, 224];
-const HAIR: RGB = [225, 232, 238];
+const FOOT: RGB = [226, 230, 236]; // #E2E6EC
+const HAIR: RGB = [226, 230, 236]; // #E2E6EC
 const col = (c: RGB) => rgb(c[0] / 255, c[1] / 255, c[2] / 255);
 
 function formatR(v: number | string | null | undefined): string {
@@ -138,12 +138,21 @@ async function renderPdf(inv: InvoiceRow, partnerName: string, items: LineItem[]
   let y = 48;
 
   // ---- header: BD logo + partner block (FROM) + INVOICE ----
-  const LOGO = 46;
-  const TX = M + LOGO + 12;
-  const logo = await doc.embedJpg(LOGO_BYTES);
-  page.drawImage(logo, { x: M, y: H - (y - 8 + LOGO), width: LOGO, height: LOGO });
-  text(partnerName, TX, y + 6, { size: 16, font: "bold", color: NAVY });
-  text("Referral Partner", TX, y + 20, { size: 9, font: "ital", color: TEAL });
+  const LOGO_W = 172;
+  const LOGO_H = 48;
+  const logo = await doc.embedPng(LOGO_BYTES);
+  page.drawRectangle({
+    x: M - 8,
+    y: H - (y - 10 + LOGO_H + 18),
+    width: LOGO_W + 16,
+    height: LOGO_H + 18,
+    color: col([247, 248, 250]),
+    borderColor: col([226, 230, 236]),
+    borderWidth: 0.75,
+  });
+  page.drawImage(logo, { x: M, y: H - (y - 2 + LOGO_H), width: LOGO_W, height: LOGO_H });
+  text(partnerName, M, y + 66, { size: 11, font: "bold", color: NAVY });
+  text("Referral Partner", M, y + 80, { size: 8.5, font: "ital", color: AMBER });
 
   text("INVOICE", W - M, y + 6, { size: 22, font: "bold", color: NAVY, align: "right" });
   const rMeta: [string, string][] = [
@@ -158,8 +167,8 @@ async function renderPdf(inv: InvoiceRow, partnerName: string, items: LineItem[]
     ry += 14;
   }
 
-  y += 70;
-  hline(M, y, W - M, 1.5, TEAL);
+  y += 96;
+  hline(M, y, W - M, 1.5, AMBER);
   y += 22;
 
   // ---- INVOICE TO (FNC) ----

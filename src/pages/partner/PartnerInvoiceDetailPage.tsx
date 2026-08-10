@@ -70,10 +70,10 @@ export default function PartnerInvoiceDetailPage() {
         {invoice && (
           <>
             {/* Header */}
-            <div className="flex flex-wrap items-start justify-between gap-4 rounded-xl border border-border bg-white p-6 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-4 rounded-xl border border-[#E2E6EC] bg-white p-6 shadow-sm">
               <div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="text-2xl font-bold text-brand-navy">{invoice.invoice_number}</h1>
+                  <h1 className="text-2xl font-bold text-[#13283D]">{invoice.invoice_number}</h1>
                   <PartnerInvoiceStateChip state={invoice.state} />
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -83,7 +83,7 @@ export default function PartnerInvoiceDetailPage() {
               <div className="flex flex-col items-end gap-2">
                 <div className="text-right">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Total</p>
-                  <p className="text-2xl font-bold text-brand-navy">
+                  <p className="text-2xl font-bold text-[#13283D]">
                     {formatZAR(invoice.total_amount, { cents: true })}
                   </p>
                 </div>
@@ -133,9 +133,9 @@ export default function PartnerInvoiceDetailPage() {
             )}
 
             {/* Line items */}
-            <section className="space-y-3 rounded-xl border border-border bg-white p-5 shadow-sm">
+            <section className="space-y-3 rounded-xl border border-[#E2E6EC] bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-brand-navy">Commissions on this invoice</h2>
+                <h2 className="text-sm font-semibold text-[#13283D]">Commissions on this invoice</h2>
                 {invoice.state === "draft" && (
                   <span className="text-xs text-muted-foreground">Remove any you don't want to bill yet</span>
                 )}
@@ -160,7 +160,7 @@ export default function PartnerInvoiceDetailPage() {
                   type="button"
                   onClick={() => void onSubmit()}
                   disabled={submit.isPending || (!itemsError && (items?.length ?? 0) === 0)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal/90 disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#DCA423] px-4 py-2 text-sm font-semibold text-white hover:bg-[#B26F11] disabled:opacity-60"
                 >
                   <Send className="h-4 w-4" />
                   {submit.isPending ? "Submitting…" : "Submit for approval"}
@@ -173,14 +173,14 @@ export default function PartnerInvoiceDetailPage() {
 
             {/* Payment details — shown once approved (awaiting/received payment) */}
             {(invoice.state === "approved" || invoice.state === "paid") && (
-              <section className="space-y-2 rounded-xl border border-border bg-slate-50 p-5">
-                <h2 className="text-sm font-semibold text-brand-navy">Payment details</h2>
+              <section className="space-y-2 rounded-xl border border-[#E2E6EC] bg-slate-50 p-5">
+                <h2 className="text-sm font-semibold text-[#13283D]">Payment details</h2>
                 <p className="text-sm text-muted-foreground">
                   Fund Now Capital pays by EFT to your banking details on file, per your Referral
                   Agreement. VAT is added only if your business is VAT-registered.
                 </p>
                 {invoice.state === "paid" && invoice.paid_reference && (
-                  <p className="text-sm text-brand-navy">
+                  <p className="text-sm text-[#13283D]">
                     <span className="font-medium">Payment reference:</span> {invoice.paid_reference}
                   </p>
                 )}
@@ -207,10 +207,10 @@ function Banner({
 }) {
   const cls =
     tone === "success"
-      ? "border-brand-green/30 bg-brand-green/5 text-brand-navy"
+      ? "border-brand-green/30 bg-brand-green/5 text-[#13283D]"
       : tone === "error"
         ? "border-red-200 bg-red-50 text-red-700"
-        : "border-brand-teal/30 bg-brand-teal/5 text-brand-navy";
+        : "border-[#DCA423]/30 bg-[#DCA423]/5 text-[#13283D]";
   return (
     <div className={"flex items-start gap-2 rounded-xl border p-4 text-sm " + cls}>
       <Icon className="mt-0.5 h-4 w-4 shrink-0" />
