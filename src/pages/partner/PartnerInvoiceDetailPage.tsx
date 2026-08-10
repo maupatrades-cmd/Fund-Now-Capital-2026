@@ -11,6 +11,7 @@ import { DownloadPdfButton } from "@/components/partner-invoices/DownloadPdfButt
 import {
   usePartnerInvoice,
   usePartnerInvoiceLineItems,
+  usePartnerInvoiceSupersessions,
   useSubmitPartnerInvoice,
 } from "@/hooks/usePartnerInvoices";
 
@@ -25,6 +26,7 @@ export default function PartnerInvoiceDetailPage() {
     retryPdf,
   } = usePartnerInvoice(invoiceId);
   const { data: items, isError: itemsError } = usePartnerInvoiceLineItems(invoiceId);
+  const { data: supersessions } = usePartnerInvoiceSupersessions(invoiceId);
   const submit = useSubmitPartnerInvoice();
   const submittingRef = useRef(false);
 
@@ -157,6 +159,22 @@ export default function PartnerInvoiceDetailPage() {
                 />
               )}
             </section>
+
+            {/* Resubmission trail — rejected invoices this one re-bills (Build 14) */}
+            {supersessions && supersessions.length > 0 && (
+              <section className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-5">
+                <h2 className="text-sm font-semibold text-amber-900">Replaces a rejected invoice</h2>
+                <ul className="space-y-1 text-sm text-amber-900">
+                  {supersessions.map((s) => (
+                    <li key={s.invoice_id}>
+                      <span className="font-medium">{s.invoice_number}</span> — rejected
+                      {s.rejected_at ? ` ${formatPeriodDate(s.rejected_at)}` : ""}
+                      {s.rejected_reason ? `: ${s.rejected_reason}` : "."}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {/* Draft → submit */}
             {invoice.state === "draft" && (
