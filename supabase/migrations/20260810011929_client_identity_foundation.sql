@@ -214,10 +214,13 @@ begin
     select 1 from pg_policies
      where schemaname = 'public'
        and tablename in ('clients', 'client_contacts')
-       and policyname in ('clients_client_read_own', 'client_contacts_client_read_own')
        and cmd <> 'SELECT'
+       and (
+         coalesce(qual, '') ilike '%current_client_id%'
+         or coalesce(with_check, '') ilike '%current_client_id%'
+       )
   ) then
-    raise exception 'Build 74A: unexpected client write policy exists';
+    raise exception 'Build 74A: unexpected client-scoped write policy exists';
   end if;
 end;
 $$;
