@@ -46,7 +46,11 @@ type PagePromise<Row> = PromiseLike<{ data: Row[] | null; error: unknown }>;
 const fetchAllCommissions = () =>
   fetchAllPaged<RawReconCommission>(
     (from, to) =>
-      supabase.from("commission_records").select(COMMISSION_COLUMNS).range(from, to) as unknown as PagePromise<RawReconCommission>,
+      supabase
+        .from("commission_records")
+        .select(COMMISSION_COLUMNS)
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PagePromise<RawReconCommission>,
   );
 
 type RawPartnerInvoice = {
@@ -62,6 +66,7 @@ const fetchAllPartnerInvoices = () =>
       supabase
         .from("partner_invoices")
         .select("state, total_amount, referral_partner_id, partner:referral_partners!left(id, name)")
+        .order("id", { ascending: true })
         .range(from, to) as unknown as PagePromise<RawPartnerInvoice>,
   );
 
@@ -80,6 +85,7 @@ const fetchAllContractorInvoices = () =>
         .select(
           "state, total_amount, contractor_id, contractor:profiles!contractor_invoices_contractor_id_fkey(id, full_name)",
         )
+        .order("id", { ascending: true })
         .range(from, to) as unknown as PagePromise<RawContractorInvoice>,
   );
 
