@@ -62,13 +62,13 @@ begin
     v_recipient := public.notify_owner();
     if new.contractor_id is not null and new.attribution_type = 'FNC_Contractor' then
       perform public.emit_in_app_notification(v_recipient, 'COMMISSION_PAID', 'Commission paid',
-        'Contractor commission of R' || to_char(new.contractor_share, 'FM999,999,990') ||
+        'Contractor commission of R' || trim(to_char(new.contractor_share, 'FM999G999G990D00')) ||
         ' for ' || coalesce(v_ref, 'a deal') || ' has been settled and paid.',
         '/deals/' || new.deal_id::text,
         jsonb_build_object('commission_record_id', new.id, 'deal_id', new.deal_id));
     else
       perform public.emit_in_app_notification(v_recipient, 'COMMISSION_PAID', 'Commission paid',
-        'Partner commission of R' || to_char(new.partner_share, 'FM999,999,990') ||
+        'Partner commission of R' || trim(to_char(new.partner_share, 'FM999G999G990D00')) ||
         ' for ' || coalesce(v_ref, 'a deal') || ' has been settled and paid.',
         '/deals/' || new.deal_id::text,
         jsonb_build_object('commission_record_id', new.id, 'deal_id', new.deal_id));
@@ -102,6 +102,17 @@ begin
   end if;
   if v_from <> 'payable' then
     raise exception 'Only a payable commission can be settled (record % is %)', p_commission_record_id, v_from;
+  end if;
+
+  -- Defense-in-depth: never settle a commission across contractors. Line items
+  -- are RPC-scoped to the invoice's contractor at generation, so this can only
+  -- fail on a corrupt/mis-inserted line — in which case fail closed rather than
+  -- stamping one contractor's payable onto another contractor's invoice.
+  if (select cr.contractor_id from public.commission_records cr where cr.id = p_commission_record_id)
+     is distinct from
+     (select ci.contractor_id from public.contractor_invoices ci where ci.id = p_contractor_invoice_id) then
+    raise exception 'Commission % does not belong to the contractor on invoice %',
+      p_commission_record_id, p_contractor_invoice_id;
   end if;
 
   update public.commission_records
