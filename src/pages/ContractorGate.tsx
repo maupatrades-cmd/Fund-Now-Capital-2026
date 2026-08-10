@@ -12,6 +12,8 @@ import ContractorTrainingPage from "./contractor/TrainingPage";
 import ContractorTrainingModulePage from "./contractor/TrainingModulePage";
 import ContractorProgressionPage from "./contractor/ProgressionPage";
 import ContractorStatementsPage from "./contractor/StatementsPage";
+import ContractorInvoicesPage from "./contractor/ContractorInvoicesPage";
+import ContractorInvoiceDetailPage from "./contractor/ContractorInvoiceDetailPage";
 import ContractorNotificationSettingsPage from "./contractor/NotificationSettingsPage";
 import ContractorPaymentSettingsPage from "./contractor/PaymentSettingsPage";
 
@@ -68,6 +70,8 @@ export default function ContractorGate() {
         <Route path="training/:moduleId" element={<ContractorTrainingModulePage />} />
         <Route path="progression" element={<ContractorProgressionPage />} />
         <Route path="statements" element={<ContractorStatementsPage />} />
+        <Route path="invoices" element={<ContractorInvoicesPage />} />
+        <Route path="invoices/:invoiceId" element={<ContractorInvoiceDetailPage />} />
         <Route path="settings/notifications" element={<ContractorNotificationSettingsPage />} />
         <Route path="settings/payment" element={<ContractorPaymentSettingsPage />} />
         <Route path="*" element={<Navigate to="/contractor" replace />} />

@@ -39,6 +39,7 @@ import InvoiceDetailPage from "@/pages/InvoiceDetailPage";
 import RepaymentsPage from "@/pages/RepaymentsPage";
 import PartnerEarningsPage from "@/pages/PartnerEarningsPage";
 import PartnerApprovalsPage from "@/pages/PartnerApprovalsPage";
+import ContractorApprovalsPage from "@/pages/ContractorApprovalsPage";
 import ActivityPage from "@/pages/ActivityPage";
 import ReportsPage from "@/pages/ReportsPage";
 import DataQualityPage from "@/pages/DataQualityPage";
@@ -160,8 +161,9 @@ function AppRoutes() {
         <Route path="/deals/:id/package" element={<DealPackagePage />} />
         <Route path="/invoices" element={<InvoicesPage />} />
         <Route path="/repayments" element={<RepaymentsPage />} />
-        {/* Static path ranks above /invoices/:id in React Router v6. */}
+        {/* Static paths rank above /invoices/:id in React Router v6. */}
         <Route path="/invoices/partner-approvals" element={<PartnerApprovalsPage />} />
+        <Route path="/invoices/contractor-approvals" element={<ContractorApprovalsPage />} />
         <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
         <Route path="/partner-earnings" element={<PartnerEarningsPage />} />
         <Route path="/leads" element={<LeadsPage />} />
