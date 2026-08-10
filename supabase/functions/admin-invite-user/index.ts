@@ -334,12 +334,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const createArgs: {
     email: string;
     email_confirm: boolean;
+    app_metadata: Record<string, unknown>;
     user_metadata: Record<string, unknown>;
     password?: string;
   } = {
     email,
     email_confirm: true, // we deliver access ourselves; skip Supabase's own email
-    user_metadata: { full_name: fullName, role },
+    app_metadata: { role },
+    user_metadata: { full_name: fullName },
   };
   if (inviteMethod === "temp_password") createArgs.password = tempPassword;
 
@@ -361,8 +363,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ error: createErr?.message ?? "Could not create the user" }, 500);
   }
 
-  // handle_new_user() creates the profile row from user_metadata (full_name,
-  // role) but not phone_number — upsert to fill phone and guarantee the row
+  // handle_new_user() creates the profile row from service-controlled
+  // app_metadata.role plus user_metadata.full_name, but not phone_number.
+  // Upsert to fill phone and guarantee the row
   // even if the trigger timing ever changed. onConflict=id.
   let phoneSaved = true;
   const { data: upserted, error: profileErr } = await service
