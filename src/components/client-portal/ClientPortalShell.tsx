@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Bell, FileCheck2, Gauge, Headphones, LogOut, UserRound } from "lucide-react";
 import { useClientPortalIdentity } from "@/hooks/useClientPortalIdentity";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -15,6 +15,7 @@ const navigation = [
 export default function ClientPortalShell({ children }: { children: ReactNode }) {
   const session = useSession();
   const identity = useClientPortalIdentity();
+  const [activeHref, setActiveHref] = useState(() => globalThis.location?.hash || "#overview");
   const businessName = identity.data?.businessName ?? "Your business";
   const profileName = session?.user.user_metadata.full_name;
   const contactName =
@@ -26,6 +27,12 @@ export default function ClientPortalShell({ children }: { children: ReactNode })
     .map((part) => part[0])
     .join("")
     .toUpperCase() || "C";
+
+  useEffect(() => {
+    const updateActiveHref = () => setActiveHref(globalThis.location.hash || "#overview");
+    globalThis.addEventListener("hashchange", updateActiveHref);
+    return () => globalThis.removeEventListener("hashchange", updateActiveHref);
+  }, []);
 
   return (
     <div className="client-portal min-h-screen bg-[#06131d] text-white">
@@ -47,12 +54,12 @@ export default function ClientPortalShell({ children }: { children: ReactNode })
         <nav className="mt-12 flex-1" aria-label="Client portal navigation">
           <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.22em] text-white/35">Your funding</p>
           <ul className="space-y-2">
-            {navigation.map((item, index) => (
+            {navigation.map((item) => (
               <li key={item.href}>
                 <a
                   href={item.href}
                   className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-                    index === 0
+                    activeHref === item.href
                       ? "border-[#6ec144]/35 bg-[#6ec144]/12 text-[#9ee67d]"
                       : "border-transparent text-white/60 hover:border-white/10 hover:bg-white/5 hover:text-white"
                   }`}
@@ -99,7 +106,7 @@ export default function ClientPortalShell({ children }: { children: ReactNode })
               >
                 <Bell className="h-4 w-4" aria-hidden="true" />
               </button>
-              <div id="profile" className="hidden text-right sm:block">
+              <div className="hidden text-right sm:block">
                 <p className="max-w-48 truncate text-sm font-bold">{contactName}</p>
                 <p className="max-w-48 truncate text-[11px] text-white/40">{session?.user.email}</p>
               </div>
@@ -118,17 +125,25 @@ export default function ClientPortalShell({ children }: { children: ReactNode })
           </div>
         </header>
 
-        <main className="mx-auto max-w-[1500px] px-4 pb-24 pt-6 sm:px-6 lg:px-8 lg:pb-10">{children}</main>
+        <main className="mx-auto max-w-[1500px] px-4 pb-24 pt-6 sm:px-6 lg:px-8 lg:pb-10">
+          {children}
+          <section id="profile" className="client-glass mt-6 scroll-mt-28 rounded-2xl p-5" aria-labelledby="client-profile-title">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#86d4cf]">Secure profile</p>
+            <h2 id="client-profile-title" className="mt-2 text-lg font-extrabold">{contactName}</h2>
+            <p className="mt-1 text-sm text-white/55">{session?.user.email}</p>
+            <p className="mt-3 text-xs text-white/40">Linked to {businessName}</p>
+          </section>
+        </main>
       </div>
 
       <nav className="fixed inset-x-3 bottom-3 z-40 rounded-2xl border border-white/12 bg-[#0a1d2a]/95 p-2 shadow-2xl shadow-black/35 backdrop-blur-2xl lg:hidden" aria-label="Client mobile navigation">
         <ul className="grid grid-cols-4 gap-1">
-          {navigation.map((item, index) => (
+          {navigation.map((item) => (
             <li key={item.href}>
               <a
                 href={item.href}
                 className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-bold ${
-                  index === 0 ? "bg-[#6ec144]/15 text-[#9ee67d]" : "text-white/50"
+                  activeHref === item.href ? "bg-[#6ec144]/15 text-[#9ee67d]" : "text-white/50"
                 }`}
               >
                 <item.icon className="h-4 w-4" aria-hidden="true" />
