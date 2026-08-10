@@ -37,8 +37,8 @@ returns public.potential_earning_snapshots language plpgsql security definer set
  values(p_deal_id,p_beneficiary_profile_id,p_beneficiary_role,p_earning_kind,p_earning_state,round(p_amount,2),p_source_snapshot,btrim(p_idempotency_key),(select auth.uid()))
  on conflict(idempotency_key)do nothing returning * into v;
  if v.id is null then select * into v from public.potential_earning_snapshots where idempotency_key=btrim(p_idempotency_key);end if;
- insert into public.activity_logs(timestamp,user_id,user_email,user_role,event_type,entity_type,entity_id,description,related_entity_ids)
- select now(),p.id,p.email,p.role::text,'CREATE','potential_earning_snapshot',v.id,'Potential earning snapshot recorded',array[p_deal_id] from public.profiles p where p.id=(select auth.uid());
+ insert into public.activity_logs(user_id,user_email,user_role,event_type,entity_type,entity_id,description,related_entity_ids)
+ select p.id,p.email,p.role::text,'CREATE','potential_earning_snapshot',v.id,'Potential earning snapshot recorded',jsonb_build_array(p_deal_id) from public.profiles p where p.id=(select auth.uid());
  return v;end;$$;
 create function public.owner_record_earnings_waterfall(p_deal_id uuid,p_snapshot_id uuid,p_gross numeric,p_fnc_retention numeric,p_owner_amount numeric,p_downstream numeric,p_inputs jsonb)
 returns public.owner_earnings_waterfall_snapshots language plpgsql security definer set search_path='' as $$declare v public.owner_earnings_waterfall_snapshots;begin
@@ -47,8 +47,8 @@ returns public.owner_earnings_waterfall_snapshots language plpgsql security defi
  if p_gross is not null and coalesce(p_fnc_retention,0)+coalesce(p_owner_amount,0)+coalesce(p_downstream,0)<>p_gross then raise exception 'Waterfall components must equal gross';end if;
  insert into public.owner_earnings_waterfall_snapshots(deal_id,potential_earning_snapshot_id,gross_amount,fnc_retention,owner_amount,downstream_amount,inputs_snapshot,recorded_by)
  values(p_deal_id,p_snapshot_id,p_gross,p_fnc_retention,p_owner_amount,p_downstream,p_inputs,(select auth.uid()))returning * into v;
- insert into public.activity_logs(timestamp,user_id,user_email,user_role,event_type,entity_type,entity_id,description,related_entity_ids)
- select now(),p.id,p.email,p.role::text,'CREATE','owner_earnings_waterfall_snapshot',v.id,'Owner earnings waterfall snapshot recorded',array[p_deal_id] from public.profiles p where p.id=(select auth.uid());
+ insert into public.activity_logs(user_id,user_email,user_role,event_type,entity_type,entity_id,description,related_entity_ids)
+ select p.id,p.email,p.role::text,'CREATE','owner_earnings_waterfall_snapshot',v.id,'Owner earnings waterfall snapshot recorded',jsonb_build_array(p_deal_id) from public.profiles p where p.id=(select auth.uid());
  return v;end;$$;
 create function public.potential_earnings_dashboard()
 returns table(snapshot_id uuid,deal_id uuid,beneficiary_profile_id uuid,beneficiary_role text,earning_kind text,earning_state text,amount numeric,currency text,calculated_at timestamptz)
