@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
 import { invalidateActivity } from "@/hooks/useActivity";
 import type {
+  InvoiceSupersession,
   OwnerPartnerInvoiceRow,
   PartnerInvoice,
   PartnerInvoiceLineItem,
@@ -159,6 +160,23 @@ export function usePartnerInvoiceLineItems(invoiceId: string | undefined) {
       if (error) throw error;
       return (data ?? []) as PartnerInvoiceLineItem[];
     },
+  });
+}
+
+// Build 14 — rejected invoices this invoice re-bills (owner or owning partner).
+export function usePartnerInvoiceSupersessions(invoiceId: string | undefined) {
+  const uid = useSession()?.user?.id ?? null;
+  return useQuery({
+    queryKey: ["partner-invoice-supersessions", invoiceId, uid],
+    enabled: !!invoiceId,
+    queryFn: async (): Promise<InvoiceSupersession[]> => {
+      const { data, error } = await supabase.rpc("list_partner_invoice_supersessions", {
+        p_invoice_id: invoiceId!,
+      });
+      if (error) throw error;
+      return (data ?? []) as InvoiceSupersession[];
+    },
+    retry: false, // no-op gracefully if the RPC isn't deployed yet
   });
 }
 

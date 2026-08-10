@@ -6,6 +6,7 @@ import type {
   ContractorInvoice,
   ContractorInvoiceLineItem,
   ContractorInvoiceableSummary,
+  InvoiceSupersession,
   OwnerContractorInvoiceRow,
 } from "@/lib/contractorInvoices";
 
@@ -130,6 +131,23 @@ export function useContractorInvoiceableSummary(periodStart: string, periodEnd: 
       return (row ?? null) as ContractorInvoiceableSummary | null;
     },
     retry: false, // don't hammer the RPC if it isn't deployed yet
+  });
+}
+
+// Build 14 — rejected invoices this invoice re-bills (owner or owning contractor).
+export function useContractorInvoiceSupersessions(invoiceId: string | undefined) {
+  const uid = useSession()?.user?.id ?? null;
+  return useQuery({
+    queryKey: ["contractor-invoice-supersessions", invoiceId, uid],
+    enabled: !!invoiceId,
+    queryFn: async (): Promise<InvoiceSupersession[]> => {
+      const { data, error } = await supabase.rpc("list_contractor_invoice_supersessions", {
+        p_invoice_id: invoiceId!,
+      });
+      if (error) throw error;
+      return (data ?? []) as InvoiceSupersession[];
+    },
+    retry: false, // no-op gracefully if the RPC isn't deployed yet
   });
 }
 

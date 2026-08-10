@@ -61,6 +61,15 @@ export type ContractorInvoiceLineItem = {
   added_at: string;
 };
 
+// A rejected invoice that a later invoice re-bills (Build 14 resubmission trail).
+export type InvoiceSupersession = {
+  invoice_id: string;
+  invoice_number: string;
+  rejected_at: string | null;
+  rejected_reason: string | null;
+  shared_line_count: number;
+};
+
 // Read-only eligibility preview returned by contractor_my_invoiceable_summary.
 // Numeric fields arrive as strings from PostgREST — coerce with toNum. S7C: the
 // contractor's take + counts + ready-date range only, no gross/pool/tier/funder.

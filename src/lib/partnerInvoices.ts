@@ -59,6 +59,15 @@ export type PartnerInvoiceLineItem = {
   added_at: string;
 };
 
+// A rejected invoice that a later invoice re-bills (Build 14 resubmission trail).
+export type InvoiceSupersession = {
+  invoice_id: string;
+  invoice_number: string;
+  rejected_at: string | null;
+  rejected_reason: string | null;
+  shared_line_count: number;
+};
+
 // State chip styling — mirrors the funder-invoice INVOICE_STATE_META convention.
 export const PARTNER_INVOICE_STATE_META: Record<
   PartnerInvoiceState,

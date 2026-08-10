@@ -11,6 +11,7 @@ import { ContractorInvoicePdfButton } from "@/components/contractor-invoices/Con
 import {
   useContractorInvoice,
   useContractorInvoiceLineItems,
+  useContractorInvoiceSupersessions,
   useSubmitContractorInvoice,
 } from "@/hooks/useContractorInvoices";
 
@@ -18,6 +19,7 @@ export default function ContractorInvoiceDetailPage() {
   const { invoiceId } = useParams();
   const { data: invoice, isLoading, isError, error } = useContractorInvoice(invoiceId);
   const { data: items, isError: itemsError } = useContractorInvoiceLineItems(invoiceId);
+  const { data: supersessions } = useContractorInvoiceSupersessions(invoiceId);
   const submit = useSubmitContractorInvoice();
   const submittingRef = useRef(false);
 
@@ -138,6 +140,22 @@ export default function ContractorInvoiceDetailPage() {
                 />
               )}
             </section>
+
+            {/* Resubmission trail — rejected invoices this one re-bills (Build 14) */}
+            {supersessions && supersessions.length > 0 && (
+              <section className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-5">
+                <h2 className="text-sm font-semibold text-amber-900">Replaces a rejected invoice</h2>
+                <ul className="space-y-1 text-sm text-amber-900">
+                  {supersessions.map((s) => (
+                    <li key={s.invoice_id}>
+                      <span className="font-medium">{s.invoice_number}</span> — rejected
+                      {s.rejected_at ? ` ${formatPeriodDate(s.rejected_at)}` : ""}
+                      {s.rejected_reason ? `: ${s.rejected_reason}` : "."}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {/* Draft → submit */}
             {invoice.state === "draft" && (
