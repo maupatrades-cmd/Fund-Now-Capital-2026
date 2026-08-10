@@ -2,12 +2,14 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const url = Deno.env.get("SUPABASE_URL") ?? "";
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const hashSecret = Deno.env.get("CLIENT_INVITATION_HASH_SECRET") ?? "";
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers:{"content-type":"application/json","cache-control":"no-store"} });
+const cors = { "access-control-allow-origin":"*", "access-control-allow-headers":"authorization, x-client-info, apikey, content-type", "access-control-allow-methods":"POST, OPTIONS" };
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers:{...cors,"content-type":"application/json","cache-control":"no-store"} });
 async function hash(value: string) {
   const data = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${hashSecret}:${value}`));
   return [...new Uint8Array(data)].map((b)=>b.toString(16).padStart(2,"0")).join("");
 }
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ valid:false },405);
   if (!url || !serviceKey || !hashSecret) return json({ valid:false },503);
   let body: Record<string,unknown>; try { body=await req.json(); } catch { return json({valid:false},400); }
