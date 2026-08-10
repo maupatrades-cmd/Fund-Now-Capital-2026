@@ -44,9 +44,7 @@ function navItems(portal: PortalKind) {
       ? [{ to: `${base}/progression`, label: "My Progress", icon: TrendingUp, end: false }]
       : []),
     { to: `${base}/statements`, label: "Statements", icon: FileText, end: false },
-    ...(portal === "partner"
-      ? [{ to: `${base}/invoices`, label: "Invoices", icon: ReceiptText, end: false }]
-      : []),
+    { to: `${base}/invoices`, label: "Invoices", icon: ReceiptText, end: false },
     { to: `${base}/badges`, label: "Badges", icon: Award, end: false },
     ...(portal === "contractor"
       ? [{ to: `${base}/training`, label: "Training", icon: GraduationCap, end: false }]

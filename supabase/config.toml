@@ -30,3 +30,12 @@ verify_jwt = false
 # shared X-Webhook-Secret header (same as generate-invoice-pdf). verify_jwt = false.
 [functions.generate-partner-invoice-pdf]
 verify_jwt = false
+
+# generate-contractor-invoice-pdf renders the contractor → FNC invoice PDF ON
+# DEMAND and returns it inline (base64) — the contractor_invoices table has no
+# stored PDF path. Invoked from the contractor's / owner's BROWSER, so it
+# authenticates the CALLER (Bearer JWT) and scopes every read to the caller's
+# RLS. verify_jwt = false so it can answer the CORS preflight and return clean
+# JSON errors itself; the in-function getUser() + RLS are the real gate.
+[functions.generate-contractor-invoice-pdf]
+verify_jwt = false
