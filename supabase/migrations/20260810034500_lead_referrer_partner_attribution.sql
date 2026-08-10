@@ -85,7 +85,7 @@ create or replace function public.lead_referrer_submit_lead(
 language plpgsql security definer
 set search_path = pg_catalog, public
 as $$
-declare v_uid uuid := auth.uid(); v_parent uuid; v_lead uuid;
+declare v_uid uuid := auth.uid(); v_parent uuid; v_lead uuid; v_owner record;
 begin
   if v_uid is null then raise exception 'Authentication required'; end if;
   select lr.referral_partner_id into v_parent
@@ -110,6 +110,22 @@ begin
   insert into public.lead_attribution_events
     (lead_id,event_type,lead_referrer_profile_id,referral_partner_id,actor_id)
   values (v_lead,'captured',v_uid,v_parent,v_uid);
+  for v_owner in
+    select p.id from public.profiles p where p.role = 'owner' and p.is_active
+  loop
+    perform public.emit_in_app_notification(
+      v_owner.id,
+      'LEAD_SUBMITTED_BY_PARTNER',
+      'New lead submitted by a lead referrer',
+      'A new lead, ' || btrim(p_business_name) || ', was submitted through a partner lead referrer.',
+      '/leads/' || v_lead::text,
+      jsonb_build_object(
+        'lead_id', v_lead,
+        'lead_referrer_profile_id', v_uid,
+        'referral_partner_id', v_parent
+      )
+    );
+  end loop;
   return v_lead;
 end;
 $$;
@@ -129,7 +145,6 @@ begin
   if not exists (
     select 1 from public.partner_lead_referrers lr
      where lr.profile_id = v_lead.attributed_to_lead_referrer_id
-       and lr.referral_partner_id = v_lead.referral_partner_id
   ) then raise exception 'Path B parent relationship is invalid'; end if;
   if v_lead.attribution_locked_at is null then
     update public.leads set attribution_locked_at=now(), attribution_locked_by=v_uid where id=p_lead_id;
