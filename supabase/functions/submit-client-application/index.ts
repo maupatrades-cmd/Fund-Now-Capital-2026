@@ -48,7 +48,10 @@ Deno.serve(async (req) => {
     captured_at: new Date().toISOString(),
   } : {};
   const service = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const callerIp = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim() || "unknown";
+  // Supabase's edge proxy appends the connection address to X-Forwarded-For.
+  // Use the rightmost hop so a caller cannot rotate a spoofed leftmost value.
+  const forwardedFor = (req.headers.get("x-forwarded-for") ?? "unknown").split(",");
+  const callerIp = forwardedFor[forwardedFor.length - 1]?.trim() || "unknown";
   const ipHash = await digest(`${referralSecret}:${callerIp}`);
   const { data: limited, error: limitError } = await service.rpc("record_client_application_attempt", {
     p_ip_hash: ipHash,
@@ -74,6 +77,7 @@ Deno.serve(async (req) => {
     consented_at: new Date().toISOString(),
   }, { onConflict: "idempotency_key", ignoreDuplicates: true }).select("id,status").maybeSingle();
   if (error) return json({ error: "Application could not be submitted" }, 500);
+  const isNewApplication = Boolean(data?.id);
   if (!data) {
     const existing = await service.from("client_applications")
       .select("id,status")
@@ -83,7 +87,7 @@ Deno.serve(async (req) => {
     error = existing.error;
   }
   if (error || !data?.id) return json({ error: "Application could not be submitted" }, 500);
-  if (data?.id) await service.from("client_application_events").insert({
+  if (isNewApplication) await service.from("client_application_events").insert({
     application_id: data.id, event_type: "submitted", event_data: { product },
   });
   return json({ accepted: true, application_id: data.id }, 202);
