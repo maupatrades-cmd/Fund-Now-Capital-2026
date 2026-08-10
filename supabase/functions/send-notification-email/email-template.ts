@@ -158,6 +158,7 @@ function escapeHtml(s: string): string {
 }
 
 function absoluteUrl(base: string, path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
   return `${base.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
 }
 
@@ -234,6 +235,17 @@ function variantContent(m: EmailModel, variant: EmailVariant): VariantContent {
   // reason's internal notes here — the trigger already withholds notes from the
   // partner recipient's body_text.
   switch (m.eventType) {
+    case "CLIENT_MAGIC_LINK":
+      return {
+        subject: "Your secure Fund Now Capital sign-in link",
+        h1: "Your secure sign-in link",
+        ctaLabel: "Open my secure portal",
+        category: "account",
+        paras: [
+          "Use the secure button below to access your Fund Now Capital client portal.",
+          "This link is personal. Do not forward it.",
+        ],
+      };
     case "LEAD_QUALIFIED":
       return {
         subject: "Lead qualified",

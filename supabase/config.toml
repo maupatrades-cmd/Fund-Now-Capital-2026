@@ -39,3 +39,9 @@ verify_jwt = false
 # JSON errors itself; the in-function getUser() + RLS are the real gate.
 [functions.generate-contractor-invoice-pdf]
 verify_jwt = false
+
+# Public client sign-in request endpoint. It returns a non-enumerating response,
+# applies database-backed throttling, and performs privileged work only with the
+# service role inside the function. verify_jwt=false also permits CORS preflight.
+[functions.request-client-magic-link]
+verify_jwt = false

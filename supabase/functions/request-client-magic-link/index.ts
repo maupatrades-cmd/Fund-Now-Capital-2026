@@ -1,4 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { renderEmail } from "../send-notification-email/email-template.ts";
+
+declare const EdgeRuntime: {
+  waitUntil(promise: Promise<unknown>): void;
+};
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -8,9 +13,15 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Fund Now Capital <noreply@fundnowcapital.africa>";
 const RATE_SECRET = Deno.env.get("CLIENT_AUTH_RATE_LIMIT_SECRET") ?? "";
 
+const CORS_HEADERS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
+  "access-control-allow-methods": "POST, OPTIONS",
+};
+
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
-  headers: { "content-type": "application/json", "cache-control": "no-store" },
+  headers: { ...CORS_HEADERS, "content-type": "application/json", "cache-control": "no-store" },
 });
 
 async function sha256(value: string): Promise<string> {
@@ -26,7 +37,72 @@ function normaliseEmail(value: unknown): string | null {
   return email;
 }
 
+async function deliverMagicLink(
+  service: ReturnType<typeof createClient>,
+  email: string,
+  requestId: string,
+  profileId: string,
+  clientId: string,
+): Promise<void> {
+  let status = "failed";
+  let failureCode: string | null = "delivery_failed";
+
+  try {
+    const redirectTo = `${APP_BASE_URL}/auth/callback?portal=client`;
+    const { data: linkData, error: linkError } = await service.auth.admin.generateLink({
+      type: "magiclink",
+      email,
+      options: { redirectTo },
+    });
+    const actionLink = linkData?.properties?.action_link;
+
+    if (linkError || !actionLink) {
+      failureCode = "link_generation_failed";
+    } else {
+      const emailContent = renderEmail({
+        eventType: "CLIENT_MAGIC_LINK",
+        appBaseUrl: APP_BASE_URL,
+        linkUrl: actionLink,
+      });
+      const sent = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          from: EMAIL_FROM,
+          to: [email],
+          subject: emailContent.subject,
+          html: emailContent.html,
+          text: emailContent.text,
+        }),
+      });
+      status = sent.ok ? "sent" : "failed";
+      failureCode = sent.ok ? null : `resend_${sent.status}`;
+    }
+  } catch {
+    failureCode = "delivery_failed";
+  }
+
+  await service.from("client_auth_requests").update({
+    status,
+    failure_code: failureCode,
+  }).eq("id", requestId);
+
+  if (status === "sent") {
+    await service.from("activity_logs").insert({
+      user_id: profileId,
+      user_email: email,
+      user_role: "client",
+      event_type: "NOTIFICATION_SENT",
+      entity_type: "client_auth_request",
+      entity_id: requestId,
+      description: "Client portal magic-link email sent",
+      related_entity_ids: [clientId],
+    });
+  }
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   if (!SUPABASE_URL || !ANON_KEY || !SERVICE_ROLE_KEY || !APP_BASE_URL || !RATE_SECRET || !RESEND_API_KEY) {
     return json({ error: "Client authentication is not configured" }, 503);
@@ -70,45 +146,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     status,
   }).select("id").single();
 
-  if (status === "accepted" && requestRow?.id && RESEND_API_KEY) {
-    const redirectTo = `${APP_BASE_URL}/auth/callback?portal=client`;
-    const { data: linkData, error: linkError } = await service.auth.admin.generateLink({
-      type: "magiclink", email, options: { redirectTo },
-    });
-    const actionLink = linkData?.properties?.action_link;
-    if (!linkError && actionLink) {
-      const sent = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          from: EMAIL_FROM,
-          to: [email],
-          subject: "Your secure Fund Now Capital sign-in link",
-          html: `<p>Hello,</p><p>Use the secure link below to access your Fund Now Capital client portal.</p><p><a href="${actionLink}">Open my secure portal</a></p><p>This link is personal. Do not forward it.</p>`,
-          text: `Open your secure Fund Now Capital client portal: ${actionLink}\n\nDo not forward this personal link.`,
-        }),
-      });
-      await service.from("client_auth_requests").update({
-        status: sent.ok ? "sent" : "failed",
-        failure_code: sent.ok ? null : `resend_${sent.status}`,
-      }).eq("id", requestRow.id);
-      if (sent.ok) {
-        await service.from("activity_logs").insert({
-          user_id: profile.id,
-          user_email: email,
-          user_role: "client",
-          event_type: "NOTIFICATION_SENT",
-          entity_type: "client_auth_request",
-          entity_id: requestRow.id,
-          description: "Client portal magic-link email sent",
-          related_entity_ids: [profile.client_id],
-        });
-      }
-    } else {
-      await service.from("client_auth_requests").update({
-        status: "failed", failure_code: "link_generation_failed",
-      }).eq("id", requestRow.id);
-    }
+  if (status === "accepted" && requestRow?.id && profile?.id && profile.client_id) {
+    EdgeRuntime.waitUntil(deliverMagicLink(
+      service,
+      email,
+      requestRow.id,
+      profile.id,
+      profile.client_id,
+    ));
   }
 
   // Always return the same response so callers cannot discover client accounts.
