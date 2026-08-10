@@ -26,10 +26,10 @@ begin
  select * into v_deal from public.deals where id=p_deal_id;if v_deal.id is null then raise exception 'Deal not found';end if;
  if v_deal.stage<'submitted'::public.deal_stage or v_deal.stage='declined'::public.deal_stage then raise exception 'Deal must be submitted to a funder first';end if;
  if not exists(select 1 from public.deal_package_dispatches where deal_id=p_deal_id) then raise exception 'No recorded funder package dispatch';end if;
- select count(*) into v_docs from public.documents where deal_id=p_deal_id and is_current and status='active' and verification_status='accepted';
+ select count(*) into v_docs from public.documents where deal_id=p_deal_id and is_current_version and status='active' and verification_status='accepted';
  if v_docs=0 then raise exception 'No current owner-accepted documents';end if;
- if exists(select 1 from public.documents where deal_id=p_deal_id and is_current and status='active' and verification_status<>'accepted') then raise exception 'Every current active deal document must be accepted';end if;
- if v_deal.is_purchase_order and not exists(select 1 from public.documents where deal_id=p_deal_id and is_current and status='active' and verification_status='accepted' and document_type='purchase_order') then raise exception 'Accepted purchase order required';end if;
+ if exists(select 1 from public.documents where deal_id=p_deal_id and is_current_version and status='active' and verification_status<>'accepted') then raise exception 'Every current active deal document must be accepted';end if;
+ if v_deal.is_purchase_order and not exists(select 1 from public.documents where deal_id=p_deal_id and is_current_version and status='active' and verification_status='accepted' and document_type='purchase_order') then raise exception 'Accepted purchase order required';end if;
  select * into v_lead from public.leads where id=v_deal.lead_id;select * into v_profile from public.profiles where id=p_beneficiary_profile_id and is_active;
  if v_profile.id is null then raise exception 'Active beneficiary not found';end if;
  if p_beneficiary_role='contractor' and (v_profile.role::text<>'contractor' or v_lead.attributed_to_contractor_id is distinct from v_profile.id) then raise exception 'Contractor attribution mismatch';end if;
@@ -37,8 +37,8 @@ begin
  v_cycle:=case when extract(day from v_date)<=22 then date_trunc('month',v_date)::date else(date_trunc('month',v_date)+interval '1 month')::date end;
  insert into public.complete_document_reward_locks(deal_id,lead_id,beneficiary_profile_id,beneficiary_role,eligibility_snapshot,locked_by,cutoff_date,pay_window_open_on,pay_window_close_on)
  values(v_deal.id,v_deal.lead_id,v_profile.id,p_beneficiary_role,jsonb_build_object('deal_stage',v_deal.stage,'accepted_current_documents',v_docs,'funder_dispatch_recorded',true,'purchase_order',v_deal.is_purchase_order),(select auth.uid()),(v_cycle+interval '21 days')::date,(v_cycle+interval '24 days')::date,least((v_cycle+interval '29 days')::date,(v_cycle+interval '1 month - 1 day')::date) returning * into v_lock;
- insert into public.activity_logs(timestamp,user_id,user_email,user_role,event_type,entity_type,entity_id,description,related_entity_ids)
- select now(),p.id,p.email,p.role::text,'CREATE','complete_document_reward_lock',v_lock.id,'Exactly R100 complete-document reward locked',array_remove(array[v_deal.id,v_deal.client_id],null) from public.profiles p where p.id=(select auth.uid());return v_lock;
+ insert into public.activity_logs(user_id,user_email,user_role,event_type,entity_type,entity_id,description,related_entity_ids)
+ select p.id,p.email,p.role::text,'CREATE','complete_document_reward_lock',v_lock.id,'Exactly R100 complete-document reward locked',to_jsonb(array_remove(array[v_deal.id,v_deal.client_id],null)) from public.profiles p where p.id=(select auth.uid());return v_lock;
 end;$$;
 revoke all on function public.complete_document_reward_locks_immutable() from public,anon,authenticated;
 revoke all on function public.owner_lock_complete_document_reward(uuid,uuid,text) from public,anon;grant execute on function public.owner_lock_complete_document_reward(uuid,uuid,text) to authenticated;
