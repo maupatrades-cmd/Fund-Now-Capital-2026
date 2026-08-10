@@ -114,13 +114,14 @@ export function formatPeriodDate(iso: string | null | undefined): string {
 }
 
 // An approved-but-unpaid invoice is overdue once past its due date (Build 12).
-// Overdue is derived (no stored state) — mirrors the server sweep's predicate.
+// "Today" is computed in Africa/Johannesburg so the banner matches the server
+// sweep + due-date stamping (both use current_sast_date()), not the viewer's TZ.
 export function isPayoutOverdue(state: string, dueDate: string | null): boolean {
   if (state !== "approved" || !dueDate) return false;
-  const [y, m, d] = dueDate.slice(0, 10).split("-").map(Number);
-  if (!y || !m || !d) return false;
-  const now = new Date();
-  return new Date(y, m - 1, d) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const sastToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(
+    new Date(),
+  ); // 'YYYY-MM-DD'
+  return dueDate.slice(0, 10) < sastToday;
 }
 
 // "1 Jul 2026 – 31 Jul 2026" period range label.
