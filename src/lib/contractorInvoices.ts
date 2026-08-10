@@ -34,6 +34,7 @@ export type ContractorInvoice = {
   approved_by: string | null;
   paid_at: string | null;
   paid_reference: string | null;
+  due_date: string | null;
   rejected_at: string | null;
   rejected_reason: string | null;
   notes: string | null;
@@ -110,6 +111,16 @@ export function formatPeriodDate(iso: string | null | undefined): string {
     month: "short",
     year: "numeric",
   });
+}
+
+// An approved-but-unpaid invoice is overdue once past its due date (Build 12).
+// Overdue is derived (no stored state) — mirrors the server sweep's predicate.
+export function isPayoutOverdue(state: string, dueDate: string | null): boolean {
+  if (state !== "approved" || !dueDate) return false;
+  const [y, m, d] = dueDate.slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return false;
+  const now = new Date();
+  return new Date(y, m - 1, d) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
 // "1 Jul 2026 – 31 Jul 2026" period range label.

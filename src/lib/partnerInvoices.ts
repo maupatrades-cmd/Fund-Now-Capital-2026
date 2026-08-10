@@ -32,6 +32,7 @@ export type PartnerInvoice = {
   approved_by: string | null;
   paid_at: string | null;
   paid_reference: string | null;
+  due_date: string | null;
   rejected_at: string | null;
   rejected_reason: string | null;
   notes: string | null;
@@ -73,6 +74,15 @@ export const PARTNER_INVOICE_STATE_META: Record<
 
 export function partnerInvoiceStateLabel(state: PartnerInvoiceState): string {
   return PARTNER_INVOICE_STATE_META[state]?.label ?? state;
+}
+
+// An approved-but-unpaid invoice is overdue once past its due date (Build 12).
+export function isPayoutOverdue(state: string, dueDate: string | null): boolean {
+  if (state !== "approved" || !dueDate) return false;
+  const [y, m, d] = dueDate.slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return false;
+  const now = new Date();
+  return new Date(y, m - 1, d) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
 // Stable order for the state filter multi-select (both surfaces).

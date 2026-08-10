@@ -28,7 +28,7 @@ import type {
 const INVOICE_COLUMNS =
   "id, contractor_id, invoice_number, generated_at, invoice_period_start, " +
   "invoice_period_end, total_amount, state, submitted_at, approved_at, approved_by, " +
-  "paid_at, paid_reference, rejected_at, rejected_reason, notes, created_by, created_at, updated_at";
+  "paid_at, paid_reference, due_date, rejected_at, rejected_reason, notes, created_by, created_at, updated_at";
 
 // ---- reads -----------------------------------------------------------------
 

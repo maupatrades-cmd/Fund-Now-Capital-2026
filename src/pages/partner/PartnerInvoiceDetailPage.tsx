@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Send, CheckCircle2, Banknote, Info } from "lucide-react";
 import PortalShell from "@/components/portal/PortalShell";
 import { formatZAR } from "@/lib/format";
-import { formatPeriodRange, formatPeriodDate } from "@/lib/partnerInvoices";
+import { formatPeriodRange, formatPeriodDate, isPayoutOverdue } from "@/lib/partnerInvoices";
 import { PartnerInvoiceStateChip } from "@/components/partner-invoices/PartnerInvoiceStateChip";
 import { LineItemsTable } from "@/components/partner-invoices/LineItemsTable";
 import { DownloadPdfButton } from "@/components/partner-invoices/DownloadPdfButton";
@@ -115,8 +115,13 @@ export default function PartnerInvoiceDetailPage() {
               </Banner>
             )}
             {invoice.state === "approved" && (
-              <Banner tone="success" icon={CheckCircle2}>
-                Approved {formatPeriodDate(invoice.approved_at)} — awaiting payment.
+              <Banner tone={isPayoutOverdue(invoice.state, invoice.due_date) ? "error" : "success"} icon={CheckCircle2}>
+                Approved {formatPeriodDate(invoice.approved_at)} — awaiting payment
+                {invoice.due_date
+                  ? isPayoutOverdue(invoice.state, invoice.due_date)
+                    ? ` (was due ${formatPeriodDate(invoice.due_date)} — overdue).`
+                    : ` (due ${formatPeriodDate(invoice.due_date)}).`
+                  : "."}
               </Banner>
             )}
             {invoice.state === "paid" && (
