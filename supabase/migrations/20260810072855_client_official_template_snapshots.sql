@@ -93,8 +93,8 @@ begin
   insert into public.official_form_templates(name,template_kind,funder_id,version,storage_path,content_sha256,approved_by)
   values(btrim(p_name),p_template_kind,p_funder_id,p_version,btrim(p_storage_path),lower(p_content_sha256),(select auth.uid()))
   returning * into v;
-  insert into public.activity_logs(timestamp,user_id,user_email,user_role,event_type,entity_type,entity_id,description)
-  select now(),p.id,p.email,p.role::text,'CREATE','official_form_template',v.id,'Official form template registered'
+  insert into public.activity_logs(user_id,user_email,user_role,event_type,entity_type,entity_id,description)
+  select p.id,p.email,p.role::text,'CREATE','official_form_template',v.id,'Official form template registered'
   from public.profiles p where p.id=(select auth.uid());
   return v;
 end;$$;
@@ -113,6 +113,12 @@ begin
   on conflict(template_id,target_field) do update set source_scope=excluded.source_scope,source_path=excluded.source_path,
     transform_key=excluded.transform_key,is_required=excluded.is_required,created_by=excluded.created_by,created_at=now()
   returning * into v;
+  insert into public.activity_logs(
+    user_id,user_email,user_role,event_type,entity_type,entity_id,description,related_entity_ids
+  )
+  select p.id,p.email,p.role::text,'UPDATE','official_form_field_mapping',v.id,
+    'Official form field mapping configured',jsonb_build_array(v.template_id)
+  from public.profiles p where p.id=(select auth.uid());
   return v;
 end;$$;
 
@@ -147,11 +153,11 @@ begin
     p_source_values_snapshot, btrim(p_rendered_storage_path), lower(p_rendered_sha256)
   ) returning * into v_result;
   insert into public.activity_logs (
-    timestamp, user_id, user_email, user_role, event_type, entity_type, entity_id,
+    user_id, user_email, user_role, event_type, entity_type, entity_id,
     description, related_entity_ids
-  ) select now(), p.id, p.email, p.role::text, 'CREATE', 'generated_document_snapshot',
+  ) select p.id, p.email, p.role::text, 'CREATE', 'generated_document_snapshot',
       v_result.id, 'Official generated-document snapshot recorded',
-      array_remove(array[p_client_id, p_deal_id], null)
+      to_jsonb(array_remove(array[p_client_id, p_deal_id], null))
     from public.profiles p where p.id = (select auth.uid());
   return v_result;
 end;
