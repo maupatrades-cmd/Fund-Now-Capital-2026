@@ -38,6 +38,10 @@ const inputCls =
 
 type Filter = "all" | ContractorInvoiceState;
 
+// EFT proof upload bounds (also enforced server-side on the bucket).
+const MAX_PROOF_BYTES = 10 * 1024 * 1024; // 10 MB
+const PROOF_TYPES = /^(application\/pdf|image\/)/;
+
 // Owner review surface for contractor invoices (Build 8 RPCs). The owner sees the
 // real contractor name here and the neutral line-item detail (contractor take;
 // contractor tier rows carry no funder name). Approve/reject only — mark-paid +
@@ -379,7 +383,24 @@ function InvoiceReviewModal({
               type="file"
               accept="application/pdf,image/*"
               className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border file:border-border file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-brand-navy hover:file:bg-slate-50"
-              onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                // The accept attribute is only a picker hint — validate type + size
+                // client-side (the bucket also enforces both server-side).
+                const f = e.target.files?.[0] ?? null;
+                if (f && !PROOF_TYPES.test(f.type)) {
+                  toast.error("Attach a PDF or an image file.");
+                  e.target.value = "";
+                  setProofFile(null);
+                  return;
+                }
+                if (f && f.size > MAX_PROOF_BYTES) {
+                  toast.error("The proof file must be 10 MB or smaller.");
+                  e.target.value = "";
+                  setProofFile(null);
+                  return;
+                }
+                setProofFile(f);
+              }}
             />
             <p className="mt-1 text-xs text-muted-foreground">
               Marking paid settles the contractor's commission and notifies them. Kept private to you.

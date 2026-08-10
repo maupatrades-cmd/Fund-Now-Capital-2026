@@ -29,9 +29,14 @@
 -- ===========================================================================
 alter table public.contractor_invoices add column if not exists paid_proof_path text;
 
-insert into storage.buckets (id, name, public)
-  values ('contractor-invoice-proofs', 'contractor-invoice-proofs', false)
-  on conflict (id) do nothing;
+-- Private bucket with a server-side 10 MB size bound + PDF/image MIME allow-list
+-- (defense-in-depth alongside the client-side check in the upload UI).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+  values ('contractor-invoice-proofs', 'contractor-invoice-proofs', false, 10485760,
+          array['application/pdf', 'image/png', 'image/jpeg', 'image/webp'])
+  on conflict (id) do update
+    set file_size_limit = excluded.file_size_limit,
+        allowed_mime_types = excluded.allowed_mime_types;
 
 -- Owner-only ALL (mirrors invoices_owner_all). No contractor policy: EFT proof
 -- is FNC's own payment evidence, not contractor-facing.
@@ -118,7 +123,7 @@ create or replace function public.owner_mark_contractor_invoice_paid(
   p_invoice_id uuid, p_paid_reference text, p_paid_proof_path text default null
 ) returns jsonb
  language plpgsql security definer set search_path = '' as $function$
-declare v_inv public.contractor_invoices; v_id uuid; v_settled int := 0; r record;
+declare v_inv public.contractor_invoices; v_id uuid; v_settled int := 0; r record; v_res jsonb;
 begin
   if not public.is_owner() then raise exception 'Only the owner can mark contractor invoices paid'; end if;
   if p_paid_reference is null or btrim(p_paid_reference) = '' then
@@ -145,8 +150,12 @@ begin
   -- The -> settled UPDATE fires notify_commission_paid (COMMISSION_PAID to owner).
   -- Idempotent per record.
   for r in select commission_record_id from public.contractor_invoice_line_items where invoice_id = p_invoice_id loop
-    perform public.settle_from_contractor_invoice(r.commission_record_id, p_invoice_id);
-    v_settled := v_settled + 1;
+    v_res := public.settle_from_contractor_invoice(r.commission_record_id, p_invoice_id);
+    -- Count only rows that ACTUALLY transitioned payable -> settled, so the
+    -- activity log reflects real settlements, not the line-item count.
+    if coalesce((v_res->>'was_transitioned')::boolean, false) then
+      v_settled := v_settled + 1;
+    end if;
   end loop;
 
   perform public.emit_in_app_notification(

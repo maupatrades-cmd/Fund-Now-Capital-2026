@@ -176,7 +176,12 @@ export async function uploadContractorEftProof(invoiceId: string, file: File): P
 // was uploaded but never recorded on the invoice (the mark-paid RPC threw or was
 // an idempotent no-op), so it doesn't linger as an orphan in the private bucket.
 export async function deleteContractorEftProof(path: string): Promise<void> {
-  await supabase.storage.from("contractor-invoice-proofs").remove([path]);
+  // Supabase Storage returns errors in the result rather than throwing; surface
+  // a failed cleanup at warning level so an orphaned object isn't fully silent.
+  const { error } = await supabase.storage.from("contractor-invoice-proofs").remove([path]);
+  if (error) {
+    console.warn("Could not remove orphaned EFT proof object", { path, message: error.message });
+  }
 }
 
 // Render + download a contractor-invoice PDF on demand. The Edge Function
