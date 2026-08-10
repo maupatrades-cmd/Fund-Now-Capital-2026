@@ -17,6 +17,25 @@
 -- ============================================================================
 
 -- ===========================================================================
+-- 0. Apply-order guard. The contractor evidence trigger below freezes
+--    paid_proof_path (Build 10, migration 20260810150000). Because plpgsql
+--    late-binds NEW/OLD fields, this file would otherwise CREATE cleanly out of
+--    order and only throw at the first paid-contractor UPDATE — long after apply.
+--    Fail loud NOW instead, enforcing the documented 150000 -> 170000 order.
+-- ===========================================================================
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public'
+       and table_name  = 'contractor_invoices'
+       and column_name = 'paid_proof_path'
+  ) then
+    raise exception 'Build 13 requires Build 10 first: contractor_invoices.paid_proof_path (migration 20260810150000) is missing. Apply 20260810150000 before this.';
+  end if;
+end $$;
+
+-- ===========================================================================
 -- 1. Partner invoice payment evidence — frozen once state = 'paid'.
 --    (state itself is already terminal via the existing state guard.)
 -- ===========================================================================
