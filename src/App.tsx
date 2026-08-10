@@ -38,6 +38,7 @@ import InvoicesPage from "@/pages/InvoicesPage";
 import InvoiceDetailPage from "@/pages/InvoiceDetailPage";
 import RepaymentsPage from "@/pages/RepaymentsPage";
 import PartnerEarningsPage from "@/pages/PartnerEarningsPage";
+import PayoutsPage from "@/pages/PayoutsPage";
 import PartnerApprovalsPage from "@/pages/PartnerApprovalsPage";
 import ContractorApprovalsPage from "@/pages/ContractorApprovalsPage";
 import ActivityPage from "@/pages/ActivityPage";
@@ -166,6 +167,7 @@ function AppRoutes() {
         <Route path="/invoices/contractor-approvals" element={<ContractorApprovalsPage />} />
         <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
         <Route path="/partner-earnings" element={<PartnerEarningsPage />} />
+        <Route path="/payouts" element={<PayoutsPage />} />
         <Route path="/leads" element={<LeadsPage />} />
         <Route path="/leads/new" element={<LeadFormPage />} />
         <Route path="/leads/:id" element={<LeadDetailPage />} />
