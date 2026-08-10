@@ -30,7 +30,7 @@ If a queue item conflicts with a canonical rule, the canonical rule wins and the
 
 The current code already contains partner and contractor portals, their pipelines and lead/deal views, owner tasks, global search, repeat-client workflow, deal archive, package readiness and dispatch, repayments, partner invoices, statements, public contractor applications, contractor progression, training-platform skeletons, terms administration, and data-quality surfaces. These are smoke-tested and repaired where necessary; they are not duplicated in this queue.
 
-PR #152 supplied the package-dispatch readiness migration. The later partner/owner-assigned visibility repair exists as a separate migration and must be published/applied through its own PR before its live result is treated as complete.
+PR #152 supplied the package-dispatch readiness migration. The later partner/owner-assigned visibility repair (Build 17) has since been published, merged (PR #153) and applied live (migration `partner_owner_assigned_visibility`); it now awaits only its role smoke + cross-role leak test before being treated as complete.
 
 ## Delivery rules
 
@@ -45,17 +45,29 @@ PR #152 supplied the package-dispatch readiness migration. The later partner/own
 
 ## Live progress ledger
 
+> **Wave 0 reconciliation — 2026-08-09.** Verified against live GitHub + the live
+> database. Builds **2, 4, 7, 17** merged with migrations applied live
+> (`pr154_shared_payee_payment_profiles`, `pr155_funder_invoice_dispatch_ledger`,
+> `pr156_contractor_payable_cascade`, `partner_owner_assigned_visibility`). Builds
+> **1, 16, 18** had remote branches but **no PR**; each was rebased onto `main`,
+> re-verified (build + lint), opened as its own PR (#159, #158, #160) and **merged**
+> — all three are UI-only (no migration). Review fixes landed before merge (#159
+> row-cap pagination; #160 re-attach dedup + shared Modal); a follow-up PR **#162**
+> closes two residual #160 review findings (dedup load/error race + name+size
+> false-skip). **No build below is "Complete" per the legend** — merged is not the
+> same as smoke-tested; every row still owes its role smoke + cross-role leak test.
+
 | Build | Status | Branch / PR | Verification |
 |---:|---|---|---|
-| 1 | BRANCH PUSHED — DRAFT PR + BROWSER SMOKE PENDING | `codex/partner-invoice-eligibility` · `0f1ecd4` | Lint ✅ · TypeScript ✅ · production bundle ✅ · browser blocked by missing local Supabase env · GitHub branch pushed |
-| 2 | BRANCH PUSHED — DRAFT PR + MIGRATION APPLY PENDING | `codex/shared-payee-payment-profile` · `6bab9cf` | Schema/privacy review ✅ · assertions included ✅ · GitHub branch pushed · no live application performed |
-| 4 | BRANCH PUSHED — DRAFT PR + MIGRATION APPLY PENDING | `codex/funder-invoice-dispatch-ledger` · `4e0f3e9` | Append-only ledger, owner queue RPC, server-only result RPC, retry chain, redacted activity evidence, RLS/grants/index assertions ✅ · GitHub branch pushed · no live application performed |
-| 7 | BRANCH PUSHED — DRAFT PR + MIGRATION APPLY PENDING | `codex/contractor-payable-cascade` · `5e630c7` | Existing locked tier amount remains authoritative; contractor-only lifecycle, same-deal invoice validation, advisory locks, void reconciliation, API grant assertions and static contract checks ✅ · GitHub branch pushed · no live application performed |
-| 16 | BRANCH PUSHED — DRAFT PR + BROWSER SMOKE PENDING | `codex/sole-trader-pii-warning` · `c9c1ebd` | Existing notification catalogue verified complete; replacement privacy safeguard lint ✅ · TypeScript ✅ · production bundle ✅ · GitHub branch pushed |
-| 17 | BRANCH PUSHED — DRAFT PR + MIGRATION APPLY PENDING | `agent/partner-owner-assigned-visibility` · `f3c10ec` | Replacement for stale AUDIT F1 queue slot; GitHub branch pushed; fixes the confirmed partner visibility gap without widening cross-partner access |
-| 18 | BRANCH PUSHED — DRAFT PR + BROWSER SMOKE PENDING | `codex/portal-lead-document-recovery` · `630013b` | Replacement for stale AUDIT F2 slot; lint ✅ · TypeScript ✅ · production bundle ✅ · GitHub branch pushed · no migration required · browser smoke pending |
+| 1 | MERGED — SMOKE/LEAK TEST PENDING | `codex/partner-invoice-eligibility` · **PR #159 (merged)** | Lint ✅ · TypeScript ✅ · production bundle ✅ · Gitar approved (row-cap pagination finding resolved) · no migration · browser smoke pending |
+| 2 | MERGED + MIGRATION APPLIED LIVE — SMOKE/LEAK TEST PENDING | `codex/shared-payee-payment-profile` · **PR #154 (merged)** | Migration `pr154_shared_payee_payment_profiles` applied live ✅ · schema/privacy review ✅ · role smoke + cross-role leak test pending |
+| 4 | MERGED + MIGRATION APPLIED LIVE — SMOKE/LEAK TEST PENDING | `codex/funder-invoice-dispatch-ledger` · **PR #155 (merged)** | Migration `pr155_funder_invoice_dispatch_ledger` applied live ✅ · append-only ledger + owner queue/result RPCs + retry chain + redacted activity evidence ✅ · smoke pending |
+| 7 | MERGED + MIGRATION APPLIED LIVE — SMOKE/LEAK TEST PENDING | `codex/contractor-payable-cascade` · **PR #156 (merged)** | Migration `pr156_contractor_payable_cascade` applied live ✅ · locked tier amount remains authoritative; same-deal invoice validation, advisory locks, void reconciliation ✅ · smoke pending |
+| 16 | MERGED — SMOKE/LEAK TEST PENDING | `codex/sole-trader-pii-warning` · **PR #158 (merged)** | Lint ✅ · TypeScript ✅ · production bundle ✅ · Gitar approved + CodeRabbit "no actionable comments" · no migration · browser smoke pending |
+| 17 | MERGED + MIGRATION APPLIED LIVE — SMOKE/LEAK TEST PENDING | `agent/partner-owner-assigned-visibility` · **PR #153 (merged)** | Migration `partner_owner_assigned_visibility` applied live ✅ · fixes the confirmed partner visibility gap without widening cross-partner access · cross-role leak test pending |
+| 18 | MERGED — SMOKE/LEAK TEST PENDING | `codex/portal-lead-document-recovery` · **PR #160 (merged)** + follow-up **PR #162** | Lint ✅ · TypeScript ✅ · production bundle ✅ · no migration · re-attach dedup + shared Modal landed pre-merge; 2 residual review findings (dedup load/error race, name+size false-skip) addressed in #162 · browser smoke pending |
 
-All builds not shown in this ledger remain **QUEUED**. Update this table after every material state change; never mark a build complete merely because a branch or PR exists.
+All builds not shown in this ledger remain **QUEUED**. Update this table after every material state change; never mark a build complete merely because a branch or PR exists — and never merely because it is merged or its migration is applied. "Complete" requires the smoke test and cross-role leak test in the legend.
 
 ## Wave 1 — Close the money loop and unblock smoke testing
 
