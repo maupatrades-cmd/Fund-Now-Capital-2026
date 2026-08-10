@@ -95,7 +95,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return json(req, { error: "This email already belongs to another CRM identity" }, 409);
     }
     profileId = existing.id;
-    await service.from("profiles").update({ is_active: true }).eq("id", profileId);
+    const { error: reactivateError } = await service.from("profiles").update({ is_active: true }).eq("id", profileId);
+    if (reactivateError) return json(req, { error: "The existing client account could not be reactivated" }, 500);
   } else {
     const { data: created, error: createError } = await service.auth.admin.createUser({
       email,
@@ -122,7 +123,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   const emailHash = await sha256(email);
-  const { data: ledger, error: ledgerError } = await service.from("client_account_bootstraps").insert({
+  const ledgerValues = {
     client_id: body.client_id,
     client_contact_id: body.client_contact_id,
     profile_id: profileId,
@@ -130,7 +131,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
     email_hash: emailHash,
     status: "account_created",
     account_created_at: new Date().toISOString(),
-  }).select("id").single();
+    welcome_sent_at: null,
+    failure_code: null,
+  };
+  const activeLedger = await service.from("client_account_bootstraps")
+    .select("id")
+    .eq("profile_id", profileId)
+    .in("status", ["account_created", "welcome_sent"])
+    .maybeSingle();
+  if (activeLedger.error) return json(req, { error: "The onboarding audit could not be checked" }, 500);
+  const ledgerResult = activeLedger.data
+    ? await service.from("client_account_bootstraps").update(ledgerValues).eq("id", activeLedger.data.id).select("id").single()
+    : await service.from("client_account_bootstraps").insert(ledgerValues).select("id").single();
+  const { data: ledger, error: ledgerError } = ledgerResult;
   if (ledgerError || !ledger) return json(req, { error: "Account exists, but onboarding audit creation failed" }, 500);
 
   const { data: linkData, error: linkError } = await service.auth.admin.generateLink({
@@ -146,16 +159,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const firstName = (contact.full_name || "there").trim().split(/\s+/)[0];
   const safeName = escapeHtml(firstName);
-  const sent = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      from: FROM, reply_to: REPLY_TO, to: [email],
-      subject: `Welcome to Fund Now Capital, ${firstName}`,
-      html: `<p>Hi ${safeName},</p><p>Thank you for reaching out to Fund Now Capital. I'm Thapelo, and I'll be your broker specialist through this process.</p><p>We review your documents first, match you with suitable funders, and negotiate for you.</p><p><a href="${escapeHtml(link)}">Log in to your secure client portal</a></p><p>Once inside, choose your funding type and complete the requested information.</p><p>Talk soon,<br><strong>Thapelo Maupa</strong><br>Founder + Broker Specialist<br>Fund Now Capital</p>`,
-      text: `Hi ${firstName},\n\nWelcome to Fund Now Capital. Log in to your secure client portal:\n${link}\n\nTalk soon,\nThapelo Maupa\nFounder + Broker Specialist`,
-    }),
-  });
+  let sent: Response;
+  try {
+    sent = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        from: FROM, reply_to: REPLY_TO, to: [email],
+        subject: `Welcome to Fund Now Capital, ${firstName}`,
+        html: `<p>Hi ${safeName},</p><p>Thank you for reaching out to Fund Now Capital. I'm Thapelo, and I'll be your broker specialist through this process.</p><p>We review your documents first, match you with suitable funders, and negotiate for you.</p><p><a href="${escapeHtml(link)}">Log in to your secure client portal</a></p><p>Once inside, choose your funding type and complete the requested information.</p><p>Talk soon,<br><strong>Thapelo Maupa</strong><br>Founder + Broker Specialist<br>Fund Now Capital</p>`,
+        text: `Hi ${firstName},\n\nWelcome to Fund Now Capital. Log in to your secure client portal:\n${link}\n\nTalk soon,\nThapelo Maupa\nFounder + Broker Specialist`,
+      }),
+    });
+  } catch {
+    await service.from("client_account_bootstraps")
+      .update({ status: "welcome_failed", failure_code: "resend_network_error" })
+      .eq("id", ledger.id);
+    return json(req, { error: "Account created, but welcome email delivery failed", profile_id: profileId }, 502);
+  }
   await service.from("client_account_bootstraps").update(sent.ok ? {
     status: "welcome_sent", welcome_sent_at: new Date().toISOString(), failure_code: null,
   } : {
