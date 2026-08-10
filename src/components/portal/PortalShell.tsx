@@ -13,6 +13,7 @@ import {
   ReceiptText,
   Search,
   TrendingUp,
+  Wallet,
 } from "lucide-react";
 import { usePartnerPortalIdentity } from "@/hooks/usePartnerPortalIdentity";
 import { usePortalDeals } from "@/hooks/usePortalDeals";
@@ -51,6 +52,8 @@ function navItems(portal: PortalKind) {
     ...(portal === "contractor"
       ? [{ to: `${base}/training`, label: "Training", icon: GraduationCap, end: false }]
       : []),
+    // Payment details (Build 3.2) — banking profile for payouts, both portals.
+    { to: `${base}/settings/payment`, label: "Payment", icon: Wallet, end: false },
     { to: `${base}/settings/notifications`, label: "Notifications", icon: Bell, end: false },
   ];
 }
@@ -62,6 +65,7 @@ function partnerPageMeta(pathname: string) {
   if (pathname.includes("/invoices")) return ["Invoices", "Manage your partner invoices"] as const;
   if (pathname.endsWith("/statements")) return ["Statements", "Review your settlement history"] as const;
   if (pathname.endsWith("/badges")) return ["Badges", "Your Fund Now Capital achievements"] as const;
+  if (pathname.includes("/settings/payment")) return ["Payment details", "Your banking details for payouts"] as const;
   if (pathname.includes("/settings/notifications")) return ["Notifications", "Choose how Fund Now Capital contacts you"] as const;
   return ["Dashboard", "Your partner command centre"] as const;
 }
