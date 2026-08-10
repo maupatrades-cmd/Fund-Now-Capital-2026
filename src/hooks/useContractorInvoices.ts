@@ -28,7 +28,8 @@ import type {
 const INVOICE_COLUMNS =
   "id, contractor_id, invoice_number, generated_at, invoice_period_start, " +
   "invoice_period_end, total_amount, state, submitted_at, approved_at, approved_by, " +
-  "paid_at, paid_reference, due_date, rejected_at, rejected_reason, notes, created_by, created_at, updated_at";
+  "paid_at, paid_reference, paid_proof_path, due_date, rejected_at, rejected_reason, notes, " +
+  "created_by, created_at, updated_at";
 
 // ---- reads -----------------------------------------------------------------
 
@@ -226,5 +227,33 @@ export function useRejectContractorInvoice() {
       return (data ?? {}) as RpcResult;
     },
     onSuccess: (_d, v) => invalidate(v.invoiceId),
+  });
+}
+
+// Mark an approved contractor invoice paid (EFT reference required, optional
+// proof path). Atomically settles the invoiced commissions server-side
+// (payable -> settled). Build 10.
+export function useMarkContractorInvoicePaid() {
+  const invalidate = useContractorInvoiceInvalidator();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      invoiceId: string;
+      paidReference: string;
+      paidProofPath?: string | null;
+    }): Promise<RpcResult> => {
+      const { data, error } = await supabase.rpc("owner_mark_contractor_invoice_paid", {
+        p_invoice_id: vars.invoiceId,
+        p_paid_reference: vars.paidReference,
+        p_paid_proof_path: vars.paidProofPath ?? null,
+      });
+      if (error) throw error;
+      return (data ?? {}) as RpcResult;
+    },
+    onSuccess: (_d, v) => {
+      invalidate(v.invoiceId);
+      // Settling moves the contractor's earnings — refresh any earnings view.
+      qc.invalidateQueries({ queryKey: ["partner-earnings"] });
+    },
   });
 }
