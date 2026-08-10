@@ -41,13 +41,8 @@ begin
 end;
 $$;
 
-alter table public.profiles validate constraint profiles_client_id_fkey;
 alter table public.profiles validate constraint profiles_client_id_role_ck;
 alter table public.profiles validate constraint profiles_client_no_partner_ck;
-
-create index if not exists idx_profiles_client_id
-  on public.profiles (client_id)
-  where client_id is not null;
 
 comment on column public.profiles.client_id is
   'For role=client only: the single CRM client business this authenticated user may access. Never derived from user-editable JWT metadata in RLS.';
@@ -86,6 +81,7 @@ declare
   v_role public.user_role;
   v_partner_id uuid;
   v_client_id uuid;
+  v_rows integer;
 begin
   v_role := coalesce(
     nullif(new.raw_app_meta_data ->> 'role', '')::public.user_role,
@@ -118,6 +114,32 @@ begin
     v_client_id
   )
   on conflict (id) do nothing;
+
+  get diagnostics v_rows = row_count;
+
+  if v_rows = 1 and v_role = 'client'::public.user_role then
+    insert into public.activity_logs (
+      user_id,
+      user_email,
+      user_role,
+      event_type,
+      entity_type,
+      entity_id,
+      description,
+      after_values,
+      related_entity_ids
+    ) values (
+      new.id,
+      new.email,
+      'client',
+      'CREATE',
+      'profile',
+      new.id,
+      'Client portal profile provisioned',
+      jsonb_build_object('role', 'client', 'client_id', v_client_id),
+      jsonb_build_array(v_client_id)
+    );
+  end if;
 
   return new;
 end;

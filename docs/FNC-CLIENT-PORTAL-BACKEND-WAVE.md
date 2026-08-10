@@ -12,16 +12,20 @@ Backend-first delivery record. Frontend starts only after the required backend P
 
 ## Delivery order
 
-- [x] Build 74A: client role and isolated CRM identity foundation (this PR)
-- [ ] Build 74B: client magic-link request and callback backend
-- [ ] Build 76: canonical public application intake and three-way referrer capture
-- [ ] Build 77: revocable per-role invite tokens and analytics
-- [ ] Build 78: Path B lead-referrer to partner attribution
-- [ ] Build 79: verified client account bootstrap and welcome email
-- [ ] Backend forms: canonical business/person/product answer model
-- [ ] Document rule engine: product plus funder plus Owner overrides
-- [ ] Form-template field mapping and immutable generated-document snapshots
-- [ ] Backend migration/RLS/integration smoke test
+- [ ] PR 1 / Build 74A: client role and isolated CRM identity foundation (this PR)
+- [ ] PR 2 / Build 74B: client magic-link request and callback backend
+- [ ] PR 3 / Build 76: canonical public application intake and referrer capture
+- [ ] PR 4 / Build 77: revocable per-role invitation tokens and analytics
+- [ ] PR 5 / Build 78: Path B lead-referrer to partner attribution
+- [ ] PR 6 / Build 79: verified client account bootstrap and welcome email
+- [ ] PR 7: canonical business, person and product form answers
+- [ ] PR 8: product/funder/Owner document requirement rule engine
+- [ ] PR 9: form-template field mapping and immutable generated-document snapshots
+- [ ] PR 10: R100 complete-document reward lock and payroll-cycle ledger
+- [ ] PR 11: role-scoped potential-earnings waterfall calculator
+- [ ] PR 12: backend migration, RLS and integration smoke harness
+
+PRs 2-12 are dependent stacked PRs during review. They merge in numerical order only. At every merge, the next PR must be rebased or retargeted to current main and re-reviewed before merge. Production migrations run only after all applicable review fixes are merged, in migration timestamp order.
 - [ ] Client portal frontend wave
 
 ## Build 74A security boundary
