@@ -157,11 +157,13 @@ function BrightDestinyPartnerShell({ children }: { children: ReactNode }) {
       <aside className="sticky top-0 hidden h-screen min-h-0 flex-col overflow-hidden bg-gradient-to-b from-[#0c2033] to-[#071726] text-white lg:flex">
         <div className="border-b border-white/10 px-5 py-6">
           {showBrightDestinyBrand ? (
-            <img
-              src="/partners/bright-destiny-logo.webp"
-              alt="Bright Destiny Finance Partners"
-              className="h-28 w-full object-contain object-center"
-            />
+            <div className="rounded-2xl border border-[#E2E6EC]/70 bg-[#F7F8FA] px-3 py-3 shadow-sm">
+              <img
+                src="/partners/bright-destiny-logo-transparent.png"
+                alt="Bright Destiny Finance Partners"
+                className="h-24 w-full object-contain object-center"
+              />
+            </div>
           ) : (
             <div className="rounded-xl border border-[#d9a21b]/30 bg-black/20 px-4 py-5 text-center">
               <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#d9a21b]">Partner portal</p>
