@@ -2,7 +2,9 @@
 -- Supabase migration execution must run this file outside an explicit
 -- transaction because PostgreSQL CREATE INDEX CONCURRENTLY requires that.
 
-create index concurrently if not exists idx_profiles_client_id
+drop index concurrently if exists public.idx_profiles_client_id;
+
+create index concurrently idx_profiles_client_id
   on public.profiles (client_id)
   where client_id is not null;
 

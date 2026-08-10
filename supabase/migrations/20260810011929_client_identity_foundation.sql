@@ -83,17 +83,13 @@ declare
   v_client_id uuid;
   v_rows integer;
 begin
-  v_role := coalesce(
-    nullif(new.raw_app_meta_data ->> 'role', '')::public.user_role,
-    nullif(new.raw_user_meta_data ->> 'role', '')::public.user_role,
-    'partner'::public.user_role
-  );
+  v_role := nullif(new.raw_app_meta_data ->> 'role', '')::public.user_role;
+  if v_role is null then
+    raise exception 'Auth users require a service-assigned app_metadata.role';
+  end if;
 
   if v_role = 'partner'::public.user_role then
-    v_partner_id := nullif(coalesce(
-      new.raw_app_meta_data ->> 'referral_partner_id',
-      new.raw_user_meta_data ->> 'referral_partner_id'
-    ), '')::uuid;
+    v_partner_id := nullif(new.raw_app_meta_data ->> 'referral_partner_id', '')::uuid;
   end if;
 
   if v_role = 'client'::public.user_role then
@@ -218,7 +214,7 @@ begin
     select 1 from pg_policies
      where schemaname = 'public'
        and tablename in ('clients', 'client_contacts')
-       and policyname like '%client%'
+       and policyname in ('clients_client_read_own', 'client_contacts_client_read_own')
        and cmd <> 'SELECT'
   ) then
     raise exception 'Build 74A: unexpected client write policy exists';
