@@ -61,6 +61,18 @@ export type ContractorInvoiceLineItem = {
   added_at: string;
 };
 
+// Read-only eligibility preview returned by contractor_my_invoiceable_summary.
+// Numeric fields arrive as strings from PostgREST — coerce with toNum. S7C: the
+// contractor's take + counts + ready-date range only, no gross/pool/tier/funder.
+export type ContractorInvoiceableSummary = {
+  selected_count: number;
+  selected_amount: string | number;
+  ready_count: number;
+  ready_amount: string | number;
+  ready_start: string | null;
+  ready_end: string | null;
+};
+
 // State chip styling — mirrors PARTNER_INVOICE_STATE_META.
 export const CONTRACTOR_INVOICE_STATE_META: Record<
   ContractorInvoiceState,

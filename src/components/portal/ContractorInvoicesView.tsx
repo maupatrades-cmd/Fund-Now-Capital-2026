@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { FilePlus2, ChevronRight, ReceiptText } from "lucide-react";
+import { FilePlus2, ChevronRight, ReceiptText, CircleCheck, Clock3 } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { formatZAR } from "@/lib/format";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -13,9 +13,11 @@ import {
   CONTRACTOR_INVOICE_STATES,
   previousInvoicePeriod,
   type ContractorInvoiceState,
+  type ContractorInvoiceableSummary,
 } from "@/lib/contractorInvoices";
 import {
   useContractorInvoices,
+  useContractorInvoiceableSummary,
   useGenerateContractorInvoice,
 } from "@/hooks/useContractorInvoices";
 
@@ -154,6 +156,8 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
   const [start, setStart] = useState(defaults.start);
   const [end, setEnd] = useState(defaults.end);
   const submittingRef = useRef(false);
+  const eligibility = useContractorInvoiceableSummary(start, end);
+  const summary = eligibility.data ?? null;
 
   const setPeriod = (period: { start: string; end: string }) => {
     setStart(period.start);
@@ -175,7 +179,9 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
         navigate(`/contractor/invoices/${res.invoice_id as string}`);
       } else {
         toast.info(
-          "No commission is payable in that period yet. Commission becomes payable once Fund Now Capital has received the funder's payment on your deal — try a wider period.",
+          summary && summary.ready_count > 0
+            ? "Commission is payable, but it falls outside the selected period. Choose ‘Use ready period’."
+            : "No commission is payable in that period yet. Commission becomes payable once Fund Now Capital has received the funder's payment on your deal — try a wider period.",
         );
       }
     } catch (e) {
@@ -184,6 +190,11 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
       submittingRef.current = false;
     }
   };
+
+  // Only hard-disable when we KNOW the selected period is empty (a successful
+  // preview with 0 selected). If the preview errored (RPC not deployed yet) or is
+  // still loading, keep Generate enabled — the generate RPC no-ops safely.
+  const knownEmpty = !!summary && summary.selected_count === 0;
 
   return (
     <Modal title="Generate a new invoice" onClose={onClose} maxWidth="max-w-md">
@@ -198,6 +209,15 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
         <button type="button" className={secondaryBtn} onClick={() => setPeriod(previousInvoicePeriod())}>
           Previous month
         </button>
+        {summary?.ready_start && summary.ready_end && (
+          <button
+            type="button"
+            className={secondaryBtn}
+            onClick={() => setPeriod({ start: summary.ready_start!, end: summary.ready_end! })}
+          >
+            Use ready period
+          </button>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -225,8 +245,18 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
           />
         </div>
       </div>
+      <EligibilitySummary
+        isLoading={eligibility.isLoading}
+        isError={eligibility.isError}
+        summary={summary}
+      />
       <div className="flex items-center gap-2">
-        <button type="button" className={primaryBtn} disabled={generate.isPending} onClick={create}>
+        <button
+          type="button"
+          className={primaryBtn}
+          disabled={generate.isPending || knownEmpty}
+          onClick={create}
+        >
           {generate.isPending ? "Generating…" : "Generate draft"}
         </button>
         <button type="button" className={secondaryBtn} onClick={onClose}>
@@ -234,5 +264,56 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
         </button>
       </div>
     </Modal>
+  );
+}
+
+// Take-only eligibility preview (S7C). Silent when the RPC isn't available yet
+// (isError) — the generate action still works and reports its own result.
+function EligibilitySummary({
+  isLoading,
+  isError,
+  summary,
+}: {
+  isLoading: boolean;
+  isError: boolean;
+  summary: ContractorInvoiceableSummary | null;
+}) {
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground">Checking what's ready to invoice…</p>;
+  }
+  if (isError || !summary) return null;
+
+  if (summary.selected_count > 0) {
+    return (
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+        <div className="flex items-center gap-2 font-semibold">
+          <CircleCheck className="h-4 w-4" />
+          {summary.selected_count} commission{summary.selected_count === 1 ? "" : "s"} ready —{" "}
+          {formatZAR(summary.selected_amount, { cents: true })}
+        </div>
+        <p className="mt-1">Generate the draft, review its line items, then submit it to FNC.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+      <div className="flex items-center gap-2 font-semibold">
+        <Clock3 className="h-4 w-4" />
+        Nothing is ready in the selected period
+      </div>
+      {summary.ready_count > 0 ? (
+        <p className="mt-1">
+          {summary.ready_count} commission{summary.ready_count === 1 ? " is" : "s are"} ready outside
+          this period ({formatZAR(summary.ready_amount, { cents: true })}). Choose{" "}
+          <strong>Use ready period</strong>.
+        </p>
+      ) : (
+        <p className="mt-1">
+          Commission becomes payable once Fund Now Capital has received the funder's payment on your
+          deal.
+        </p>
+      )}
+    </div>
   );
 }

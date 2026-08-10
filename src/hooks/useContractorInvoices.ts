@@ -5,6 +5,7 @@ import { invalidateActivity } from "@/hooks/useActivity";
 import type {
   ContractorInvoice,
   ContractorInvoiceLineItem,
+  ContractorInvoiceableSummary,
   OwnerContractorInvoiceRow,
 } from "@/lib/contractorInvoices";
 
@@ -108,12 +109,37 @@ export function useContractorInvoiceLineItems(invoiceId: string | undefined) {
   });
 }
 
+// Read-only eligibility preview for the "Generate invoice" dialog, via the
+// DEFINER RPC (contractors can't read commission_records directly — no read-own
+// RLS). Returns take-only aggregates for the caller's payable, not-yet-invoiced
+// commissions. Advisory: if the RPC isn't deployed yet the query errors and the
+// dialog falls back to letting the generate RPC decide (it no-ops when nothing
+// is eligible), so the preview is never a hard gate on its own failure.
+export function useContractorInvoiceableSummary(periodStart: string, periodEnd: string) {
+  const uid = useSession()?.user?.id ?? null;
+  return useQuery({
+    queryKey: ["contractor-invoiceable-summary", uid, periodStart, periodEnd],
+    enabled: !!uid && !!periodStart && !!periodEnd,
+    queryFn: async (): Promise<ContractorInvoiceableSummary | null> => {
+      const { data, error } = await supabase.rpc("contractor_my_invoiceable_summary", {
+        p_start: periodStart,
+        p_end: periodEnd,
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      return (row ?? null) as ContractorInvoiceableSummary | null;
+    },
+    retry: false, // don't hammer the RPC if it isn't deployed yet
+  });
+}
+
 // ---- shared cache refresh --------------------------------------------------
 function useContractorInvoiceInvalidator() {
   const qc = useQueryClient();
   return (invoiceId?: string) => {
     qc.invalidateQueries({ queryKey: ["contractor-invoices"] });
     qc.invalidateQueries({ queryKey: ["owner-contractor-invoices"] });
+    qc.invalidateQueries({ queryKey: ["contractor-invoiceable-summary"] });
     if (invoiceId) {
       qc.invalidateQueries({ queryKey: ["contractor-invoice", invoiceId] });
       qc.invalidateQueries({ queryKey: ["contractor-invoice-line-items", invoiceId] });
