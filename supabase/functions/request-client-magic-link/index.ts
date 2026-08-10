@@ -82,22 +82,28 @@ async function deliverMagicLink(
     failureCode = "delivery_failed";
   }
 
-  await service.from("client_auth_requests").update({
-    status,
-    failure_code: failureCode,
-  }).eq("id", requestId);
+  try {
+    const { error: updateError } = await service.from("client_auth_requests").update({
+      status,
+      failure_code: failureCode,
+    }).eq("id", requestId);
+    if (updateError) console.error("magic-link status update failed", updateError.message);
 
-  if (status === "sent") {
-    await service.from("activity_logs").insert({
-      user_id: profileId,
-      user_email: email,
-      user_role: "client",
-      event_type: "NOTIFICATION_SENT",
-      entity_type: "client_auth_request",
-      entity_id: requestId,
-      description: "Client portal magic-link email sent",
-      related_entity_ids: [clientId],
-    });
+    if (status === "sent") {
+      const { error: activityError } = await service.from("activity_logs").insert({
+        user_id: profileId,
+        user_email: email,
+        user_role: "client",
+        event_type: "NOTIFICATION_SENT",
+        entity_type: "client_auth_request",
+        entity_id: requestId,
+        description: "Client portal magic-link email sent",
+        related_entity_ids: [clientId],
+      });
+      if (activityError) console.error("magic-link activity write failed", activityError.message);
+    }
+  } catch (error) {
+    console.error("magic-link audit write failed", error);
   }
 }
 
