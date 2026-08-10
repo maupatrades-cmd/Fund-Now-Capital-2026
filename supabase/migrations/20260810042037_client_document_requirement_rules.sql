@@ -1,6 +1,7 @@
 -- Client backend PR 8: product/funder/Owner document rules on the canonical document taxonomy.
 
 create table public.funding_product_catalog (
+  id uuid not null unique default gen_random_uuid(),
   code text primary key check (code ~ '^[a-z][a-z0-9_]{1,62}$'),
   display_name text not null,
   max_requested_amount numeric(14,2) check (max_requested_amount is null or max_requested_amount > 0),
@@ -47,6 +48,7 @@ create table public.document_requirement_rules (
 );
 
 create table public.deal_document_rule_contexts (
+  id uuid not null unique default gen_random_uuid(),
   deal_id uuid primary key references public.deals(id) on delete cascade,
   product_code text not null references public.funding_product_catalog(code) on delete restrict,
   funder_id uuid references public.funders(id) on delete set null,
@@ -107,6 +109,34 @@ revoke execute on function public.validate_document_rule_context() from public, 
 create trigger validate_document_rule_context
   before insert or update on public.deal_document_rule_contexts
   for each row execute function public.validate_document_rule_context();
+
+create or replace function public.validate_document_requirement_rule()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_context_product text;
+begin
+  if new.rule_scope = 'owner_override' then
+    select c.product_code into v_context_product
+      from public.deal_document_rule_contexts c
+     where c.deal_id = new.deal_id;
+    if v_context_product is null then
+      raise exception 'Select the deal document context before creating an Owner override';
+    end if;
+    if new.product_code is distinct from v_context_product then
+      raise exception 'Owner override product must match the deal document context';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+revoke execute on function public.validate_document_requirement_rule() from public, anon, authenticated;
+create trigger validate_document_requirement_rule
+  before insert or update on public.document_requirement_rules
+  for each row execute function public.validate_document_requirement_rule();
 
 create or replace function public.client_document_checklist(p_deal_id uuid)
 returns table (
