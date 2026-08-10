@@ -42,6 +42,13 @@ export type ContractorInvoice = {
   updated_at: string;
 };
 
+// Owner review rows embed the contractor's real name (owner privilege — the
+// owner sees who raised each invoice). Contractors never need their own name, so
+// the contractor list uses the bare ContractorInvoice shape.
+export type OwnerContractorInvoiceRow = ContractorInvoice & {
+  contractor: { id: string; full_name: string | null } | null;
+};
+
 // Enriched line item — the exact shape returned by
 // list_contractor_invoice_line_items. No funder name (contractor tier rows have
 // none); amount is the contractor take only.

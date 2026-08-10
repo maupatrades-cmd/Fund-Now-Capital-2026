@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
 import { invalidateActivity } from "@/hooks/useActivity";
-import type { ContractorInvoice, ContractorInvoiceLineItem } from "@/lib/contractorInvoices";
+import type {
+  ContractorInvoice,
+  ContractorInvoiceLineItem,
+  OwnerContractorInvoiceRow,
+} from "@/lib/contractorInvoices";
 
 /*
  * Build 9 (Contractor invoicing FNC) data layer — the contractor analogue of
@@ -13,9 +17,11 @@ import type { ContractorInvoice, ContractorInvoiceLineItem } from "@/lib/contrac
  *   - edits a draft (contractor_remove_line_item),
  *   - submits for FNC approval (contractor_submit_invoice).
  *
- * Owner approve/reject + mark-paid live in Build 10, so no owner mutation hooks
- * here. Every write is a SECURITY DEFINER RPC (DML on these tables is revoked
- * from authenticated); money is recomputed server-side.
+ * The owner reviews + approves/rejects submitted invoices (owner_approve_/
+ * owner_reject_contractor_invoice, both from Build 8). Mark-paid + EFT proof +
+ * atomic settle are Build 10 (they need a settle migration) — not here. Every
+ * write is a SECURITY DEFINER RPC (DML on these tables is revoked from
+ * authenticated); money is recomputed server-side.
  */
 
 const INVOICE_COLUMNS =
@@ -43,6 +49,27 @@ export function useContractorInvoices() {
     },
   });
   return { ...query, isLoading: query.isLoading || uid === null };
+}
+
+// Owner view: every contractor invoice + the contractor's real name (owner
+// privilege). Owner RLS (is_owner()) returns all rows; the embedded profiles
+// join is disambiguated to the contractor_id FK (approved_by/created_by also
+// reference profiles).
+export function useOwnerContractorInvoices() {
+  const uid = useSession()?.user?.id ?? null;
+  return useQuery({
+    queryKey: ["owner-contractor-invoices", uid],
+    queryFn: async (): Promise<OwnerContractorInvoiceRow[]> => {
+      const { data, error } = await supabase
+        .from("contractor_invoices")
+        .select(
+          `${INVOICE_COLUMNS}, contractor:profiles!contractor_invoices_contractor_id_fkey(id, full_name)`,
+        )
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as OwnerContractorInvoiceRow[];
+    },
+  });
 }
 
 // A single invoice (the owning contractor OR the owner — both satisfy RLS SELECT).
@@ -86,6 +113,7 @@ function useContractorInvoiceInvalidator() {
   const qc = useQueryClient();
   return (invoiceId?: string) => {
     qc.invalidateQueries({ queryKey: ["contractor-invoices"] });
+    qc.invalidateQueries({ queryKey: ["owner-contractor-invoices"] });
     if (invoiceId) {
       qc.invalidateQueries({ queryKey: ["contractor-invoice", invoiceId] });
       qc.invalidateQueries({ queryKey: ["contractor-invoice-line-items", invoiceId] });
@@ -135,6 +163,38 @@ export function useRemoveContractorLineItem() {
     mutationFn: async (vars: { lineItemId: string; invoiceId: string }): Promise<RpcResult> => {
       const { data, error } = await supabase.rpc("contractor_remove_line_item", {
         p_line_item_id: vars.lineItemId,
+      });
+      if (error) throw error;
+      return (data ?? {}) as RpcResult;
+    },
+    onSuccess: (_d, v) => invalidate(v.invoiceId),
+  });
+}
+
+// ---- owner mutations -------------------------------------------------------
+// Approve/reject only (Build 8 RPCs). Mark-paid + settle are Build 10.
+
+export function useApproveContractorInvoice() {
+  const invalidate = useContractorInvoiceInvalidator();
+  return useMutation({
+    mutationFn: async (vars: { invoiceId: string }): Promise<RpcResult> => {
+      const { data, error } = await supabase.rpc("owner_approve_contractor_invoice", {
+        p_invoice_id: vars.invoiceId,
+      });
+      if (error) throw error;
+      return (data ?? {}) as RpcResult;
+    },
+    onSuccess: (_d, v) => invalidate(v.invoiceId),
+  });
+}
+
+export function useRejectContractorInvoice() {
+  const invalidate = useContractorInvoiceInvalidator();
+  return useMutation({
+    mutationFn: async (vars: { invoiceId: string; reason: string }): Promise<RpcResult> => {
+      const { data, error } = await supabase.rpc("owner_reject_contractor_invoice", {
+        p_invoice_id: vars.invoiceId,
+        p_reason: vars.reason,
       });
       if (error) throw error;
       return (data ?? {}) as RpcResult;
