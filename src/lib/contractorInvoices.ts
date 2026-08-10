@@ -172,6 +172,13 @@ export async function uploadContractorEftProof(invoiceId: string, file: File): P
   return path;
 }
 
+// Remove an uploaded EFT proof object. Best-effort — used to clean up a file that
+// was uploaded but never recorded on the invoice (the mark-paid RPC threw or was
+// an idempotent no-op), so it doesn't linger as an orphan in the private bucket.
+export async function deleteContractorEftProof(path: string): Promise<void> {
+  await supabase.storage.from("contractor-invoice-proofs").remove([path]);
+}
+
 // Render + download a contractor-invoice PDF on demand. The Edge Function
 // authenticates the caller's session (functions.invoke attaches the JWT), scopes
 // every read to the caller's RLS (owner or the owning contractor), and returns

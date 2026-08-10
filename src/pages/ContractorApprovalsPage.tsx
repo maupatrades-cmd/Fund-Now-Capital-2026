@@ -12,6 +12,7 @@ import {
   formatPeriodDate,
   getContractorEftProofUrl,
   uploadContractorEftProof,
+  deleteContractorEftProof,
   type OwnerContractorInvoiceRow,
   type ContractorInvoiceState,
   CONTRACTOR_INVOICE_STATES,
@@ -246,23 +247,33 @@ function InvoiceReviewModal({
       return;
     }
     busyRef.current = true;
+    let proofPath: string | null = null;
     try {
       // Upload the optional proof-of-payment first, so the RPC records its path
       // atomically with the paid transition.
-      let proofPath: string | null = null;
       if (proofFile) {
         setUploading(true);
         proofPath = await uploadContractorEftProof(invoice.id, proofFile);
         setUploading(false);
       }
-      await markPaid.mutateAsync({
+      const res = await markPaid.mutateAsync({
         invoiceId: invoice.id,
         paidReference: reference.trim(),
         paidProofPath: proofPath,
       });
-      toast.success(`Invoice ${invoice.invoice_number} marked paid`);
+      // Idempotent no-op: the invoice was already paid, so the RPC did NOT record
+      // this proof. Clean up the orphaned upload and tell the owner it was ignored.
+      if (res?.changed === false) {
+        if (proofPath) await deleteContractorEftProof(proofPath);
+        toast.info(`Invoice ${invoice.invoice_number} was already marked paid — the uploaded proof was not attached.`);
+      } else {
+        toast.success(`Invoice ${invoice.invoice_number} marked paid`);
+      }
       onClose();
     } catch (e) {
+      // The RPC failed after the file was uploaded → the path was never recorded.
+      // Remove the orphaned object so it doesn't linger in the private bucket.
+      if (proofPath) await deleteContractorEftProof(proofPath);
       toast.error((e as Error).message || "Could not mark the invoice paid");
     } finally {
       setUploading(false);
