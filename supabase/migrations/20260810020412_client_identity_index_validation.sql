@@ -1,10 +1,10 @@
--- Build 74A review follow-up: avoid write blocking on populated profiles.
--- Supabase migration execution must run this file outside an explicit
--- transaction because PostgreSQL CREATE INDEX CONCURRENTLY requires that.
+-- Build 74A review follow-up: validate the client identity index and foreign key.
+-- Keep this migration transaction-compatible because Supabase applies migrations
+-- inside a transaction.
 
-drop index concurrently if exists public.idx_profiles_client_id;
+drop index if exists public.idx_profiles_client_id;
 
-create index concurrently idx_profiles_client_id
+create index idx_profiles_client_id
   on public.profiles (client_id)
   where client_id is not null;
 

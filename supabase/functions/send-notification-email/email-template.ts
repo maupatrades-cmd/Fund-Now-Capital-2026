@@ -158,6 +158,7 @@ function escapeHtml(s: string): string {
 }
 
 function absoluteUrl(base: string, path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
   return `${base.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
 }
 
@@ -234,6 +235,17 @@ function variantContent(m: EmailModel, variant: EmailVariant): VariantContent {
   // reason's internal notes here — the trigger already withholds notes from the
   // partner recipient's body_text.
   switch (m.eventType) {
+    case "CLIENT_MAGIC_LINK":
+      return {
+        subject: "Your secure Fund Now Capital sign-in link",
+        h1: "Your secure sign-in link",
+        ctaLabel: "Open my secure portal",
+        category: "account",
+        paras: [
+          "Use the secure button below to access your Fund Now Capital client portal.",
+          "This link is personal. Do not forward it.",
+        ],
+      };
     case "LEAD_QUALIFIED":
       return {
         subject: "Lead qualified",
@@ -450,6 +462,10 @@ export function renderEmail(m: EmailModel): { subject: string; html: string; tex
   const prefsUrl = absoluteUrl(base, "/settings/notifications");
   const logoWhite = `${base}/logo-white.png`;
   const icon = accentIcon(variant);
+  const isSecuritySignIn = m.eventType === "CLIENT_MAGIC_LINK";
+  const notificationNoteHtml = isSecuritySignIn
+    ? `<p style="margin:40px 0 0;font-family:${FONT};font-size:12px;font-weight:400;line-height:1.6;color:${SMALL_INK};">This security email was requested for access to your Fund Now Capital client portal. If you did not request it, you can safely ignore it.</p>`
+    : `<p style="margin:40px 0 0;font-family:${FONT};font-size:12px;font-weight:400;line-height:1.6;color:${SMALL_INK};">You're receiving this because you're subscribed to ${escapeHtml(c.category)} notifications. <a href="${escapeHtml(prefsUrl)}" target="_blank" style="color:${SMALL_INK};text-decoration:underline;">Update preferences in your CRM.</a></p>`;
 
   const greeting = greetingName(m.firstName);
   const paraHtml = c.paras
@@ -514,7 +530,7 @@ export function renderEmail(m: EmailModel): { subject: string; html: string; tex
     <p style="margin:0 0 16px;font-family:${FONT};font-size:16px;font-weight:400;line-height:1.6;color:${BODY_INK};">${escapeHtml(greeting)}</p>
     ${paraHtml}
     <div style="margin:32px 0 0;">${ctaButton(ctaUrl, c.ctaLabel)}</div>
-    <p style="margin:40px 0 0;font-family:${FONT};font-size:12px;font-weight:400;line-height:1.6;color:${SMALL_INK};">You're receiving this because you're subscribed to ${escapeHtml(c.category)} notifications. <a href="${escapeHtml(prefsUrl)}" target="_blank" style="color:${SMALL_INK};text-decoration:underline;">Update preferences in your CRM.</a></p>
+    ${notificationNoteHtml}
   </td></tr>
 
   <!-- Block D: footer -->
@@ -543,8 +559,9 @@ export function renderEmail(m: EmailModel): { subject: string; html: string; tex
     `${c.ctaLabel}: ${ctaUrl}`,
     "",
     "---",
-    `You're receiving this because you're subscribed to ${c.category}`,
-    `notifications. Update preferences: ${prefsUrl}`,
+    ...(isSecuritySignIn
+      ? ["This security email was requested for access to your Fund Now Capital client portal.", "If you did not request it, you can safely ignore it."]
+      : [`You're receiving this because you're subscribed to ${c.category}`, `notifications. Update preferences: ${prefsUrl}`]),
     "",
     `© 2026 ${LEGAL_NAME} · CIPC ${CIPC}`,
     "Cedarwood House, 128 Ballyclare Drive, Bryanston 2191, Sandton",
