@@ -1,0 +1,97 @@
+.client-portal {
+  --client-green: #6ec144;
+  --client-teal: #2ca8a8;
+  --client-sky: #7fd4e8;
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
+  font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+.client-portal::before {
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  content: "";
+  background: radial-gradient(circle at 50% -20%, #153e50 0, #06131d 52%, #030a10 100%);
+}
+
+.client-grid {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.16;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.24) 0.8px, transparent 0.8px);
+  background-size: 38px 38px;
+  mask-image: linear-gradient(to bottom, black, transparent 85%);
+}
+
+.client-aurora {
+  position: fixed;
+  z-index: -2;
+  width: 38rem;
+  height: 38rem;
+  border-radius: 999px;
+  opacity: 0.17;
+  filter: blur(90px);
+  animation: client-drift 22s ease-in-out infinite alternate;
+}
+
+.client-aurora--green {
+  top: -18rem;
+  left: 5%;
+  background: #6ec144;
+}
+
+.client-aurora--blue {
+  top: 18%;
+  right: -18rem;
+  background: #1f6fa8;
+  animation-duration: 29s;
+  animation-direction: alternate-reverse;
+}
+
+.client-rail {
+  background: linear-gradient(180deg, rgba(10, 29, 42, 0.98), rgba(4, 14, 22, 0.98));
+  backdrop-filter: blur(24px);
+}
+
+.client-glass {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.client-orbit {
+  animation: client-spin 36s linear infinite;
+}
+
+.client-pulse {
+  animation: client-pulse 3.2s ease-in-out infinite;
+}
+
+@keyframes client-drift {
+  from { transform: translate3d(-4%, -3%, 0) scale(0.94); }
+  to { transform: translate3d(8%, 7%, 0) scale(1.08); }
+}
+
+@keyframes client-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes client-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .client-portal *,
+  .client-portal *::before,
+  .client-portal *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

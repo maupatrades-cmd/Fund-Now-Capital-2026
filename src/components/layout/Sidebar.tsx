@@ -17,8 +17,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      {/* Nav — scrolls independently when the menu outgrows the viewport, while
+          the brand lockup above and the footer below stay pinned. min-h-0 lets
+          this flex child shrink below its content so overflow-y-auto can engage. */}
+      <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-1">
         {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}

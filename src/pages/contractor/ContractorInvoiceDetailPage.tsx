@@ -4,13 +4,14 @@ import { toast } from "sonner";
 import { ArrowLeft, Send, CheckCircle2, Banknote, Info } from "lucide-react";
 import PortalShell from "@/components/portal/PortalShell";
 import { formatZAR } from "@/lib/format";
-import { formatPeriodRange, formatPeriodDate } from "@/lib/contractorInvoices";
+import { formatPeriodRange, formatPeriodDate, isPayoutOverdue } from "@/lib/contractorInvoices";
 import { ContractorInvoiceStateChip } from "@/components/contractor-invoices/ContractorInvoiceStateChip";
 import { ContractorLineItemsTable } from "@/components/contractor-invoices/ContractorLineItemsTable";
 import { ContractorInvoicePdfButton } from "@/components/contractor-invoices/ContractorInvoicePdfButton";
 import {
   useContractorInvoice,
   useContractorInvoiceLineItems,
+  useContractorInvoiceSupersessions,
   useSubmitContractorInvoice,
 } from "@/hooks/useContractorInvoices";
 
@@ -18,6 +19,7 @@ export default function ContractorInvoiceDetailPage() {
   const { invoiceId } = useParams();
   const { data: invoice, isLoading, isError, error } = useContractorInvoice(invoiceId);
   const { data: items, isError: itemsError } = useContractorInvoiceLineItems(invoiceId);
+  const { data: supersessions } = useContractorInvoiceSupersessions(invoiceId);
   const submit = useSubmitContractorInvoice();
   const submittingRef = useRef(false);
 
@@ -101,8 +103,13 @@ export default function ContractorInvoiceDetailPage() {
               </Banner>
             )}
             {invoice.state === "approved" && (
-              <Banner tone="success" icon={CheckCircle2}>
-                Approved {formatPeriodDate(invoice.approved_at)} — awaiting payment.
+              <Banner tone={isPayoutOverdue(invoice.state, invoice.due_date) ? "error" : "success"} icon={CheckCircle2}>
+                Approved {formatPeriodDate(invoice.approved_at)} — awaiting payment
+                {invoice.due_date
+                  ? isPayoutOverdue(invoice.state, invoice.due_date)
+                    ? ` (was due ${formatPeriodDate(invoice.due_date)} — overdue).`
+                    : ` (due ${formatPeriodDate(invoice.due_date)}).`
+                  : "."}
               </Banner>
             )}
             {invoice.state === "paid" && (
@@ -138,6 +145,22 @@ export default function ContractorInvoiceDetailPage() {
                 />
               )}
             </section>
+
+            {/* Resubmission trail — rejected invoices this one re-bills (Build 14) */}
+            {supersessions && supersessions.length > 0 && (
+              <section className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-5">
+                <h2 className="text-sm font-semibold text-amber-900">Replaces a rejected invoice</h2>
+                <ul className="space-y-1 text-sm text-amber-900">
+                  {supersessions.map((s) => (
+                    <li key={s.invoice_id}>
+                      <span className="font-medium">{s.invoice_number}</span> — rejected
+                      {s.rejected_at ? ` ${formatPeriodDate(s.rejected_at)}` : ""}
+                      {s.rejected_reason ? `: ${s.rejected_reason}` : "."}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {/* Draft → submit */}
             {invoice.state === "draft" && (

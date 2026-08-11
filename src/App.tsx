@@ -17,6 +17,8 @@ import PartnerPaymentSettingsPage from "@/pages/partner/PaymentSettingsPage";
 import PartnerBadgesPage from "@/pages/partner/PartnerBadgesPage";
 import PartnerStatementsPage from "@/pages/partner/StatementsPage";
 import ContractorGate from "@/pages/ContractorGate";
+import ClientGate from "@/pages/client/ClientGate";
+import ClientHomePage from "@/pages/client/ClientHomePage";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
 import DealDetailPage from "@/pages/DealDetailPage";
@@ -38,6 +40,7 @@ import InvoicesPage from "@/pages/InvoicesPage";
 import InvoiceDetailPage from "@/pages/InvoiceDetailPage";
 import RepaymentsPage from "@/pages/RepaymentsPage";
 import PartnerEarningsPage from "@/pages/PartnerEarningsPage";
+import PayoutsPage from "@/pages/PayoutsPage";
 import PartnerApprovalsPage from "@/pages/PartnerApprovalsPage";
 import ContractorApprovalsPage from "@/pages/ContractorApprovalsPage";
 import ActivityPage from "@/pages/ActivityPage";
@@ -142,6 +145,10 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/partner" replace />} />
       </Route>
       <Route path="/contractor/*" element={<ContractorGate />} />
+      <Route path="/client" element={<ClientGate />}>
+        <Route index element={<ClientHomePage />} />
+        <Route path="*" element={<Navigate to="/client" replace />} />
+      </Route>
 
       {/*
         Authenticated app — owner-only, shared sidebar/top-bar layout.
@@ -166,6 +173,7 @@ function AppRoutes() {
         <Route path="/invoices/contractor-approvals" element={<ContractorApprovalsPage />} />
         <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
         <Route path="/partner-earnings" element={<PartnerEarningsPage />} />
+        <Route path="/payouts" element={<PayoutsPage />} />
         <Route path="/leads" element={<LeadsPage />} />
         <Route path="/leads/new" element={<LeadFormPage />} />
         <Route path="/leads/:id" element={<LeadDetailPage />} />

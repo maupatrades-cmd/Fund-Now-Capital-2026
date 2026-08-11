@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
 import { invalidateActivity } from "@/hooks/useActivity";
 import type {
+  InvoiceSupersession,
   OwnerPartnerInvoiceRow,
   PartnerInvoice,
   PartnerInvoiceLineItem,
@@ -26,7 +27,7 @@ import type {
 const INVOICE_COLUMNS =
   "id, referral_partner_id, invoice_number, generated_at, invoice_period_start, " +
   "invoice_period_end, total_amount, state, submitted_at, approved_at, approved_by, " +
-  "paid_at, paid_reference, rejected_at, rejected_reason, notes, pdf_storage_path, " +
+  "paid_at, paid_reference, due_date, rejected_at, rejected_reason, notes, pdf_storage_path, " +
   "created_by, created_at, updated_at";
 
 const PDF_POLL_INTERVAL_MS = 4000;
@@ -159,6 +160,23 @@ export function usePartnerInvoiceLineItems(invoiceId: string | undefined) {
       if (error) throw error;
       return (data ?? []) as PartnerInvoiceLineItem[];
     },
+  });
+}
+
+// Build 14 — rejected invoices this invoice re-bills (owner or owning partner).
+export function usePartnerInvoiceSupersessions(invoiceId: string | undefined) {
+  const uid = useSession()?.user?.id ?? null;
+  return useQuery({
+    queryKey: ["partner-invoice-supersessions", invoiceId, uid],
+    enabled: !!invoiceId,
+    queryFn: async (): Promise<InvoiceSupersession[]> => {
+      const { data, error } = await supabase.rpc("list_partner_invoice_supersessions", {
+        p_invoice_id: invoiceId!,
+      });
+      if (error) throw error;
+      return (data ?? []) as InvoiceSupersession[];
+    },
+    retry: false, // no-op gracefully if the RPC isn't deployed yet
   });
 }
 

@@ -45,3 +45,11 @@ verify_jwt = false
 # service role inside the function. verify_jwt=false also permits CORS preflight.
 [functions.request-client-magic-link]
 verify_jwt = false
+
+# Invitation endpoints handle browser preflight themselves. Creation validates
+# the caller JWT in-function; resolution deliberately accepts an opaque token.
+[functions.create-client-invitation]
+verify_jwt = false
+
+[functions.resolve-client-invitation]
+verify_jwt = false
