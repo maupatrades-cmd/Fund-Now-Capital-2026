@@ -305,6 +305,8 @@ declare
   v_lr_earning      numeric(14,2);
   v_owner_net       numeric(14,2);
   v_existing        uuid;
+  v_ex_status       public.lead_referrer_commission_state;
+  v_ex_pct          numeric(10,4);
   v_id              uuid;
 begin
   if not public.is_owner() then
@@ -338,13 +340,65 @@ begin
       p_lead_refer_id, v_lr_channel, v_doctor;
   end if;
 
-  -- Idempotency: a non-void row already exists for this (deal, LR)?
-  select id into v_existing from public.lead_referrer_commission_records
+  -- Sourcing gate (Gitar): being UNDER the Doctor is not enough — the LR must be
+  -- the one who actually SOURCED this deal's lead, or any LR under the Doctor
+  -- could be paid on deals they never sourced, wrongly carving owner residual.
+  -- A deal has exactly one lead (deals.lead_id), so exactly one LR can source it
+  -- — this also structurally enforces ONE LR commission per deal.
+  if not exists (
+    select 1 from public.deals d
+      join public.leads l on l.id = d.lead_id
+     where d.id = p_deal_id
+       and l.sourced_by_lead_refer_id = p_lead_refer_id
+  ) then
+    raise exception 'Lead referrer % did not source deal %''s lead — only the deal''s lead sourcer earns an LR commission',
+      p_lead_refer_id, p_deal_id;
+  end if;
+
+  -- Over-carve guard (Gitar): at most ONE LR commission per deal. The sourcing
+  -- gate already guarantees this, but reject explicitly if a DIFFERENT LR already
+  -- holds a non-void commission on this deal, so two LRs can never each carve
+  -- from the full owner residual and push it negative.
+  if exists (
+    select 1 from public.lead_referrer_commission_records
+     where deal_id = p_deal_id and lead_refer_id <> p_lead_refer_id and status <> 'void'
+  ) then
+    raise exception 'Deal % already has an LR commission for a different lead referrer', p_deal_id;
+  end if;
+
+  -- Idempotency + freshness (Gitar): a non-void row already exists for (deal, LR)?
+  select id, status, tier_pct into v_existing, v_ex_status, v_ex_pct
+    from public.lead_referrer_commission_records
     where deal_id = p_deal_id and lead_refer_id = p_lead_refer_id and status <> 'void'
     limit 1;
   if v_existing is not null then
+    -- A settled/paid LR commission is frozen evidence — never recompute.
+    if v_ex_status <> 'earned' then
+      return jsonb_build_object('was_created', false, 'lead_referrer_commission_id', v_existing,
+                                'reason', 'already_' || v_ex_status::text);
+    end if;
+    -- 'earned' → refresh against the CURRENT Doctor earning (co-funding may have
+    -- added commission_records rows since the first write). Tier stays FROZEN at
+    -- first-write: re-crediting the same deal must never bump the LR's tier.
+    select coalesce(sum(cr.partner_share), 0)::numeric(14,2),
+           coalesce(sum(cr.owner_share),   0)::numeric(14,2)
+      into v_doctor_earning, v_owner_share
+      from public.commission_records cr
+     where cr.deal_id = p_deal_id and cr.referral_partner_id = v_doctor and cr.status <> 'void';
+    v_lr_earning := public.calculate_lead_referrer_earning(v_doctor_earning, v_ex_pct);
+    v_owner_net  := v_owner_share - v_lr_earning;
+    if v_owner_net < 0 then
+      raise exception 'Refreshed LR earning % exceeds owner residual % on deal %', v_lr_earning, v_owner_share, p_deal_id;
+    end if;
+    update public.lead_referrer_commission_records
+       set doctor_earning = v_doctor_earning, owner_share_snapshot = v_owner_share,
+           lr_earning = v_lr_earning, owner_net_after_lr = v_owner_net, updated_at = now()
+     where id = v_existing and status = 'earned'
+       and (doctor_earning is distinct from v_doctor_earning or lr_earning is distinct from v_lr_earning)
+     returning id into v_id;
     return jsonb_build_object('was_created', false, 'lead_referrer_commission_id', v_existing,
-                              'reason', 'already_exists');
+                              'was_refreshed', (v_id is not null),
+                              'reason', case when v_id is not null then 'refreshed' else 'already_current' end);
   end if;
 
   -- READ Doctor's earning + the owner residual on the deal. Never recompute.
@@ -445,7 +499,7 @@ declare
   -- pure-numeric proofs
   v_t int; v_p numeric; v_e numeric;
   -- behavioural fixtures
-  v_client uuid; v_doctor uuid; v_owner uuid; v_lr uuid;
+  v_client uuid; v_doctor uuid; v_owner uuid; v_lr uuid; v_lead uuid;
   v_deal uuid; v_cr public.commission_records;
   v_res1 jsonb; v_res2 jsonb; v_row public.lead_referrer_commission_records;
   v_cnt int;
@@ -536,9 +590,15 @@ begin
     -- Owner auth context so is_owner() passes inside the writer.
     perform set_config('request.jwt.claims', json_build_object('sub', v_owner)::text, true);
 
-    -- Synthetic funded deal with Doctor attribution.
-    insert into public.deals (client_id, reference, stage, is_purchase_order, referral_partner_id)
-      values (v_client, 'B56_LR_ROLLBACK', 'funded', false, v_doctor)
+    -- Synthetic lead SOURCED BY the LR (satisfies the new sourcing gate), Path-B
+    -- attributed to the Doctor.
+    insert into public.leads (business_name, contact_name, referral_partner_id, sourced_by_lead_refer_id)
+      values ('B56 LR Rollback Lead', 'Test Contact', v_doctor, v_lr)
+      returning id into v_lead;
+
+    -- Synthetic funded deal LINKED to that lead, Doctor attribution.
+    insert into public.deals (client_id, lead_id, reference, stage, is_purchase_order, referral_partner_id)
+      values (v_client, v_lead, 'B56_LR_ROLLBACK', 'funded', false, v_doctor)
       returning id into v_deal;
 
     -- Doctor commission on the deal. The LOCKED partner recompute trigger fills
@@ -585,6 +645,24 @@ begin
     select count(*) into v_cnt from public.lead_referrer_commission_records
       where deal_id = v_deal and lead_refer_id = v_lr and status <> 'void';
     if v_cnt <> 1 then raise exception 'assert FAIL: expected 1 LR row, got %', v_cnt; end if;
+
+    -- Co-funding REFRESH (Gitar): a 2nd Doctor commission appears AFTER the LR
+    -- write; re-calling refreshes the earned LR row to the new Doctor earning,
+    -- with the tier FROZEN. Doctor 18000+18000=36000; LR L1 25% = 9000; still 1 row.
+    insert into public.commission_records
+      (deal_id, referral_partner_id, gross_commission, is_purchase_order, status, contractor_share, earned_at)
+      values (v_deal, v_doctor, 100000, false, 'earned', 0, now());
+    v_res2 := public.write_lead_referrer_commission(v_deal, v_lr);
+    if (v_res2->>'was_created')::boolean is not false then raise exception 'assert FAIL: refresh should not create'; end if;
+    select * into v_row from public.lead_referrer_commission_records
+      where deal_id = v_deal and lead_refer_id = v_lr and status <> 'void';
+    if v_row.doctor_earning <> 36000.00 then raise exception 'assert FAIL: refresh doctor_earning % (exp 36000)', v_row.doctor_earning; end if;
+    if v_row.lr_earning <> 9000.00 then raise exception 'assert FAIL: refresh lr_earning % (exp 9000)', v_row.lr_earning; end if;
+    if v_row.tier <> 1 then raise exception 'assert FAIL: tier bumped on refresh (exp 1), got %', v_row.tier; end if;
+    if v_row.owner_net_after_lr <> 75000.00 then raise exception 'assert FAIL: refresh owner_net % (exp 75000)', v_row.owner_net_after_lr; end if;
+    select count(*) into v_cnt from public.lead_referrer_commission_records
+      where deal_id = v_deal and lead_refer_id = v_lr and status <> 'void';
+    if v_cnt <> 1 then raise exception 'assert FAIL: refresh created a duplicate row (%)', v_cnt; end if;
 
     -- CHECK constraint proof: an over-cap direct insert must be rejected.
     -- status = 'void' so it bypasses the (deal, LR) partial-unique index and the
