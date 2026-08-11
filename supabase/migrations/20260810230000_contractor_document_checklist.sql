@@ -158,8 +158,8 @@ create table if not exists public.contractor_documents (
 comment on table public.contractor_documents is
   'Build 31: per-contractor status of each of the 17 ONBOARDING onboarding documents. Writes are RPC-only; a contractor reads only their own rows.';
 
-create index if not exists contractor_documents_contractor_idx
-  on public.contractor_documents (contractor_id);
+-- Composite (contractor_id, status) also serves single-column contractor_id
+-- lookups (leftmost prefix), so no standalone contractor_id index is needed (Gitar).
 create index if not exists contractor_documents_status_idx
   on public.contractor_documents (contractor_id, status);
 
@@ -347,11 +347,11 @@ begin
         rejection_reason  = null,
         verified_by       = null,
         verified_at       = null
-    where public.contractor_documents.status <> 'verified'
+    where public.contractor_documents.status not in ('verified', 'not_applicable')
   returning id into v_id;
 
   if v_id is null then
-    raise exception 'This document is already verified and cannot be replaced — ask the owner to reject it first';
+    raise exception 'This document is already verified or marked Not Applicable by the owner and cannot be replaced — ask the owner to reject/reset it first';
   end if;
 
   select email into v_email from public.profiles where id = v_uid;
@@ -559,10 +559,13 @@ insert into storage.buckets (id, name, public)
 values ('contractor-documents', 'contractor-documents', false)
 on conflict (id) do nothing;
 
+-- Owner: FULL control incl. delete — POPIA erasure/right-to-be-forgotten (Gitar).
 drop policy if exists contractor_documents_bucket_owner_select on storage.objects;
-create policy contractor_documents_bucket_owner_select on storage.objects
-  for select to authenticated
-  using (bucket_id = 'contractor-documents' and public.is_owner());
+drop policy if exists contractor_documents_bucket_owner_all on storage.objects;
+create policy contractor_documents_bucket_owner_all on storage.objects
+  for all to authenticated
+  using (bucket_id = 'contractor-documents' and public.is_owner())
+  with check (bucket_id = 'contractor-documents' and public.is_owner());
 
 drop policy if exists contractor_documents_bucket_self_select on storage.objects;
 create policy contractor_documents_bucket_self_select on storage.objects
@@ -582,6 +585,10 @@ create policy contractor_documents_bucket_self_insert on storage.objects
     and (storage.foldername(name))[2] = (select auth.uid())::text
   );
 
+-- Contractor may replace/delete their OWN file ONLY while it is not yet verified
+-- (Gitar): once the owner has verified a file, it is immutable to the contractor
+-- so it can never be swapped or deleted out from under the owner's approval,
+-- leaving an orphaned DB row. Non-verified files stay freely re-uploadable.
 drop policy if exists contractor_documents_bucket_self_update on storage.objects;
 create policy contractor_documents_bucket_self_update on storage.objects
   for update to authenticated
@@ -589,6 +596,8 @@ create policy contractor_documents_bucket_self_update on storage.objects
     bucket_id = 'contractor-documents'
     and (storage.foldername(name))[1] = 'contractor'
     and (storage.foldername(name))[2] = (select auth.uid())::text
+    and not exists (select 1 from public.contractor_documents cd
+                     where cd.storage_path = name and cd.status = 'verified')
   )
   with check (
     bucket_id = 'contractor-documents'
@@ -603,6 +612,8 @@ create policy contractor_documents_bucket_self_delete on storage.objects
     bucket_id = 'contractor-documents'
     and (storage.foldername(name))[1] = 'contractor'
     and (storage.foldername(name))[2] = (select auth.uid())::text
+    and not exists (select 1 from public.contractor_documents cd
+                     where cd.storage_path = name and cd.status = 'verified')
   );
 
 -- ===========================================================================
@@ -709,7 +720,7 @@ begin
   end if;
   if (select count(*) from pg_policies where schemaname='storage' and tablename='objects'
         and policyname in (
-          'contractor_documents_bucket_owner_select','contractor_documents_bucket_self_select',
+          'contractor_documents_bucket_owner_all','contractor_documents_bucket_self_select',
           'contractor_documents_bucket_self_insert','contractor_documents_bucket_self_update',
           'contractor_documents_bucket_self_delete')) <> 5 then
     raise exception 'assert FAIL: contractor-documents storage policy set incomplete';
