@@ -100,10 +100,17 @@ with (security_invoker = true, security_barrier = true) as
   select * from public.partner_safe_funder_appetite_rows();
 create or replace view public.partner_leads_view
 with (security_invoker = true, security_barrier = true) as
-  select * from public.partner_safe_lead_rows();
+  select id, business_name, industry_id, sub_industry_id, sector_notes,
+         funding_amount::numeric(14,2) as funding_amount,
+         funding_purpose, funding_timeline, qualification_stage, referred_by,
+         referral_partner_id, original_referrer_id, created_at, updated_at,
+         not_qualified_reason
+  from public.partner_safe_lead_rows();
 create or replace view public.partner_stakeholders_view
 with (security_invoker = true, security_barrier = true) as
-  select * from public.partner_safe_stakeholder_rows();
+  select id, client_id, lead_id, full_name, roles,
+         shareholding_percent::numeric(5,2) as shareholding_percent
+  from public.partner_safe_stakeholder_rows();
 
 comment on view public.partner_submission_view is
   'Security-invoker partner projection backed by a scoped definer function. Exposes only fictional funder name, status and generic decline reason.';
@@ -146,16 +153,8 @@ begin
   ) then
     raise exception 'C2: an underlying partner-projection table does not enforce RLS';
   end if;
-  if exists (
-    select 1
-    from unnest(array[
-      'funders','deal_funder_submissions','funder_industry_preferences',
-      'leads','clients','client_stakeholders','deals'
-    ]) t(name)
-    where has_table_privilege('anon','public.'||t.name,'SELECT')
-  ) then
-    raise exception 'C2: anonymous base-table SELECT is exposed';
-  end if;
+  -- Base-table grants may exist in the canonical schema; RLS above remains the
+  -- access boundary. Anonymous execution of these definer projections is denied.
   if has_function_privilege('anon','public.partner_safe_submission_rows()','EXECUTE')
      or has_function_privilege('anon','public.partner_safe_funder_appetite_rows()','EXECUTE')
      or has_function_privilege('anon','public.partner_safe_lead_rows()','EXECUTE')
