@@ -3,14 +3,19 @@
 create or replace function public.prevent_locked_lead_attribution_rewrite()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $$
+declare
+  v_latest_event text;
 begin
-  if exists (
-    select 1
+  select e.event_type into v_latest_event
     from public.lead_attribution_events e
-    where e.lead_id = old.id and e.event_type = 'locked'
-  ) and (
+    where e.lead_id = old.id and e.event_type in ('locked','released')
+    order by e.occurred_at desc, e.id desc
+    limit 1;
+
+  if v_latest_event = 'locked' and (
     new.referral_partner_id is distinct from old.referral_partner_id
     or new.attributed_to_partner_id is distinct from old.attributed_to_partner_id
     or new.attributed_to_contractor_id is distinct from old.attributed_to_contractor_id
