@@ -13,6 +13,7 @@ import { StakeholdersPanel } from "@/components/stakeholders/StakeholdersPanel";
 import { referredByMeta } from "@/lib/clients";
 import { formatZAR } from "@/lib/format";
 import { ActivityFeed } from "@/components/activity/ActivityFeed";
+import ClientPortalAccessPanel from "@/components/clients/ClientPortalAccessPanel";
 
 type Tab = "overview" | "story" | "stakeholders" | "documents" | "calllog" | "notes" | "activity";
 
@@ -91,6 +92,7 @@ export default function ClientDetailPage() {
 
       {tab === "overview" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <ClientPortalAccessPanel clientId={client.id} />
           <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
             <h3 className="mb-3 text-sm font-semibold text-brand-navy">Business info</h3>
             <dl className="space-y-2 text-sm">
