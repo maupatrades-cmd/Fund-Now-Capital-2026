@@ -105,6 +105,15 @@ create or replace view public.partner_stakeholders_view
 with (security_invoker = true, security_barrier = true) as
   select * from public.partner_safe_stakeholder_rows();
 
+comment on view public.partner_submission_view is
+  'Security-invoker partner projection backed by a scoped definer function. Exposes only fictional funder name, status and generic decline reason.';
+comment on view public.partner_funder_industry_appetite is
+  'Security-invoker partner projection backed by a scoped definer function. Exposes anonymised appetite data only.';
+comment on view public.partner_leads_view is
+  'Security-invoker partner projection backed by a scoped definer function. Exposes only partner-safe lead fields within caller attribution.';
+comment on view public.partner_stakeholders_view is
+  'Security-invoker partner projection backed by a scoped definer function. Excludes stakeholder identity and contact PII.';
+
 grant select on public.partner_submission_view,
   public.partner_funder_industry_appetite,
   public.partner_leads_view,
@@ -127,10 +136,25 @@ begin
       raise exception 'C2: authenticated cannot select public.%', v_name;
     end if;
   end loop;
-  if has_table_privilege('authenticated','public.funders','SELECT')
-     or has_table_privilege('authenticated','public.deal_funder_submissions','SELECT')
-     or has_table_privilege('authenticated','public.funder_industry_preferences','SELECT') then
-    raise exception 'C2: sensitive base-table access was exposed';
+  if exists (
+    select 1
+    from unnest(array[
+      'funders','deal_funder_submissions','funder_industry_preferences',
+      'leads','clients','client_stakeholders','deals','industries'
+    ]) t(name)
+    where not (select c.relrowsecurity from pg_class c where c.oid=to_regclass('public.'||t.name))
+  ) then
+    raise exception 'C2: an underlying partner-projection table does not enforce RLS';
+  end if;
+  if exists (
+    select 1
+    from unnest(array[
+      'funders','deal_funder_submissions','funder_industry_preferences',
+      'leads','clients','client_stakeholders','deals'
+    ]) t(name)
+    where has_table_privilege('anon','public.'||t.name,'SELECT')
+  ) then
+    raise exception 'C2: anonymous base-table SELECT is exposed';
   end if;
   if has_function_privilege('anon','public.partner_safe_submission_rows()','EXECUTE')
      or has_function_privilege('anon','public.partner_safe_funder_appetite_rows()','EXECUTE')
