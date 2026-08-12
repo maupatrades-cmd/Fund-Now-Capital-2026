@@ -30,7 +30,18 @@ export default function LeadReferrerHomePage() {
     },
   });
 
-  const activeCount = (leads.data ?? []).filter((lead) => !["declined", "lost"].includes(lead.status)).length;
+  const summary = useQuery({
+    queryKey: ["lead-referrer", "lead-counts"],
+    queryFn: async () => {
+      const [totalResult, activeResult] = await Promise.all([
+        supabase.from("leads").select("id", { count: "exact", head: true }),
+        supabase.from("leads").select("id", { count: "exact", head: true }).not("status", "in", "(declined,lost)"),
+      ]);
+      if (totalResult.error) throw totalResult.error;
+      if (activeResult.error) throw activeResult.error;
+      return { total: totalResult.count ?? 0, active: activeResult.count ?? 0 };
+    },
+  });
 
   return (
     <LeadReferrerShell>
@@ -50,11 +61,11 @@ export default function LeadReferrerHomePage() {
       <div className="grid gap-4 sm:grid-cols-2">
         <article className="rounded-xl border border-border bg-white p-5 shadow-sm">
           <p className="text-sm text-muted-foreground">Leads submitted</p>
-          <p className="mt-2 text-3xl font-bold text-brand-navy">{leads.data?.length ?? 0}</p>
+          <p className="mt-2 text-3xl font-bold text-brand-navy">{summary.data?.total ?? 0}</p>
         </article>
         <article className="rounded-xl border border-border bg-white p-5 shadow-sm">
           <p className="text-sm text-muted-foreground">Active opportunities</p>
-          <p className="mt-2 text-3xl font-bold text-brand-navy">{activeCount}</p>
+          <p className="mt-2 text-3xl font-bold text-brand-navy">{summary.data?.active ?? 0}</p>
         </article>
       </div>
 
