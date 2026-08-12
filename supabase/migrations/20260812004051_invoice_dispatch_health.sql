@@ -35,7 +35,7 @@ begin
     d.recipient_email,
     case
       when i.state = 'draft' then 'Invoice is still a draft'
-      when d.id is null then 'Issued invoice has never been queued for delivery'
+      when d.id is null and i.state in ('issued','overdue') then 'Issued invoice has never been queued for delivery'
       when d.status in ('failed','bounced') then 'Latest delivery attempt failed'
       when d.status = 'queued' and d.queued_at < now() - interval '15 minutes' then 'Delivery remains queued beyond 15 minutes'
       when d.status = 'sent' and d.sent_at < now() - interval '24 hours' then 'Delivery has no confirmation after 24 hours'
@@ -43,7 +43,7 @@ begin
     end,
     case
       when i.state = 'draft' then 'Issue invoice'
-      when d.id is null then 'Queue invoice email'
+      when d.id is null and i.state in ('issued','overdue') then 'Queue invoice email'
       when d.status in ('failed','bounced') then 'Review failure and retry'
       when d.status = 'queued' and d.queued_at < now() - interval '15 minutes' then 'Check email worker'
       when d.status = 'sent' and d.sent_at < now() - interval '24 hours' then 'Confirm recipient or resend'
@@ -59,7 +59,7 @@ begin
   ) d on true
   where i.state <> 'void'
   order by
-    case when i.state = 'draft' or d.id is null or d.status in ('failed','bounced') then 0 else 1 end,
+    case when i.state = 'draft' or (d.id is null and i.state in ('issued','overdue')) or d.status in ('failed','bounced') then 0 else 1 end,
     i.created_at desc;
 end;
 $$;
