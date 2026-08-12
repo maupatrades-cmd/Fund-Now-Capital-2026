@@ -19,6 +19,14 @@ import PartnerStatementsPage from "@/pages/partner/StatementsPage";
 import ContractorGate from "@/pages/ContractorGate";
 import ClientGate from "@/pages/client/ClientGate";
 import ClientHomePage from "@/pages/client/ClientHomePage";
+import ClientApplicationPage from "@/pages/client/ClientApplicationPage";
+import ClientDocumentsPage from "@/pages/client/ClientDocumentsPage";
+import ClientLegalPage from "@/pages/client/ClientLegalPage";
+import ClientProgressPage from "@/pages/client/ClientProgressPage";
+import ClientAppointmentsPage from "@/pages/client/ClientAppointmentsPage";
+import ClientMessagesPage from "@/pages/client/ClientMessagesPage";
+import ClientOffersPage from "@/pages/client/ClientOffersPage";
+import ClientProfilePage from "@/pages/client/ClientProfilePage";
 import LeadReferrerGate from "@/pages/LeadReferrerGate";
 import LeadReferrerHomePage from "@/pages/lead-referrer/LeadReferrerHomePage";
 import LeadReferrerSubmitLeadPage from "@/pages/lead-referrer/LeadReferrerSubmitLeadPage";
@@ -150,6 +158,14 @@ function AppRoutes() {
       <Route path="/contractor/*" element={<ContractorGate />} />
       <Route path="/client" element={<ClientGate />}>
         <Route index element={<ClientHomePage />} />
+        <Route path="application" element={<ClientApplicationPage />} />
+        <Route path="documents" element={<ClientDocumentsPage />} />
+        <Route path="legal" element={<ClientLegalPage />} />
+        <Route path="progress" element={<ClientProgressPage />} />
+        <Route path="appointments" element={<ClientAppointmentsPage />} />
+        <Route path="messages" element={<ClientMessagesPage />} />
+        <Route path="offers" element={<ClientOffersPage />} />
+        <Route path="profile" element={<ClientProfilePage />} />
         <Route path="*" element={<Navigate to="/client" replace />} />
       </Route>
       <Route path="/lead-referrer" element={<LeadReferrerGate />}>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import {
   ArrowRight,
   BadgeCheck,
@@ -64,12 +65,12 @@ export default function ClientHomePage() {
               One secure place to complete your application, share documents and follow every step of your funding journey.
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <a href="#application" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#6ec144] to-[#2ca8a8] px-5 text-sm font-extrabold text-[#06131d] shadow-lg shadow-[#2ca8a8]/15 transition hover:-translate-y-0.5">
+              <Link to="/client/application" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#6ec144] to-[#2ca8a8] px-5 text-sm font-extrabold text-[#06131d] shadow-lg shadow-[#2ca8a8]/15 transition hover:-translate-y-0.5">
                 Explore funding options <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </a>
-              <a href="#support" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-white/5 px-5 text-sm font-bold text-white/80 transition hover:bg-white/10">
+              </Link>
+              <Link to="/client/messages" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-white/5 px-5 text-sm font-bold text-white/80 transition hover:bg-white/10">
                 Talk to our team <MessageCircle className="h-4 w-4" aria-hidden="true" />
-              </a>
+              </Link>
             </div>
           </div>
         </section>
@@ -149,7 +150,7 @@ export default function ClientHomePage() {
                   <p className="mt-1 text-xs leading-5 text-white/45">The detailed form and document checklist will activate when the matching backend PRs are merged and migrated.</p>
                 </div>
               </div>
-              <span className="shrink-0 rounded-xl border border-white/10 px-4 py-2 text-xs font-bold text-white/45">Preview only</span>
+              <Link to={`/client/application?product=${selectedProduct}`} className="shrink-0 rounded-xl border border-[#6ec144]/30 bg-[#6ec144]/10 px-4 py-2 text-xs font-bold text-[#a2eb80] transition hover:bg-[#6ec144]/20">Continue application</Link>
             </div>
           ) : null}
         </section>
@@ -178,7 +179,7 @@ export default function ClientHomePage() {
             <article id="documents" className="client-glass scroll-mt-28 rounded-[28px] p-5 sm:p-7">
               <div className="flex items-center justify-between">
                 <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#2ca8a8]/15 text-[#7fd4e8]"><FileText className="h-5 w-5" aria-hidden="true" /></span>
-                <span className="rounded-full border border-white/9 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-white/35">Coming next</span>
+                <Link to="/client/documents" className="rounded-full border border-white/9 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-[#9ee67d]">Open checklist</Link>
               </div>
               <h2 className="mt-5 text-xl font-extrabold">Smart document checklist</h2>
               <p className="mt-2 text-sm leading-6 text-white/48">Your checklist will combine your funding type, Owner review and the selected funder’s requirements—without exposing private funder details.</p>
