@@ -22,7 +22,8 @@ declare
   v_title text;
   v_task public.owner_tasks%rowtype;
 begin
-  if not public.is_owner() then
+  if not coalesce(public.is_owner(), false)
+     and coalesce(auth.jwt()->>'role','') <> 'service_role' then
     raise exception 'Only the owner can generate document tasks' using errcode = '42501';
   end if;
   if p_due_in_days not between 0 and 90 then
@@ -43,21 +44,26 @@ begin
     if not exists (
       select 1 from public.owner_tasks t
       where t.deal_id = p_deal_id and t.title = v_title and t.status <> 'cancelled'
+        and t.notes like '[document_requirement:%'
     ) then
-      insert into public.owner_tasks (
-        title, notes, due_at, priority, client_id, lead_id, deal_id,
-        assigned_to, created_by
-      ) values (
-        v_title,
-        '[document_requirement:' || v_rule.document_type::text || '] ' ||
-          coalesce(v_rule.client_safe_reason, 'Required for the selected funding package.'),
-        now() + make_interval(days => p_due_in_days),
-        case when v_rule.requirement = 'required' then 'high' else 'normal' end,
-        v_deal.client_id, v_deal.lead_id, v_deal.id,
-        p_assigned_to, auth.uid()
-      )
-      returning * into v_task;
-      return next v_task;
+      begin
+        insert into public.owner_tasks (
+          title, notes, due_at, priority, client_id, lead_id, deal_id,
+          assigned_to, created_by
+        ) values (
+          v_title,
+          '[document_requirement:' || v_rule.document_type::text || '] ' ||
+            coalesce(v_rule.client_safe_reason, 'Required for the selected funding package.'),
+          now() + make_interval(days => p_due_in_days),
+          case when v_rule.requirement = 'required' then 'high' else 'normal' end,
+          v_deal.client_id, v_deal.lead_id, v_deal.id,
+          p_assigned_to, auth.uid()
+        )
+        returning * into v_task;
+        return next v_task;
+      exception when unique_violation then
+        null;
+      end;
     end if;
   end loop;
 end;
@@ -66,7 +72,7 @@ $$;
 revoke all on function public.owner_generate_document_requirement_tasks(uuid,uuid,integer)
   from public, anon;
 grant execute on function public.owner_generate_document_requirement_tasks(uuid,uuid,integer)
-  to authenticated;
+  to authenticated, service_role;
 
 do $$
 begin
