@@ -9,13 +9,11 @@ alter table public.owner_tasks drop constraint if exists owner_tasks_status_chec
 alter table public.owner_tasks
   add constraint owner_tasks_status_check
   check (status in ('open','in_progress','blocked','completed','cancelled')) not valid;
-alter table public.owner_tasks validate constraint owner_tasks_status_check;
 
 alter table public.owner_tasks drop constraint if exists owner_tasks_task_kind_check;
 alter table public.owner_tasks
   add constraint owner_tasks_task_kind_check
   check (task_kind in ('follow_up','document_request','paperwork_review','client_contact','funder_follow_up','meeting','payment')) not valid;
-alter table public.owner_tasks validate constraint owner_tasks_task_kind_check;
 
 alter table public.owner_tasks drop constraint if exists owner_tasks_blocker_consistent;
 alter table public.owner_tasks
@@ -24,14 +22,10 @@ alter table public.owner_tasks
     (status = 'blocked' and nullif(btrim(coalesce(blocker_reason,'')), '') is not null)
     or (status <> 'blocked' and blocker_reason is null)
   ) not valid;
-alter table public.owner_tasks validate constraint owner_tasks_blocker_consistent;
 
-create index if not exists owner_tasks_assignee_open_idx
-  on public.owner_tasks (assigned_to, due_at nulls last)
-  where status in ('open','in_progress','blocked');
-create index if not exists owner_tasks_escalation_idx
-  on public.owner_tasks (escalation_at)
-  where escalation_at is not null and status in ('open','in_progress','blocked');
+-- Validation and optional production indexes are deliberately deferred to a
+-- follow-up migration so this feature migration does not scan/lock the live
+-- owner_tasks table while its DDL transaction is open.
 
 drop policy if exists owner_tasks_assignee_select on public.owner_tasks;
 create policy owner_tasks_assignee_select
