@@ -19,6 +19,9 @@ import PartnerStatementsPage from "@/pages/partner/StatementsPage";
 import ContractorGate from "@/pages/ContractorGate";
 import ClientGate from "@/pages/client/ClientGate";
 import ClientHomePage from "@/pages/client/ClientHomePage";
+import LeadReferrerGate from "@/pages/LeadReferrerGate";
+import LeadReferrerHomePage from "@/pages/lead-referrer/LeadReferrerHomePage";
+import LeadReferrerSubmitLeadPage from "@/pages/lead-referrer/LeadReferrerSubmitLeadPage";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
 import DealDetailPage from "@/pages/DealDetailPage";
@@ -148,6 +151,11 @@ function AppRoutes() {
       <Route path="/client" element={<ClientGate />}>
         <Route index element={<ClientHomePage />} />
         <Route path="*" element={<Navigate to="/client" replace />} />
+      </Route>
+      <Route path="/lead-referrer" element={<LeadReferrerGate />}>
+        <Route index element={<LeadReferrerHomePage />} />
+        <Route path="submit-lead" element={<LeadReferrerSubmitLeadPage />} />
+        <Route path="*" element={<Navigate to="/lead-referrer" replace />} />
       </Route>
 
       {/*
