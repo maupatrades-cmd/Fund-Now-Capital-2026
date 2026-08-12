@@ -49,7 +49,7 @@ begin
     'task_due:'||t.id::text||':'||extract(epoch from t.due_at)::bigint::text,
     'task_due',coalesce(t.assigned_to,t.created_by),t.id,t.due_at
   from public.owner_tasks t
-  where t.status in ('open','in_progress','blocked')
+  where t.status not in ('completed','cancelled')
     and t.due_at >= p_window_start and t.due_at < p_window_end
   on conflict(idempotency_key) do nothing;
   get diagnostics v_added = row_count; v_count := v_count + v_added;
