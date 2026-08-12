@@ -107,7 +107,10 @@ grant select on table public.deal_success_fees to authenticated;
 create or replace function public.enforce_frozen_success_fee_immutable()
 returns trigger language plpgsql set search_path = '' as $$
 begin
-  if old.is_frozen then
+  -- Immutable against UPDATE only. A DELETE (including ON DELETE CASCADE from the
+  -- parent deal) is allowed so the fee is cleaned up with its deal — blocking it
+  -- would contradict the deal_id cascade and abort a deal delete.
+  if tg_op = 'UPDATE' and old.is_frozen then
     raise exception
       'A sent mandate''s success fee is immutable (deal %). Withdraw/supersede the mandate to change it (§4.5).',
       old.deal_id using errcode = 'restrict_violation';
@@ -299,7 +302,12 @@ begin
       'base', p_illustrative_base, 'base_kind', v_fee.percentage_base,
       'fee', v_fee_amount,
       'note', 'Illustrative only, on a sample ' || replace(v_fee.percentage_base::text,'_',' ')
-                || ' of R' || to_char(p_illustrative_base, 'FM999,999,999,990') || '. Excludes any VAT.');
+                || ' of R' || to_char(p_illustrative_base, 'FM999,999,999,990') || '. '
+                || case v_fee.vat_treatment
+                     when 'exclusive' then 'The figure excludes VAT (VAT added at the prevailing rate).'
+                     when 'inclusive' then 'The figure is VAT inclusive.'
+                     when 'not_applicable' then 'VAT is not applicable.'
+                     else 'VAT treatment to be confirmed.' end);
   else  -- flat_amount
     v_sentence := 'A success fee of R' || to_char(v_fee.flat_amount_zar, 'FM999,999,999,990.00')
       || ' applies, payable within ' || coalesce(v_fee.payment_due_days::text, '—') || ' days of '
