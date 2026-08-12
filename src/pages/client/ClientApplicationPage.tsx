@@ -53,6 +53,7 @@ export default function ClientApplicationPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<FormValues>(initialValues);
+  const [dirty, setDirty] = useState(false);
   const requestedProduct = searchParams.get("product") ?? "working_capital";
 
   const products = useQuery({
@@ -101,14 +102,16 @@ export default function ClientApplicationPage() {
       }
     }
     setValues(next);
+    setDirty(false);
   }, [draft.data, draft.isLoading, identity.data]);
 
   const persist = async (submit: boolean) => {
     if (!identity.data?.clientId) throw new Error("Your client account is not linked yet.");
     const requestedAmount = Number(values.requested_amount);
-    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) throw new Error("Enter a valid funding amount.");
+    const hasAmount = values.requested_amount.trim() !== "" && Number.isFinite(requestedAmount) && requestedAmount > 0;
+    if (submit && !hasAmount) throw new Error("Enter a valid funding amount.");
     const product = products.data?.find((item) => item.code === selectedProduct);
-    if (product?.max_requested_amount && requestedAmount > product.max_requested_amount) {
+    if (hasAmount && product?.max_requested_amount && requestedAmount > product.max_requested_amount) {
       throw new Error(`This product is capped at ${formatMoney(String(product.max_requested_amount))}.`);
     }
     if (submit && ["registered_name", "contact_name", "contact_email", "funding_purpose"].some((key) => !values[key].trim())) {
@@ -118,11 +121,13 @@ export default function ClientApplicationPage() {
 
     let responseId = draft.data?.id;
     if (responseId) {
-      const { error } = await supabase.from("client_form_responses").update({ requested_amount: requestedAmount }).eq("id", responseId);
+      const { error } = await supabase.from("client_form_responses")
+        .update({ requested_amount: hasAmount ? requestedAmount : null }).eq("id", responseId);
       if (error) throw error;
     } else {
       const { data, error } = await supabase.from("client_form_responses").insert({
-        client_id: identity.data.clientId, product_code: selectedProduct, requested_amount: requestedAmount, status: "draft",
+        client_id: identity.data.clientId, product_code: selectedProduct,
+        requested_amount: hasAmount ? requestedAmount : null, status: "draft",
       }).select("id").single();
       if (error) throw error;
       responseId = data.id as string;
@@ -150,12 +155,23 @@ export default function ClientApplicationPage() {
     mutationFn: (submit: boolean) => persist(submit),
     onSuccess: async ({ submitted }) => {
       toast.success(submitted ? "Application submitted securely." : "Draft saved.");
+      setDirty(false);
       await queryClient.invalidateQueries({ queryKey: ["client-application-draft", identity.data?.clientId, selectedProduct] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "The application could not be saved."),
   });
 
-  const updateValue = (name: string, value: string) => setValues((current) => ({ ...current, [name]: value }));
+  const updateValue = (name: string, value: string) => {
+    setDirty(true);
+    setValues((current) => ({ ...current, [name]: value }));
+  };
+  const changeProduct = (nextProduct: string) => {
+    if (dirty) {
+      toast.info("Save your current draft before changing the funding type.");
+      return;
+    }
+    setSearchParams({ product: nextProduct });
+  };
   const product = products.data?.find((item) => item.code === selectedProduct);
   const submitted = draft.data?.status === "submitted";
 
@@ -215,7 +231,7 @@ export default function ClientApplicationPage() {
                 <p className="mt-2 text-sm text-white/45">Your choice controls the questions and document checklist shown next.</p>
                 <div className="mt-6 grid gap-5 sm:grid-cols-2">
                   <label className="block text-sm font-semibold text-white/75">Funding type
-                    <select className={inputClass} value={selectedProduct} onChange={(event) => setSearchParams({ product: event.target.value })}>
+                    <select className={inputClass} value={selectedProduct} onChange={(event) => changeProduct(event.target.value)}>
                       {products.data?.map((item) => <option key={item.code} value={item.code} className="bg-[#0a1d2a]">{item.display_name}</option>)}
                     </select>
                   </label>
