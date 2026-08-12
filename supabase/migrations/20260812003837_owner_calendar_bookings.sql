@@ -113,8 +113,39 @@ declare
 begin
   select p.role::text into v_role from public.profiles p
   where p.id = auth.uid() and p.is_active;
-  if v_role not in ('owner','partner','contractor','lead_referrer','client') then
+  if v_role is null or v_role not in ('owner','partner','contractor','lead_referrer','client') then
     raise exception 'Active CRM role required' using errcode='42501';
+  end if;
+  if p_client_id is not null and not exists (
+    select 1 from public.clients c
+    where c.id=p_client_id and (
+      coalesce(public.is_owner(),false)
+      or c.id=public.current_client_id()
+      or c.referral_partner_id=public.current_partner_id()
+      or exists (
+        select 1 from public.deals d
+        where d.client_id=c.id and d.lead_id is not null
+          and coalesce(public.caller_owns_lead(d.lead_id),false)
+      )
+    )
+  ) then
+    raise exception 'Client is not visible to the requester' using errcode='42501';
+  end if;
+  if p_deal_id is not null and not exists (
+    select 1 from public.deals d
+    where d.id=p_deal_id and (
+      coalesce(public.is_owner(),false)
+      or d.client_id=public.current_client_id()
+      or d.referral_partner_id=public.current_partner_id()
+      or (d.lead_id is not null and coalesce(public.caller_owns_lead(d.lead_id),false))
+    )
+  ) then
+    raise exception 'Deal is not visible to the requester' using errcode='42501';
+  end if;
+  if p_client_id is not null and p_deal_id is not null and not exists (
+    select 1 from public.deals d where d.id=p_deal_id and d.client_id=p_client_id
+  ) then
+    raise exception 'Deal does not belong to the selected client';
   end if;
   select * into v_slot from public.owner_availability_slots
   where id = p_slot_id and is_open and starts_at > now() for update;
