@@ -55,38 +55,48 @@ declare
   v_accepted integer;
 begin
   select legal_dispatch_gate_enabled into v_enabled from public.crm_integration_settings where singleton;
-  select exists(
-    select 1 from public.crm_legal_execution_events e
+  select coalesce((
+    select e.execution_state='executed' and e.final_document_sha256 is not null
+    from public.crm_legal_execution_events e
     where e.deal_id=p_deal_id and e.document_key='client_mandate'
-      and e.execution_state='executed' and e.final_document_sha256 is not null
-      and not exists(
-        select 1 from public.crm_legal_execution_events newer
-        where newer.source_instance_id=e.source_instance_id
-          and newer.source_occurred_at>e.source_occurred_at
-          and newer.execution_state in ('withdrawn','superseded','expired','declined')
-      )
-  ) into v_mandate;
-  select exists(
-    select 1 from public.crm_legal_execution_events e
+    order by e.source_occurred_at desc, e.recorded_at desc, e.id desc
+    limit 1
+  ),false) into v_mandate;
+  select coalesce((
+    select e.execution_state='executed' and e.final_document_sha256 is not null
+    from public.crm_legal_execution_events e
     where e.deal_id=p_deal_id and e.document_key='authority_consent'
-      and e.execution_state='executed' and e.final_document_sha256 is not null
-      and not exists(
-        select 1 from public.crm_legal_execution_events newer
-        where newer.source_instance_id=e.source_instance_id
-          and newer.source_occurred_at>e.source_occurred_at
-          and newer.execution_state in ('withdrawn','superseded','expired','declined')
-      )
-  ) into v_consent;
-  select count(*) into v_required
-  from public.client_document_checklist(p_deal_id) c where c.requirement='required';
-  select count(distinct d.document_type) into v_accepted
-  from public.documents d
-  where d.deal_id=p_deal_id and d.is_current_version and d.status='active'
-    and d.verification_status='accepted'
-    and d.document_type in(
-      select c.document_type from public.client_document_checklist(p_deal_id) c
-      where c.requirement='required'
-    );
+    order by e.source_occurred_at desc, e.recorded_at desc, e.id desc
+    limit 1
+  ),false) into v_consent;
+
+  -- Resolve requirements objectively. Do not call the client-scoped checklist
+  -- helper here because service-role dispatch has no client auth.uid().
+  with context as (
+    select c.deal_id,c.product_code,c.funder_id
+    from public.deal_document_rule_contexts c where c.deal_id=p_deal_id
+  ), candidates as (
+    select r.document_type,r.requirement,
+      case r.rule_scope when 'owner_override' then 3 when 'funder_reference' then 2 else 1 end priority
+    from context c join public.document_requirement_rules r
+      on r.product_code=c.product_code and r.is_active
+     and (r.rule_scope='product_baseline'
+       or (r.rule_scope='funder_reference' and r.funder_id=c.funder_id)
+       or (r.rule_scope='owner_override' and r.deal_id=c.deal_id))
+  ), ranked as (
+    select candidates.*,
+      row_number() over(partition by document_type order by priority desc) rn
+    from candidates
+  ), required_types as (
+    select document_type from ranked where rn=1 and requirement='required'
+  )
+  select count(*), count(*) filter(where exists(
+    select 1 from public.documents d
+    where d.deal_id=p_deal_id and d.document_type=required_types.document_type
+      and d.is_current_version and d.status='active'
+      and d.verification_status='accepted'
+  ))
+  into v_required,v_accepted from required_types;
   return jsonb_build_object(
     'ready',not v_enabled or (v_mandate and v_consent and v_accepted>=v_required),
     'enforced',v_enabled,'mandate_executed',v_mandate,
