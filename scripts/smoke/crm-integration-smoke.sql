@@ -41,8 +41,14 @@ begin
   if has_table_privilege('authenticated','public.crm_reminder_events','INSERT,UPDATE,DELETE') then
     raise exception 'C12 smoke: direct reminder writes exposed';
   end if;
+  if to_regprocedure('public.request_owner_booking(uuid,text,text,uuid,uuid)') is null then
+    raise exception 'C12 smoke: booking RPC is missing or its signature drifted';
+  end if;
   if has_function_privilege('anon','public.request_owner_booking(uuid,text,text,uuid,uuid)','EXECUTE') then
     raise exception 'C12 smoke: anonymous booking RPC exposed';
+  end if;
+  if to_regprocedure('public.owner_funder_invoice_dispatch_health()') is null then
+    raise exception 'C12 smoke: invoice health RPC is missing or its signature drifted';
   end if;
   if has_function_privilege('anon','public.owner_funder_invoice_dispatch_health()','EXECUTE') then
     raise exception 'C12 smoke: anonymous invoice health RPC exposed';
