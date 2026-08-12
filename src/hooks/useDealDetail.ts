@@ -346,6 +346,54 @@ export function useAddCommunication() {
   });
 }
 
+// Client-portal conversations are deliberately separate from the internal
+// communications log above. Only messages explicitly written to the portal
+// are returned here; funder/internal notes cannot enter this result shape.
+export type OwnerPortalMessageThread = {
+  id: string;
+  subject: string;
+  status: "open" | "closed";
+  updated_at: string;
+  client_portal_messages: {
+    id: string;
+    sender_kind: "client" | "owner";
+    body: string;
+    created_at: string;
+  }[];
+};
+
+export function useDealPortalMessages(dealId: string | undefined) {
+  return useQuery({
+    queryKey: ["deal-portal-messages", dealId],
+    enabled: !!dealId,
+    queryFn: async (): Promise<OwnerPortalMessageThread[]> => {
+      const { data, error } = await supabase
+        .from("client_message_threads")
+        .select("id,subject,status,updated_at,client_portal_messages(id,sender_kind,body,created_at)")
+        .eq("deal_id", dealId!)
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as OwnerPortalMessageThread[];
+    },
+  });
+}
+
+export function useReplyToClientPortalMessage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ threadId, body }: { threadId: string; body: string; dealId: string }) => {
+      const { error } = await supabase.rpc("owner_send_client_portal_message", {
+        p_thread_id: threadId,
+        p_body: body,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      void qc.invalidateQueries({ queryKey: ["deal-portal-messages", variables.dealId] });
+    },
+  });
+}
+
 // ---- Stage history -------------------------------------------------------
 export type StageHistoryRow = {
   id: string;

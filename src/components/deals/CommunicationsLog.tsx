@@ -2,9 +2,14 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, MessageSquare } from "lucide-react";
+import { Plus, MessageSquare, Send } from "lucide-react";
 import { toast } from "sonner";
-import { useDealCommunications, useAddCommunication } from "@/hooks/useDealDetail";
+import {
+  useDealCommunications,
+  useAddCommunication,
+  useDealPortalMessages,
+  useReplyToClientPortalMessage,
+} from "@/hooks/useDealDetail";
 import { formatRelative } from "@/lib/format";
 
 const CHANNELS = ["note", "call", "email", "whatsapp", "meeting"];
@@ -35,7 +40,10 @@ export function CommunicationsLog({
 }) {
   const { data: comms, isLoading } = useDealCommunications(dealId);
   const add = useAddCommunication();
+  const portal = useDealPortalMessages(dealId);
+  const reply = useReplyToClientPortalMessage();
   const [open, setOpen] = useState(false);
+  const [replyByThread, setReplyByThread] = useState<Record<string, string>>({});
   const {
     register,
     handleSubmit,
@@ -115,6 +123,64 @@ export function CommunicationsLog({
       ) : (
         <p className="text-sm text-muted-foreground">No communications logged.</p>
       )}
+
+      <div className="mt-5 border-t border-border pt-4">
+        <h4 className="text-sm font-semibold text-brand-navy">Client portal inbox</h4>
+        <p className="mt-1 text-xs text-muted-foreground">Only messages explicitly shared through the secure portal appear here. Internal communications remain private.</p>
+        {portal.isLoading ? <p className="mt-3 text-sm text-muted-foreground">Loading portal messages…</p> : null}
+        {portal.isError ? <p role="alert" className="mt-3 text-sm text-red-600">Could not load portal messages: {portal.error.message}</p> : null}
+        {portal.data?.length ? (
+          <ul className="mt-3 space-y-3">
+            {portal.data.map((thread) => (
+              <li key={thread.id} className="rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-brand-navy">{thread.subject}</p>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{thread.status}</span>
+                </div>
+                <ol className="mt-3 space-y-2">
+                  {[...thread.client_portal_messages]
+                    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+                    .map((message) => (
+                      <li key={message.id} className={`rounded-lg p-2.5 text-sm ${message.sender_kind === "owner" ? "ml-6 bg-brand-teal/10" : "mr-6 bg-slate-100"}`}>
+                        <p className="whitespace-pre-wrap break-words text-brand-navy">{message.body}</p>
+                        <p className="mt-1 text-[10px] text-muted-foreground">{message.sender_kind === "owner" ? "FNC Owner" : "Client"} · {formatRelative(message.created_at)}</p>
+                      </li>
+                    ))}
+                </ol>
+                {thread.status === "open" ? (
+                  <form
+                    className="mt-3 flex gap-2"
+                    onSubmit={async (event) => {
+                      event.preventDefault();
+                      const body = (replyByThread[thread.id] ?? "").trim();
+                      if (!body) return;
+                      try {
+                        await reply.mutateAsync({ threadId: thread.id, dealId, body });
+                        setReplyByThread((current) => ({ ...current, [thread.id]: "" }));
+                        toast.success("Reply sent to the client portal");
+                      } catch (error) {
+                        toast.error(error instanceof Error ? error.message : "Could not send reply");
+                      }
+                    }}
+                  >
+                    <input
+                      value={replyByThread[thread.id] ?? ""}
+                      onChange={(event) => setReplyByThread((current) => ({ ...current, [thread.id]: event.target.value }))}
+                      maxLength={5000}
+                      className={cls}
+                      placeholder="Reply to the client…"
+                      aria-label={`Reply to ${thread.subject}`}
+                    />
+                    <button type="submit" disabled={reply.isPending || !(replyByThread[thread.id] ?? "").trim()} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-brand-teal text-white disabled:opacity-50" aria-label="Send portal reply">
+                      <Send className="h-4 w-4" />
+                    </button>
+                  </form>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : portal.isSuccess ? <p className="mt-3 text-sm text-muted-foreground">No client portal conversations for this deal.</p> : null}
+      </div>
     </div>
   );
 }

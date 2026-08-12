@@ -19,6 +19,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import ClientPortalShell from "@/components/client-portal/ClientPortalShell";
+import ClientMessagesPanel from "@/components/client-portal/ClientMessagesPanel";
 import { useClientPortalIdentity } from "@/hooks/useClientPortalIdentity";
 
 const products = [
@@ -187,11 +188,9 @@ export default function ClientHomePage() {
 
             <article id="support" className="client-glass scroll-mt-28 rounded-[28px] p-5 sm:p-7">
               <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#6ec144]/15 text-[#9ee67d]"><HelpCircle className="h-5 w-5" aria-hidden="true" /></span>
-              <h2 className="mt-5 text-xl font-extrabold">Real people, one conversation away</h2>
-              <p className="mt-2 text-sm leading-6 text-white/48">Need help choosing a funding path or preparing paperwork? Contact the Fund Now Capital team before submitting.</p>
-              <a href="mailto:thapelol@fundnowcapital.africa" className="mt-5 inline-flex items-center gap-2 text-sm font-extrabold text-[#9ee67d] hover:text-white">
-                Email our team <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </a>
+              <h2 className="mt-5 text-xl font-extrabold">Secure conversations with our team</h2>
+              <p className="mt-2 text-sm leading-6 text-white/48">Ask about your application or paperwork here. This inbox never displays funder identities, internal notes, meetings or Owner tasks.</p>
+              <ClientMessagesPanel />
             </article>
           </div>
         </section>
