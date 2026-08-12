@@ -3,12 +3,13 @@
 // bounces in the gates can never disagree.
 //
 // Mirrors the live `public.user_role` enum on profiles.role.
-export type UserRole = "owner" | "partner" | "contractor" | "client";
+export type UserRole = "owner" | "partner" | "contractor" | "client" | "lead_referrer";
 
 export function roleHome(role: string | null | undefined): string {
   if (role === "partner") return "/partner";
   if (role === "contractor") return "/contractor";
   if (role === "client") return "/client";
+  if (role === "lead_referrer") return "/lead-referrer";
   // Owner keeps the current behaviour. An unknown/missing role also lands on
   // /dashboard, where OwnerGate shows its access-restricted card — the same
   // dead end a non-owner gets today.
