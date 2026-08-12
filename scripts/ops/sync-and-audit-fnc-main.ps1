@@ -75,6 +75,7 @@ else {
   Write-Host "Fast-forwarding the clean audit checkout ..." -ForegroundColor Cyan
   Invoke-Checked -FilePath "git" -Arguments @("fetch", "origin", "main", "--prune") -WorkingDirectory $Target
   Invoke-Checked -FilePath "git" -Arguments @("switch", "main") -WorkingDirectory $Target
+  Invoke-Checked -FilePath "git" -Arguments @("merge-base", "--is-ancestor", "HEAD", "origin/main") -WorkingDirectory $Target
   Invoke-Checked -FilePath "git" -Arguments @("merge", "--ff-only", "origin/main") -WorkingDirectory $Target
 }
 
@@ -115,31 +116,87 @@ $duplicateVersions = @(
 )
 
 $securityFindings = [System.Collections.Generic.List[object]]::new()
+$cleanSqlByMigration = @{}
 foreach ($migration in $localMigrations) {
   $migrationPath = Join-Path $migrationDirectory $migration.File
   $sql = Get-Content -LiteralPath $migrationPath -Raw
-  if ($sql -match "(?is)create\s+table\s+(if\s+not\s+exists\s+)?public\." -and
-      $sql -notmatch "(?is)enable\s+row\s+level\s+security") {
+  $clean = [regex]::Replace($sql, '(?s)/\*.*?\*/', ' ')
+  $clean = [regex]::Replace($clean, '(?m)--[^\r\n]*', ' ')
+  $cleanSqlByMigration[$migration.File] = $clean
+}
+$allSql = ($localMigrations | ForEach-Object { $cleanSqlByMigration[$_.File] }) -join "`n"
+
+$tableSources = @{}
+$tableCreatePattern = '(?is)\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?(?:(?<schema>[a-zA-Z_][\w$]*)\.)?(?<name>[a-zA-Z_][\w$]*)'
+foreach ($migration in $localMigrations) {
+  foreach ($match in [regex]::Matches($cleanSqlByMigration[$migration.File], $tableCreatePattern)) {
+    $schema = $match.Groups['schema'].Value
+    if (-not $schema -or $schema -ieq 'public') { $tableSources[$match.Groups['name'].Value.ToLowerInvariant()] = $migration.File }
+  }
+}
+$rlsTables = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$rlsPattern = '(?is)\balter\s+table\s+(?:if\s+exists\s+)?(?:(?<schema>[a-zA-Z_][\w$]*)\.)?(?<name>[a-zA-Z_][\w$]*)\s+enable\s+row\s+level\s+security'
+foreach ($match in [regex]::Matches($allSql, $rlsPattern)) {
+  $schema = $match.Groups['schema'].Value
+  if (-not $schema -or $schema -ieq 'public') { [void]$rlsTables.Add($match.Groups['name'].Value) }
+}
+foreach ($tableName in $tableSources.Keys) {
+  if (-not $rlsTables.Contains($tableName)) {
     $securityFindings.Add([pscustomobject]@{
       Severity = "HIGH"
-      Migration = $migration.File
-      Finding = "Creates a public table without an RLS enable statement in the same migration."
+      Migration = $tableSources[$tableName]
+      Finding = "Public table $tableName has no RLS enable statement in cumulative migration state."
     })
   }
-  if ($sql -match "(?is)security\s+definer" -and
-      $sql -notmatch "(?is)revoke\s+execute\s+on\s+function") {
-    $securityFindings.Add([pscustomobject]@{
-      Severity = "HIGH"
-      Migration = $migration.File
-      Finding = "Contains SECURITY DEFINER without an explicit EXECUTE revoke in the same migration."
-    })
+}
+
+$revokedFunctions = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$revokePattern = '(?is)\brevoke\s+(?:all|execute)\s+on\s+function\s+(?:(?<schema>[a-zA-Z_][\w$]*)\.)?(?<name>[a-zA-Z_][\w$]*)'
+foreach ($match in [regex]::Matches($allSql, $revokePattern)) {
+  $schema = $match.Groups['schema'].Value
+  if (-not $schema -or $schema -ieq 'public') { [void]$revokedFunctions.Add($match.Groups['name'].Value) }
+}
+$functionPattern = '(?is)\bcreate\s+(?:or\s+replace\s+)?function\s+(?:(?<schema>[a-zA-Z_][\w$]*)\.)?(?<name>[a-zA-Z_][\w$]*)\s*\([^;]*?\)\s*returns\b(?<header>.*?)\bas\s+\$'
+foreach ($migration in $localMigrations) {
+  foreach ($match in [regex]::Matches($cleanSqlByMigration[$migration.File], $functionPattern)) {
+    $schema = $match.Groups['schema'].Value
+    $name = $match.Groups['name'].Value
+    if ((-not $schema -or $schema -ieq 'public') -and
+        $match.Groups['header'].Value -match '(?is)\bsecurity\s+definer\b' -and
+        -not $revokedFunctions.Contains($name)) {
+      $securityFindings.Add([pscustomobject]@{
+        Severity = "HIGH"
+        Migration = $migration.File
+        Finding = "SECURITY DEFINER function $name has no cumulative explicit EXECUTE revoke."
+      })
+    }
   }
-  if ($sql -match "(?is)create\s+(or\s+replace\s+)?view\s+public\." -and
-      $sql -notmatch "(?is)security_invoker") {
+}
+
+$invokerViews = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$viewSources = @{}
+$viewPattern = '(?is)\bcreate\s+(?:or\s+replace\s+)?view\s+(?:(?<schema>[a-zA-Z_][\w$]*)\.)?(?<name>[a-zA-Z_][\w$]*)(?<options>.*?)\bas\b'
+foreach ($migration in $localMigrations) {
+  foreach ($match in [regex]::Matches($cleanSqlByMigration[$migration.File], $viewPattern)) {
+    $schema = $match.Groups['schema'].Value
+    $name = $match.Groups['name'].Value
+    if (-not $schema -or $schema -ieq 'public') {
+      $viewSources[$name.ToLowerInvariant()] = $migration.File
+      if ($match.Groups['options'].Value -match '(?is)\bsecurity_invoker\s*=\s*true\b') { [void]$invokerViews.Add($name) }
+    }
+  }
+}
+$alterViewPattern = '(?is)\balter\s+view\s+(?:(?<schema>[a-zA-Z_][\w$]*)\.)?(?<name>[a-zA-Z_][\w$]*)\s+set\s*\([^;]*?\bsecurity_invoker\s*=\s*true\b'
+foreach ($match in [regex]::Matches($allSql, $alterViewPattern)) {
+  $schema = $match.Groups['schema'].Value
+  if (-not $schema -or $schema -ieq 'public') { [void]$invokerViews.Add($match.Groups['name'].Value) }
+}
+foreach ($viewName in $viewSources.Keys) {
+  if (-not $invokerViews.Contains($viewName)) {
     $securityFindings.Add([pscustomobject]@{
       Severity = "MEDIUM"
-      Migration = $migration.File
-      Finding = "Creates a public view without a visible security_invoker declaration."
+      Migration = $viewSources[$viewName]
+      Finding = "Public view $viewName has no object-specific security_invoker=true declaration."
     })
   }
 }
@@ -153,8 +210,14 @@ if (Get-Command supabase -ErrorAction SilentlyContinue) {
   Push-Location -LiteralPath $Target
   try {
     if ($ProjectRef) {
-      & supabase link --project-ref $ProjectRef
-      if ($LASTEXITCODE -ne 0) { throw "Supabase link failed. No migrations were applied." }
+      $linkedRefPath = Join-Path $Target 'supabase\.temp\project-ref'
+      if (-not (Test-Path -LiteralPath $linkedRefPath)) {
+        throw "Audit checkout is not pre-linked. Link it explicitly outside this read-only script."
+      }
+      $linkedRef = (Get-Content -LiteralPath $linkedRefPath -Raw).Trim()
+      if ($linkedRef -ne $ProjectRef) {
+        throw "Linked project mismatch. Expected $ProjectRef but found $linkedRef."
+      }
     }
     $linkedMigrationOutput = @(& supabase migration list --linked 2>&1)
     $linkedMigrationExitCode = $LASTEXITCODE
@@ -240,7 +303,7 @@ else {
 $report.Add("")
 $report.Add("## Safety result")
 $report.Add("")
-$report.Add("This script does not apply, repair, revert or delete migrations. Use the report to determine the reviewed merge/apply order before any remote database change.")
+$report.Add("This script does not link projects or apply, repair, revert or delete migrations. Static findings use cumulative, comment-stripped, object-associated heuristics and still require runtime confirmation.")
 
 [IO.File]::WriteAllLines($reportPath, $report, [Text.UTF8Encoding]::new($false))
 
