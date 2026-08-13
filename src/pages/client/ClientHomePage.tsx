@@ -19,6 +19,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 import ClientPortalShell from "@/components/client-portal/ClientPortalShell";
+import ClientApplicationProgress from "@/components/client-portal/ClientApplicationProgress";
+import ClientMeetingRequestCard from "@/components/client-portal/ClientMeetingRequestCard";
 import ClientMessagesPanel from "@/components/client-portal/ClientMessagesPanel";
 import { useClientPortalIdentity } from "@/hooks/useClientPortalIdentity";
 
@@ -31,14 +33,6 @@ const products = [
   { key: "investment", label: "Investment funding", detail: "Growth capital for suitable opportunities", icon: TrendingUp },
   { key: "private-equity", label: "Private equity", detail: "Strategic capital for established businesses", icon: Landmark },
 ] as const;
-
-const journey = [
-  { label: "Application", detail: "Tell us about your business and funding goal" },
-  { label: "Documents", detail: "Complete your tailored documentation checklist" },
-  { label: "Review", detail: "Our team checks readiness and prepares your package" },
-  { label: "Funder matching", detail: "We approach suitable funders with your permission" },
-  { label: "Decision", detail: "Compare the outcome and take the next step" },
-];
 
 export default function ClientHomePage() {
   const identity = useClientPortalIdentity();
@@ -158,22 +152,10 @@ export default function ClientHomePage() {
 
         <section className="grid gap-6 xl:grid-cols-[1.2fr_.8fr]">
           <article className="client-glass rounded-[28px] p-5 sm:p-8">
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#86d4cf]">Clear from day one</p>
-            <h2 className="mt-2 text-2xl font-extrabold">Your funding journey</h2>
-            <ol className="mt-7 space-y-1">
-              {journey.map((step, index) => (
-                <li key={step.label} className="group flex gap-4 rounded-2xl p-3 transition hover:bg-white/[0.04]">
-                  <div className="flex flex-col items-center">
-                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border text-xs font-extrabold ${index === 0 ? "client-pulse border-[#6ec144]/60 bg-[#6ec144]/15 text-[#a2eb80]" : "border-white/10 bg-white/5 text-white/35"}`}>{index + 1}</span>
-                    {index < journey.length - 1 ? <span className="my-1 h-8 w-px bg-white/9" aria-hidden="true" /> : null}
-                  </div>
-                  <div className="pt-1">
-                    <p className="text-sm font-extrabold">{step.label}</p>
-                    <p className="mt-1 text-xs leading-5 text-white/43">{step.detail}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#86d4cf]">Always informed</p>
+            <h2 className="mt-2 text-2xl font-extrabold">Your application progress</h2>
+            <p className="mt-2 mb-6 text-sm leading-6 text-white/50">Follow every client-facing milestone without exposing private funding-partner or internal review information.</p>
+            <ClientApplicationProgress />
           </article>
 
           <div className="space-y-6">
@@ -185,6 +167,12 @@ export default function ClientHomePage() {
               <h2 className="mt-5 text-xl font-extrabold">Smart document checklist</h2>
               <p className="mt-2 text-sm leading-6 text-white/48">Your checklist will combine your funding type, Owner review and the selected funder’s requirements—without exposing private funder details.</p>
             </article>
+
+            <Link to="/client/legal-documents" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-extrabold text-[#a2eb80] transition hover:bg-white/10 hover:text-white">
+              View legal documents <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+
+            <ClientMeetingRequestCard />
 
             <article id="support" className="client-glass scroll-mt-28 rounded-[28px] p-5 sm:p-7">
               <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#6ec144]/15 text-[#9ee67d]"><HelpCircle className="h-5 w-5" aria-hidden="true" /></span>
