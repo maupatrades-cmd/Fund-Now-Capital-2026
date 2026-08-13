@@ -55,6 +55,7 @@ declare
   v_uid uuid := (select auth.uid());
   v_client_id uuid;
   v_contact_id uuid;
+  v_contact_before jsonb;
   v_before jsonb;
   v_after jsonb;
   v_changed text[] := array[]::text[];
@@ -75,17 +76,29 @@ begin
   if v_before->>'sector' is distinct from nullif(btrim(p_sector), '') then v_changed := array_append(v_changed, 'sector'); end if;
   if v_before->>'address' is distinct from nullif(btrim(p_address), '') then v_changed := array_append(v_changed, 'address'); end if;
 
-  update public.clients set business_name=btrim(p_business_name), sector=nullif(btrim(p_sector), ''),
-    address=nullif(btrim(p_address), ''), updated_at=now() where id=v_client_id;
+  if cardinality(v_changed) > 0 then
+    update public.clients set business_name=btrim(p_business_name), sector=nullif(btrim(p_sector), ''),
+      address=nullif(btrim(p_address), ''), updated_at=now() where id=v_client_id;
+  end if;
 
-  select cc.id into v_contact_id from public.client_contacts cc
+  select cc.id, jsonb_build_object(
+      'full_name', cc.full_name,
+      'email', cc.email,
+      'phone', cc.phone,
+      'position', cc.position
+    ) into v_contact_id, v_contact_before from public.client_contacts cc
   where cc.client_id=v_client_id and cc.is_primary_director order by cc.created_at limit 1 for update;
   if v_contact_id is null then
     insert into public.client_contacts(client_id,full_name,email,phone,position,is_primary_director)
     values(v_client_id,btrim(p_contact_name),nullif(lower(btrim(p_contact_email)),''),nullif(btrim(p_contact_phone),''),nullif(btrim(p_contact_position),''),true)
     returning id into v_contact_id;
     v_changed := array_append(v_changed, 'primary_contact');
-  else
+  elsif v_contact_before is distinct from jsonb_build_object(
+      'full_name', btrim(p_contact_name),
+      'email', nullif(lower(btrim(p_contact_email)),''),
+      'phone', nullif(btrim(p_contact_phone),''),
+      'position', nullif(btrim(p_contact_position),'')
+    ) then
     update public.client_contacts set full_name=btrim(p_contact_name), email=nullif(lower(btrim(p_contact_email)),''),
       phone=nullif(btrim(p_contact_phone),''), position=nullif(btrim(p_contact_position),''), updated_at=now()
     where id=v_contact_id;
@@ -93,10 +106,12 @@ begin
   end if;
 
   v_after := public.client_portal_profile_workspace();
-  insert into public.activity_logs(user_id,user_email,user_role,event_type,entity_type,entity_id,description,changed_fields,before_values,after_values,related_entity_ids)
-  select v_uid,p.email,'client','UPDATE','client',v_client_id,'Client updated permitted portal profile fields',
-    to_jsonb(v_changed),v_before,v_after,jsonb_build_array(v_client_id,v_contact_id)
-  from public.profiles p where p.id=v_uid;
+  if cardinality(v_changed) > 0 then
+    insert into public.activity_logs(user_id,user_email,user_role,event_type,entity_type,entity_id,description,changed_fields,before_values,after_values,related_entity_ids)
+    select v_uid,p.email,'client','UPDATE','client',v_client_id,'Client updated permitted portal profile fields',
+      to_jsonb(v_changed),v_before,v_after,jsonb_build_array(v_client_id,v_contact_id)
+    from public.profiles p where p.id=v_uid;
+  end if;
   return v_after;
 end;
 $$;
