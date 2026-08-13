@@ -14,6 +14,7 @@ import {
   Search,
   TrendingUp,
   Wallet,
+  Send,
 } from "lucide-react";
 import { usePartnerPortalIdentity } from "@/hooks/usePartnerPortalIdentity";
 import { usePortalDeals } from "@/hooks/usePortalDeals";
@@ -41,6 +42,7 @@ function navItems(portal: PortalKind) {
     { to: `${base}/submit-lead`, label: "New lead", icon: PlusCircle, end: false },
     { to: `${base}/leads`, label: portal === "partner" ? "Leads" : "My Leads", icon: ListChecks, end: false },
     { to: `${base}/deals`, label: portal === "partner" ? "Pipeline" : "My Deals", icon: Briefcase, end: false },
+    { to: `${base}/client-invitations`, label: "Client invitations", icon: Send, end: false },
     ...(portal === "contractor"
       ? [{ to: `${base}/progression`, label: "My Progress", icon: TrendingUp, end: false }]
       : []),
@@ -60,6 +62,7 @@ function partnerPageMeta(pathname: string) {
   if (pathname.endsWith("/submit-lead")) return ["New lead", "Capture a funding opportunity"] as const;
   if (pathname.endsWith("/leads")) return ["Leads", "Track your submitted opportunities"] as const;
   if (pathname.endsWith("/deals")) return ["Pipeline", "Follow deals through the funding process"] as const;
+  if (pathname.endsWith("/client-invitations")) return ["Client invitations", "Send secure access to attributed clients"] as const;
   if (pathname.includes("/invoices")) return ["Invoices", "Manage your partner invoices"] as const;
   if (pathname.endsWith("/statements")) return ["Statements", "Review your settlement history"] as const;
   if (pathname.endsWith("/badges")) return ["Badges", "Your Fund Now Capital achievements"] as const;

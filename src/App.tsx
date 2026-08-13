@@ -31,6 +31,7 @@ import ClientLegalDocumentsPage from "@/pages/client/ClientLegalDocumentsPage";
 import LeadReferrerGate from "@/pages/LeadReferrerGate";
 import LeadReferrerHomePage from "@/pages/lead-referrer/LeadReferrerHomePage";
 import LeadReferrerSubmitLeadPage from "@/pages/lead-referrer/LeadReferrerSubmitLeadPage";
+import ClientInvitationsPage from "@/pages/ClientInvitationsPage";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
 import DealDetailPage from "@/pages/DealDetailPage";
@@ -148,6 +149,7 @@ function AppRoutes() {
         <Route path="submit-lead" element={<PartnerSubmitLeadPage />} />
         <Route path="leads" element={<PartnerMyLeadsPage />} />
         <Route path="deals" element={<PartnerDealsPage />} />
+        <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="statements" element={<PartnerStatementsPage />} />
         <Route path="invoices" element={<PartnerInvoicesPage />} />
         <Route path="invoices/:invoiceId" element={<PartnerInvoiceDetailPage />} />
@@ -173,6 +175,7 @@ function AppRoutes() {
       <Route path="/lead-referrer" element={<LeadReferrerGate />}>
         <Route index element={<LeadReferrerHomePage />} />
         <Route path="submit-lead" element={<LeadReferrerSubmitLeadPage />} />
+        <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="*" element={<Navigate to="/lead-referrer" replace />} />
       </Route>
 
@@ -208,6 +211,7 @@ function AppRoutes() {
         <Route path="/clients/new" element={<ClientFormPage />} />
         <Route path="/clients/:id" element={<ClientDetailPage />} />
         <Route path="/clients/:id/edit" element={<ClientFormPage />} />
+        <Route path="/client-invitations" element={<ClientInvitationsPage />} />
         <Route path="/documents" element={<DocumentsPage />} />
         <Route path="/funders" element={<FundersPage />} />
         <Route path="/funders/new" element={<FunderFormPage />} />
