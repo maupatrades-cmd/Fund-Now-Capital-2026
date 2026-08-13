@@ -46,7 +46,17 @@ async function audit(service: SupabaseClient, actorId: string, actorEmail: strin
   if (error) console.error("Client bootstrap audit failed:", error.message);
 }
 
-type Body = { client_id?: string; client_contact_id?: string; authorised_email_verified?: boolean; owner_verified?: boolean };
+type Body = {
+  action?: "invite_existing" | "quick_invite";
+  client_id?: string;
+  client_contact_id?: string;
+  authorised_email_verified?: boolean;
+  owner_verified?: boolean;
+  contact_email?: string;
+  contact_name?: string;
+  contact_phone?: string;
+  business_name?: string;
+};
 
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
@@ -79,10 +89,34 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   let body: Body;
   try { body = await req.json(); } catch { return json(req, { error: "Invalid request body" }, 400); }
+  const isQuickInvite = body.action === "quick_invite";
+  let quickInvitationId: string | null = null;
+  if (isQuickInvite) {
+    if (body.authorised_email_verified !== true || !body.contact_email) {
+      return json(req, { error: "Client email and authorised-email verification are required" }, 400);
+    }
+    const { data: quickRows, error: quickError } = await service.rpc("service_create_quick_client_invitation", {
+      p_actor_id: caller.id,
+      p_email: body.contact_email,
+      p_contact_name: body.contact_name ?? null,
+      p_phone: body.contact_phone ?? null,
+      p_business_name: body.business_name ?? null,
+    });
+    const quick = Array.isArray(quickRows) ? quickRows[0] : null;
+    if (quickError || !quick) {
+      const message = quickError?.message?.includes("another CRM relationship")
+        ? "This email is already linked to another CRM relationship"
+        : quickError?.message ?? "The quick client invitation could not be prepared";
+      return json(req, { error: message }, quickError?.message?.includes("another CRM relationship") ? 409 : 422);
+    }
+    quickInvitationId = quick.invitation_id;
+    body.client_id = quick.client_id;
+    body.client_contact_id = quick.client_contact_id;
+  }
   if (!body.client_id || !body.client_contact_id || (body.authorised_email_verified !== true && body.owner_verified !== true)) {
     return json(req, { error: "Client, primary contact and authorised-email verification are required" }, 400);
   }
-  if (!(candidates ?? []).some((candidate: { client_id?: string }) => candidate.client_id === body.client_id)) {
+  if (!isQuickInvite && !(candidates ?? []).some((candidate: { client_id?: string }) => candidate.client_id === body.client_id)) {
     return json(req, { error: 'You may invite only clients attributed to your role' }, 403);
   }
   const { data: client } = await service.from("clients").select("id, business_name").eq("id", body.client_id).maybeSingle();
@@ -163,6 +197,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const link = linkData?.properties?.action_link;
   if (linkError || !link) {
     await service.from("client_account_bootstraps").update({ status: "welcome_failed", failure_code: "link_generation_failed" }).eq("id", ledger.id);
+    if (quickInvitationId) await service.from("client_quick_invitations").update({ status: "welcome_failed" }).eq("id", quickInvitationId);
     return json(req, { error: "Account created, but the secure welcome link could not be generated", profile_id: profileId }, 502);
   }
 
@@ -184,6 +219,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     await service.from("client_account_bootstraps")
       .update({ status: "welcome_failed", failure_code: "resend_network_error" })
       .eq("id", ledger.id);
+    if (quickInvitationId) await service.from("client_quick_invitations").update({ status: "welcome_failed" }).eq("id", quickInvitationId);
     return json(req, { error: "Account created, but welcome email delivery failed", profile_id: profileId }, 502);
   }
   await service.from("client_account_bootstraps").update(sent.ok ? {
@@ -191,6 +227,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } : {
     status: "welcome_failed", failure_code: `resend_${sent.status}`,
   }).eq("id", ledger.id);
+  if (quickInvitationId) {
+    await service.from("client_quick_invitations").update(sent.ok ? {
+      status: "welcome_sent", sent_at: new Date().toISOString(),
+    } : { status: "welcome_failed" }).eq("id", quickInvitationId);
+  }
   if (accountCreated) await audit(service, caller.id, caller.email ?? null, actor.role, profileId, `Client portal account created for ${client.business_name}`, "CREATE");
   if (sent.ok) await audit(service, caller.id, caller.email ?? null, actor.role, profileId, `Client welcome email sent for ${client.business_name}`, "NOTIFICATION_SENT");
 
@@ -199,5 +240,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
     status: sent.ok ? "welcome_sent" : "welcome_failed",
     profile_id: profileId,
     account_created: accountCreated,
+    quick_invitation_id: quickInvitationId,
   }, sent.ok ? 200 : 502);
 });
