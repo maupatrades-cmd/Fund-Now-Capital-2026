@@ -27,6 +27,7 @@ import ClientAppointmentsPage from "@/pages/client/ClientAppointmentsPage";
 import ClientMessagesPage from "@/pages/client/ClientMessagesPage";
 import ClientOffersPage from "@/pages/client/ClientOffersPage";
 import ClientProfilePage from "@/pages/client/ClientProfilePage";
+import ClientLegalDocumentsPage from "@/pages/client/ClientLegalDocumentsPage";
 import LeadReferrerGate from "@/pages/LeadReferrerGate";
 import LeadReferrerHomePage from "@/pages/lead-referrer/LeadReferrerHomePage";
 import LeadReferrerSubmitLeadPage from "@/pages/lead-referrer/LeadReferrerSubmitLeadPage";
@@ -166,6 +167,7 @@ function AppRoutes() {
         <Route path="messages" element={<ClientMessagesPage />} />
         <Route path="offers" element={<ClientOffersPage />} />
         <Route path="profile" element={<ClientProfilePage />} />
+        <Route path="legal-documents" element={<ClientLegalDocumentsPage />} />
         <Route path="*" element={<Navigate to="/client" replace />} />
       </Route>
       <Route path="/lead-referrer" element={<LeadReferrerGate />}>
