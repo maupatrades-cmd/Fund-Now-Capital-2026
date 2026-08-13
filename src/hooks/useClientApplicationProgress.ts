@@ -39,11 +39,35 @@ type ProgressRow = {
   timeline: ClientProgressEvent[] | null;
 };
 
+const statuses = new Set<ClientProgressStatus>([
+  "received", "documents", "review", "funding_review", "decision", "finalising", "funded", "closed",
+]);
+
+function isProgressEvent(value: unknown): value is ClientProgressEvent {
+  if (!value || typeof value !== "object") return false;
+  const event = value as Record<string, unknown>;
+  return typeof event.status === "string" && statuses.has(event.status as ClientProgressStatus) && typeof event.occurredAt === "string";
+}
+
+function isProgressRow(value: unknown): value is ProgressRow {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.deal_id === "string"
+    && typeof row.deal_reference === "string"
+    && typeof row.product_label === "string"
+    && typeof row.current_status === "string"
+    && statuses.has(row.current_status as ClientProgressStatus)
+    && typeof row.opened_at === "string"
+    && typeof row.last_progress_at === "string"
+    && typeof row.is_complete === "boolean"
+    && (row.timeline === null || (Array.isArray(row.timeline) && row.timeline.every(isProgressEvent)));
+}
+
 export function useClientApplicationProgress() {
   const session = useSession();
   const userId = session?.user.id ?? null;
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ["client-application-progress", userId],
     enabled: Boolean(userId),
     staleTime: 60_000,
@@ -51,7 +75,10 @@ export function useClientApplicationProgress() {
       const { data, error } = await supabase.rpc("client_portal_application_progress");
       if (error) throw error;
 
-      return ((data ?? []) as ProgressRow[]).map((row) => ({
+      if (!Array.isArray(data) || !data.every(isProgressRow)) {
+        throw new Error("Application progress returned an unexpected response.");
+      }
+      return data.map((row) => ({
         dealId: row.deal_id,
         dealReference: row.deal_reference,
         productLabel: row.product_label,
@@ -63,4 +90,5 @@ export function useClientApplicationProgress() {
       }));
     },
   });
+  return { ...query, isSessionLoading: session === undefined };
 }

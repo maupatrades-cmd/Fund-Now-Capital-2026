@@ -55,7 +55,7 @@ function ApplicationCard({ application }: { application: Application }) {
             const current = index === currentIndex;
             const occurredAt = eventDates.get(step.status);
             return (
-              <li key={step.status} className="relative flex gap-3 rounded-xl p-2 lg:block lg:px-1 lg:text-center">
+              <li key={step.status} aria-current={current ? "step" : undefined} className="relative flex gap-3 rounded-xl p-2 lg:block lg:px-1 lg:text-center">
                 {index < steps.length - 1 ? (
                   <span className={`absolute left-[25px] top-10 h-[calc(100%-1.25rem)] w-px lg:left-1/2 lg:top-[25px] lg:h-px lg:w-full ${index < currentIndex ? "bg-[#6ec144]" : "bg-white/10"}`} aria-hidden="true" />
                 ) : null}
@@ -95,7 +95,7 @@ function ApplicationCard({ application }: { application: Application }) {
 export default function ClientApplicationProgress() {
   const query = useClientApplicationProgress();
 
-  if (query.isLoading) {
+  if (query.isSessionLoading || query.isLoading) {
     return <div className="flex min-h-36 items-center justify-center gap-2 text-sm text-white/50"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading your progress…</div>;
   }
 
@@ -103,7 +103,7 @@ export default function ClientApplicationProgress() {
     return (
       <div role="alert" className="rounded-2xl border border-red-300/20 bg-red-300/8 p-5">
         <p className="font-bold text-red-100">We couldn’t load your application progress.</p>
-        <button type="button" onClick={() => void query.refetch()} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-white/70 hover:bg-white/5">
+        <button type="button" onClick={() => void query.refetch()} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-white/70 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6ec144]">
           <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Try again
         </button>
       </div>

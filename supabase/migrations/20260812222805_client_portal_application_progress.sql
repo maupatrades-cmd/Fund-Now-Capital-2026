@@ -5,6 +5,28 @@
 -- identity, internal stages, staff identities, notes, decline reasons, money
 -- lifecycle data and commission data never cross this function boundary.
 
+create or replace function public.client_portal_public_stage(p_stage public.deal_stage)
+returns text
+language sql
+immutable
+strict
+set search_path = ''
+as $$
+  select case
+    when p_stage in ('new_lead'::public.deal_stage, 'qualifying'::public.deal_stage) then 'received'
+    when p_stage = 'document_collection'::public.deal_stage then 'documents'
+    when p_stage = 'deal_review'::public.deal_stage then 'review'
+    when p_stage in ('submitted'::public.deal_stage, 'in_credit'::public.deal_stage) then 'funding_review'
+    when p_stage in ('approved_quote_received'::public.deal_stage, 'client_deciding'::public.deal_stage) then 'decision'
+    when p_stage in ('verification_kyc'::public.deal_stage, 'contract_signed'::public.deal_stage, 'advance_pending'::public.deal_stage) then 'finalising'
+    when p_stage in ('funded'::public.deal_stage, 'invoiced'::public.deal_stage, 'commission_paid'::public.deal_stage) then 'funded'
+    when p_stage = 'declined'::public.deal_stage then 'closed'
+    else 'received'
+  end
+$$;
+
+revoke all on function public.client_portal_public_stage(public.deal_stage) from public, anon, authenticated;
+
 create or replace function public.client_portal_application_progress()
 returns table (
   deal_id uuid,
@@ -46,30 +68,7 @@ begin
     select
       h.deal_id,
       h.changed_at,
-      case
-        when h.to_stage in ('new_lead'::public.deal_stage, 'qualifying'::public.deal_stage)
-          then 'received'
-        when h.to_stage = 'document_collection'::public.deal_stage
-          then 'documents'
-        when h.to_stage = 'deal_review'::public.deal_stage
-          then 'review'
-        when h.to_stage in ('submitted'::public.deal_stage, 'in_credit'::public.deal_stage)
-          then 'funding_review'
-        when h.to_stage in ('approved_quote_received'::public.deal_stage, 'client_deciding'::public.deal_stage)
-          then 'decision'
-        when h.to_stage in (
-          'verification_kyc'::public.deal_stage,
-          'contract_signed'::public.deal_stage,
-          'advance_pending'::public.deal_stage
-        ) then 'finalising'
-        when h.to_stage in (
-          'funded'::public.deal_stage,
-          'invoiced'::public.deal_stage,
-          'commission_paid'::public.deal_stage
-        ) then 'funded'
-        when h.to_stage = 'declined'::public.deal_stage
-          then 'closed'
-      end as public_status
+      public.client_portal_public_stage(h.to_stage) as public_status
     from public.deal_stage_history h
     join public.deals owned_deal
       on owned_deal.id = h.deal_id
@@ -110,29 +109,7 @@ begin
       when 'other' then 'Business funding'
       else 'Working capital'
     end as product_label,
-    case
-      when d.stage in ('new_lead'::public.deal_stage, 'qualifying'::public.deal_stage)
-        then 'received'
-      when d.stage = 'document_collection'::public.deal_stage
-        then 'documents'
-      when d.stage = 'deal_review'::public.deal_stage
-        then 'review'
-      when d.stage in ('submitted'::public.deal_stage, 'in_credit'::public.deal_stage)
-        then 'funding_review'
-      when d.stage in ('approved_quote_received'::public.deal_stage, 'client_deciding'::public.deal_stage)
-        then 'decision'
-      when d.stage in (
-        'verification_kyc'::public.deal_stage,
-        'contract_signed'::public.deal_stage,
-        'advance_pending'::public.deal_stage
-      ) then 'finalising'
-      when d.stage in (
-        'funded'::public.deal_stage,
-        'invoiced'::public.deal_stage,
-        'commission_paid'::public.deal_stage
-      ) then 'funded'
-      else 'closed'
-    end as current_status,
+    public.client_portal_public_stage(d.stage) as current_status,
     d.created_at as opened_at,
     greatest(d.updated_at, coalesce(st.last_history_at, d.updated_at)) as last_progress_at,
     d.stage in (
