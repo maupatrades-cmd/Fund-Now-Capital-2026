@@ -82,7 +82,7 @@ as $$
   with identity as (
     select public.current_client_id() as client_id
   ), allowed_deals as (
-    select d.id, d.reference, d.stage::text as stage
+    select d.id, d.reference, d.stage::text as stage, d.created_at as sort_created_at
     from public.deals d
     join identity i on i.client_id = d.client_id
     where d.archived_at is null
@@ -94,7 +94,7 @@ as $$
     order by t.updated_at desc
   )
   select jsonb_build_object(
-    'deals', coalesce((select jsonb_agg(to_jsonb(d)) from allowed_deals d), '[]'::jsonb),
+    'deals', coalesce((select jsonb_agg(to_jsonb(d) - 'sort_created_at' order by d.sort_created_at desc, d.id) from allowed_deals d), '[]'::jsonb),
     'threads', coalesce((
       select jsonb_agg(
         to_jsonb(t) || jsonb_build_object(
@@ -110,7 +110,7 @@ as $$
             from public.client_portal_messages m
             where m.thread_id = t.id
           ), '[]'::jsonb)
-        )
+        ) order by t.updated_at desc, t.id
       )
       from allowed_threads t
     ), '[]'::jsonb)
@@ -195,6 +195,7 @@ as $$
 declare
   v_user_id uuid := (select auth.uid());
   v_message_id uuid;
+  v_thread public.client_message_threads%rowtype;
 begin
   if v_user_id is null or not public.is_owner() then
     raise exception 'Owner access required';
@@ -202,10 +203,11 @@ begin
   if length(btrim(coalesce(p_body, ''))) not between 1 and 5000 then
     raise exception 'Message must contain between 1 and 5000 characters';
   end if;
-  if not exists (
-    select 1 from public.client_message_threads t
-    where t.id = p_thread_id and t.status = 'open'
-  ) then
+  select * into v_thread
+  from public.client_message_threads t
+  where t.id = p_thread_id and t.status = 'open'
+  for update;
+  if v_thread.id is null then
     raise exception 'Open conversation not found';
   end if;
 
@@ -213,6 +215,15 @@ begin
   values (p_thread_id, v_user_id, 'owner', btrim(p_body))
   returning id into v_message_id;
   update public.client_message_threads set updated_at = now() where id = p_thread_id;
+
+  insert into public.activity_logs (
+    user_id, user_email, user_role, event_type, entity_type, entity_id,
+    description, related_entity_ids
+  )
+  select p.id, p.email, p.role::text, 'CREATE', 'client_message_thread', v_thread.id,
+    'Owner sent client portal message',
+    to_jsonb(array_remove(array[v_thread.client_id, v_thread.deal_id], null))
+  from public.profiles p where p.id = v_user_id;
   return v_message_id;
 end;
 $$;
