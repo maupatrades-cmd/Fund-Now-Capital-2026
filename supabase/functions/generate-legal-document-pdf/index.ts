@@ -22,7 +22,7 @@
 // the Deno edge runtime (see generate-invoice-pdf).
 
 import { createClient } from "@supabase/supabase-js";
-import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont, PDFImage } from "pdf-lib";
 import { FNC_LOGO_JPEG } from "./logo.ts";
 
 const LOGO_BYTES: Uint8Array = Uint8Array.from(
@@ -56,10 +56,14 @@ const M = 56; // ~20mm margins
 const HEADER_BOTTOM = 96; // content starts below the running header
 const FOOTER_TOP = PAGE_H - 64; // content must stop above the running footer
 
+// Helvetica/WinAnsi can only encode ASCII + Latin-1 + a few typographic marks.
+// Any glyph outside that set (e.g. Š, Ž, non-Latin scripts, €) cannot be drawn —
+// substitute a VISIBLE "?" marker rather than silently deleting it, so an altered
+// legal name is never invisible on a binding document.
 const safe = (s: unknown): string =>
   String(s ?? "").replace(
     /[^\x09\x0A\x0D\x20-\x7E -ÿ–—‘’“”•…]/g,
-    "",
+    "?",
   );
 
 function formatDate(iso: string | null | undefined): string {
@@ -107,6 +111,7 @@ type Ctx = {
   reg: PDFFont;
   bold: PDFFont;
   ital: PDFFont;
+  logo: PDFImage; // embedded ONCE in renderPdf and reused on every page
   input: RenderInput;
 };
 
@@ -155,9 +160,10 @@ function splitText(ctx: Ctx, str: unknown, font: "reg" | "bold" | "ital", size: 
 }
 
 async function drawRunningHeader(ctx: Ctx) {
-  const logo = await ctx.doc.embedJpg(LOGO_BYTES);
+  // Reuse the single embedded logo handle (embedded once in renderPdf). pdf-lib
+  // does not de-duplicate images, so re-embedding per page bloats the PDF.
   const LZ = 30;
-  ctx.page.drawImage(logo, { x: M, y: PAGE_H - (44 + LZ - 8), width: LZ, height: LZ });
+  ctx.page.drawImage(ctx.logo, { x: M, y: PAGE_H - (44 + LZ - 8), width: LZ, height: LZ });
   drawText(ctx, FNC.name, M + LZ + 8, 52, { size: 10, font: "bold", color: NAVY });
   drawText(ctx, `CIPC ${FNC.cipc}`, M + LZ + 8, 64, { size: 7, color: MUTED });
   drawText(ctx, ctx.input.reference, PAGE_W - M, 52, { size: 9, font: "bold", color: NAVY, align: "right" });
@@ -322,7 +328,7 @@ function drawFooters(doc: PDFDocument, reg: PDFFont, input: RenderInput) {
   });
 }
 
-async function renderPdf(input: RenderInput): Promise<{ bytes: Uint8Array; sha256: string }> {
+async function renderPdf(input: RenderInput): Promise<{ bytes: Uint8Array; sha256: string; pages: number }> {
   const doc = await PDFDocument.create();
   // Determinism: pin metadata to a stable date + fixed producer/creator so the same
   // input renders byte-identical output.
@@ -339,6 +345,7 @@ async function renderPdf(input: RenderInput): Promise<{ bytes: Uint8Array; sha25
     reg: await doc.embedFont(StandardFonts.Helvetica),
     bold: await doc.embedFont(StandardFonts.HelveticaBold),
     ital: await doc.embedFont(StandardFonts.HelveticaOblique),
+    logo: await doc.embedJpg(LOGO_BYTES), // embed once; reused on every page
     input,
   };
   await newPage(ctx);
@@ -370,7 +377,7 @@ async function renderPdf(input: RenderInput): Promise<{ bytes: Uint8Array; sha25
   const bytes = await doc.save();
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   const sha256 = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-  return { bytes, sha256 };
+  return { bytes, sha256, pages: doc.getPages().length };
 }
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
@@ -455,10 +462,10 @@ Deno.serve(async (req: Request) => {
     return err(`load failed: ${String((e as Error)?.message ?? e)}`, 500);
   }
 
-  let rendered: { bytes: Uint8Array; sha256: string };
+  let rendered: { bytes: Uint8Array; sha256: string; pages: number };
   try { rendered = await renderPdf(input); } catch (e) { return err(`render failed: ${String((e as Error)?.message ?? e)}`, 500); }
 
-  const resp: Record<string, unknown> = { ok: true, mode: input.mode, sha256: rendered.sha256, pages: undefined };
+  const resp: Record<string, unknown> = { ok: true, mode: input.mode, sha256: rendered.sha256, pages: rendered.pages };
 
   if (store) {
     const bucket = input.mode === "executed" ? "legal-executed" : "legal-generated-drafts";
