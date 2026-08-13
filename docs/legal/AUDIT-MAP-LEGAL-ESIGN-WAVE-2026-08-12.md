@@ -3,9 +3,31 @@
 **Spec:** `FNC-CANONICAL-LEGAL-DOCUMENTS-ESIGN-ONBOARDING-SPEC-2026-08-12.md`
 **Produced:** 2026-08-12 · **Required by:** spec §19 (audit map before any code)
 **Method:** read-only sweep of all 135 live migrations under `supabase/migrations/`.
-**Owner ruling recorded:** the 2026-08-12 spec §4.2 **supersedes** consolidation §2.4 — the Bright-Destiny sub-lead-referrer deduction comes from Bright Destiny's (Doctor's) share, not Thapelo's residual.
+**Owner ruling recorded — ⚠️ SUPERSEDED, see §0 CORRECTIONS (C1) below:** ~~the 2026-08-12 spec §4.2 supersedes consolidation §2.4 — the Bright-Destiny sub-lead-referrer deduction comes from Bright Destiny's (Doctor's) share, not Thapelo's residual.~~ → **Corrected:** the CRM carves the Lead-Referrer earning from **Thapelo's residual (`owner_share`) for BOTH paths** — never from Doctor's share. The 12–22% is contract text only, not the CRM calc. Build 56 / PR #198 already encodes this; keep it.
 
 > Purpose: so the 15-PR wave **extends canonical objects** instead of forking parallel ones (spec §11/§19). Every capability below is graded against what is already live.
+
+---
+
+## 0. CORRECTIONS (post-dated — read before the table)
+
+*Added 2026-08-13. This map was written 2026-08-12 as a read-only snapshot. Some capabilities were built + applied to live **later the same day**, and the money-source ruling was reversed afterward. §1's table is a point-in-time artifact and is stale where noted here. **Where this section conflicts with anything below it, THIS section wins.***
+
+**C1 — Money source (corrects the "Owner ruling recorded" line above).** Final owner ruling (2026-08-12b handover, PR #229): the CRM carves the Lead-Referrer earning from **Thapelo's residual (`commission_records.owner_share`) for BOTH Path A and Path B** — never from Doctor's/Bright Destiny's share, and never from FNC's 40 % retention. The 12–22 % contract figure is agreement text only, not the CRM calc. **Build 56 / PR #198 already encodes exactly this — keep it; forward-fix only, never rewrite it, leave `commission_records` untouched.** The one open money detail is the **Path-A tier base** (a Direct-FNC deal has no `partner_share`), which the owner must confirm before Build 56's Path-A support is coded — do not invent it.
+
+**C2 — Machinery grades in §1 are stale (built + applied to live the same day this map was written).** Verified against the live migration list 2026-08-13. Do **NOT** rebuild any of these — extend them:
+
+| §1 row | Was | Actual | Live migration (PR) |
+|---|---|---|---|
+| 1 `legal_source_assets` | 🔴 | 🟢 BUILT + LIVE (+ `legal_template_clause_sources`, `register_legal_source_asset`, `set_template_clause_source`, 5 `legal-*` buckets) | `legal_source_assets_buckets` (#218) |
+| 4 clause→source map | 🔴 | 🟢 BUILT + LIVE (`legal_template_clause_sources`) | same (#218) |
+| 5 `role_document_requirements` | 🔴 | 🟢 BUILT + LIVE (+ `resolve_role_document_package`, owner setters) | `role_document_requirements` (#201) |
+| 7–13 agreement / signature / executed / consent | 🔴 | 🟢 BUILT + LIVE — `agreement_instances`, `agreement_party_snapshots`, `agreement_variable_snapshots`, `signature_requests`, append-only `signature_events`, `signature_artifacts`, `executed_document_artifacts`, `consent_records` + server-controlled state machine (client cannot set `executed`) + full RPC surface (`create_agreement_instance`, `add_agreement_party`, `set_agreement_variables`, `send_agreement`, `open`/`resolve_signature_request`, `record_agreement_consent`, `submit_agreement_signature`, `countersign_agreement`, `withdraw_agreement`, `decline_signature_request`, `expire_due_agreements`) | `esign_evidence_backend_schema` / `_rpcs` + `esign_backend_rpc_fixes` (#200, #214) |
+| success-fee model (§1 extra row) | 🔴 | 🟢 BUILT + LIVE — `deal_success_fees` + `success_fee_method` / `percentage_base` / `vat_treatment` enums + `set` / `freeze` / `summary` RPCs + immutable-after-freeze trigger | `deal_success_fees` (#220) |
+
+Net effect: the **machinery half** of the wave (this map's §7 recommended PRs A/B/C/D + spec PR 7) is **already live**. Remaining: the money-model Path-A fix (gated on the base ruling), the PDF renderer (#222 — still a draft), content ingestion once the approved PDFs land, the onboarding + client packages, the owner + signing UIs, delivery/retention (email-domain gated), and the E2E smoke harness.
+
+**C3 — Two merged migrations are NOT yet applied to live** (confirmed absent from the live migration list 2026-08-13): Build 56 / PR #198 (`lead_referrer_commission_engine`) and Build 57 / PR #199 (`doctor_my_network`, which depends on #198's table). They sit in `main` awaiting the single-actor apply after the Path-A ruling — the next apply must land #198 + its forward-fix before #199.
 
 ---
 
