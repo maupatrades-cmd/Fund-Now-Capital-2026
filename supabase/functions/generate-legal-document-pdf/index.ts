@@ -234,16 +234,26 @@ async function drawBody(ctx: Ctx, md: string) {
 async function drawPartyTable(ctx: Ctx, parties: Party[]) {
   if (!parties.length) return;
   await drawHeading(ctx, "Parties", 2);
-  const rowH = 30;
+  const innerW = CONTENT_W - 16; // 8px padding each side
   for (const p of [...parties].sort((a, b) => a.party_order - b.party_order)) {
+    const roleLabel = (p.is_fnc ? "FNC (countersignatory)" : p.party_role.replace(/_/g, " ")).toUpperCase();
+    // Wrap the legal name and the capacity / represented-party detail onto their
+    // own stacked lines. Previously both were drawn on one baseline (name left,
+    // detail right-aligned) with no width limit, so a long legal name overflowed
+    // the row and could overlap the detail — making the legal identity unreadable
+    // on a binding document. Row height is now derived from the wrapped lines.
+    const nameLines = splitText(ctx, p.legal_name, "bold", 10, innerW);
+    const rightBits = [p.capacity, p.represented_party].filter(Boolean).join(" · ");
+    const detailLines = rightBits ? splitText(ctx, rightBits, "reg", 8.5, innerW) : [];
+    const rowH = 32 + nameLines.length * 13 + detailLines.length * 12;
     await ensureSpace(ctx, rowH + 4);
     rect(ctx, M, ctx.y, CONTENT_W, rowH, ctx.input.mode === "preview" ? PANEL : WHITE);
     hline(ctx, M, ctx.y + rowH, PAGE_W - M, 0.5, HAIR);
-    const roleLabel = p.is_fnc ? "FNC (countersignatory)" : p.party_role.replace(/_/g, " ");
-    drawText(ctx, roleLabel.toUpperCase(), M + 8, ctx.y + 12, { size: 7, font: "bold", color: MUTED });
-    drawText(ctx, p.legal_name, M + 8, ctx.y + 24, { size: 10, font: "bold", color: NAVY });
-    const rightBits = [p.capacity, p.represented_party].filter(Boolean).join(" · ");
-    if (rightBits) drawText(ctx, rightBits, PAGE_W - M - 8, ctx.y + 24, { size: 8.5, color: INK, align: "right" });
+    let yy = ctx.y + 12;
+    drawText(ctx, roleLabel, M + 8, yy, { size: 7, font: "bold", color: MUTED });
+    yy += 14;
+    for (const nl of nameLines) { drawText(ctx, nl, M + 8, yy, { size: 10, font: "bold", color: NAVY }); yy += 13; }
+    for (const dl of detailLines) { drawText(ctx, dl, M + 8, yy, { size: 8.5, color: INK }); yy += 12; }
     ctx.y += rowH;
   }
   ctx.y += 8;
@@ -266,11 +276,16 @@ async function drawFeeSummary(ctx: Ctx, fee: Record<string, unknown> | null) {
 
 async function drawSignatureBlocks(ctx: Ctx, parties: Party[]) {
   await drawHeading(ctx, "Signatures", 2);
-  const blockH = 78;
   for (const p of [...parties].sort((a, b) => a.party_order - b.party_order)) {
-    // Keep each signature block whole on one page (§8.4).
-    await ensureSpace(ctx, blockH);
     const label = p.is_fnc ? "For Fund Now Capital (Pty) Ltd" : "Signatory";
+    // Wrap the legal name + capacity so a long value never overflows the block
+    // (same readability guarantee as the party table). Block height is derived
+    // from the wrapped line counts so it stays whole on one page (§8.4).
+    const nameLines = splitText(ctx, p.legal_name, "bold", 9.5, CONTENT_W);
+    const cap = [p.capacity, p.represented_party].filter(Boolean).join(", ");
+    const capLines = cap ? splitText(ctx, cap, "reg", 8, CONTENT_W) : [];
+    const blockH = 34 + 22 + 12 + nameLines.length * 12 + capLines.length * 11 + 14;
+    await ensureSpace(ctx, blockH);
     drawText(ctx, label, M, ctx.y + 10, { size: 8, font: "bold", color: MUTED });
     ctx.y += 34;
     hline(ctx, M, ctx.y, M + 220, 0.75, INK);
@@ -278,10 +293,10 @@ async function drawSignatureBlocks(ctx: Ctx, parties: Party[]) {
     drawText(ctx, "Signature", M, ctx.y + 12, { size: 7.5, color: MUTED });
     drawText(ctx, "Date", PAGE_W - M - 150, ctx.y + 12, { size: 7.5, color: MUTED });
     ctx.y += 22;
-    drawText(ctx, p.legal_name, M, ctx.y + 10, { size: 9.5, font: "bold", color: NAVY });
-    const cap = [p.capacity, p.represented_party].filter(Boolean).join(", ");
-    if (cap) drawText(ctx, cap, M, ctx.y + 22, { size: 8, color: INK });
-    ctx.y += blockH - 34 - 22 + 18;
+    let ny = ctx.y + 10;
+    for (const nl of nameLines) { drawText(ctx, nl, M, ny, { size: 9.5, font: "bold", color: NAVY }); ny += 12; }
+    for (const cl of capLines) { drawText(ctx, cl, M, ny, { size: 8, color: INK }); ny += 11; }
+    ctx.y = ny + 14;
   }
 }
 
@@ -290,16 +305,22 @@ async function drawCertificatePage(ctx: Ctx) {
   await drawHeading(ctx, "Execution Certificate", 1);
   await drawParagraph(
     ctx,
-    "This certificate accompanies the executed agreement and records its integrity and execution evidence. " +
-      "Network and identity details are retained privately in the platform's evidence record.",
+    "This certificate accompanies the executed agreement and records its content integrity. " +
+      "The executed-file hash and the network / identity details are retained privately in the platform's " +
+      "evidence record; they are not reproduced here, because a document cannot contain its own final hash " +
+      "(embedding it would change the very bytes it describes).",
   );
+  // Show ONLY the stable content (unsigned) SHA-256, which correctly describes the
+  // agreement content. The executed-FILE self-hash is deliberately omitted: this
+  // renderer regenerates bytes on demand, so a persisted executed-file hash would
+  // not match these bytes. The canonical executed artifact + its hash are committed
+  // atomically by the execution transition (Build 9), not by this renderer.
   const rows: [string, string][] = [
     ["Document reference", ctx.input.reference],
     ["Certificate reference", ctx.input.certificateReference || "—"],
     ["Template version", ctx.input.templateVersion],
     ["Executed at", formatDate(ctx.input.executedAt)],
-    ["Unsigned SHA-256", ctx.input.unsignedSha256 || "—"],
-    ["Executed SHA-256", ctx.input.executedSha256 || "—"],
+    ["Content SHA-256 (unsigned)", ctx.input.unsignedSha256 || "—"],
   ];
   for (const [k, v] of rows) {
     await ensureSpace(ctx, 22);
@@ -407,12 +428,20 @@ Deno.serve(async (req: Request) => {
         .eq("id", agreementId).single();
       if (aiErr || !ai) return err(aiErr?.message ?? "agreement not found", 404);
 
-      const { data: tv } = await supabase.from("legal_document_template_versions")
+      // Required reads — a query FAILURE (network / RLS) must abort. Never
+      // silently render an incomplete agreement with a fallback entity, empty
+      // content, or no parties (and never upload that as a "document").
+      const { data: tv, error: tvErr } = await supabase.from("legal_document_template_versions")
         .select("version, effective_date, content_markdown, template_id").eq("id", ai.template_version_id).single();
-      const { data: tpl } = tv ? await supabase.from("legal_document_templates")
-        .select("title, legal_entity, jurisdiction").eq("id", tv.template_id).single() : { data: null };
-      const { data: parties } = await supabase.from("agreement_party_snapshots")
+      if (tvErr || !tv) return err(tvErr?.message ?? "template version not found", 404);
+      const { data: tpl, error: tplErr } = await supabase.from("legal_document_templates")
+        .select("title, legal_entity, jurisdiction").eq("id", tv.template_id).single();
+      if (tplErr || !tpl) return err(tplErr?.message ?? "template not found", 404);
+      const { data: parties, error: partiesErr } = await supabase.from("agreement_party_snapshots")
         .select("party_role, party_order, legal_name, represented_party, capacity, email, is_fnc").eq("agreement_id", agreementId);
+      if (partiesErr) return err(partiesErr.message, 502);
+      // Optional evidence reads — a missing row is legitimate (e.g. preview before
+      // execution), so these stay optional; only their absence is tolerated.
       const { data: vars } = await supabase.from("agreement_variable_snapshots").select("fee_summary").eq("agreement_id", agreementId).maybeSingle();
       const { data: exec } = await supabase.from("executed_document_artifacts").select("certificate_reference, executed_pdf_sha256, executed_at, unsigned_sha256").eq("agreement_id", agreementId).maybeSingle();
 
@@ -468,8 +497,14 @@ Deno.serve(async (req: Request) => {
   const resp: Record<string, unknown> = { ok: true, mode: input.mode, sha256: rendered.sha256, pages: rendered.pages };
 
   if (store) {
-    const bucket = input.mode === "executed" ? "legal-executed" : "legal-generated-drafts";
-    const path = `${input.mode === "executed" ? "executed" : "preview"}/${input.reference}-${rendered.sha256.slice(0, 12)}.pdf`;
+    // This renderer only ever produces a RENDERED COPY, never the canonical
+    // executed artifact of record. The binding executed PDF and its hash are
+    // committed atomically by the execution transition (Build 9), so a
+    // regenerated file must not masquerade as evidence under legal-executed.
+    // Both modes therefore store to the drafts bucket; resp.sha256 describes
+    // exactly THESE bytes.
+    const bucket = "legal-generated-drafts";
+    const path = `${input.mode}/${input.reference}-${rendered.sha256.slice(0, 12)}.pdf`;
     const { error: upErr } = await supabase.storage.from(bucket).upload(path, rendered.bytes, { contentType: "application/pdf", upsert: true });
     if (upErr) return err(`upload failed: ${upErr.message}`, 500);
     resp.bucket = bucket;
