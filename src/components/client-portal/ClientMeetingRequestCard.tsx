@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CheckCircle2, Clock3, Loader2, Phone, Video, X } from "lucide-react";
+import { CalendarClock, CheckCircle2, Clock3, Loader2, MapPin, Phone, Video, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useClientPortalIdentity } from "@/hooks/useClientPortalIdentity";
@@ -56,9 +56,18 @@ function formatDateTime(value: string | null) {
 }
 
 function defaultMinimumTime() {
-  const value = new Date(Date.now() + 60 * 60 * 1000);
-  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
+  const sastOffsetMs = 2 * 60 * 60 * 1000;
+  return new Date(Date.now() + 60 * 60 * 1000 + sastOffsetMs).toISOString().slice(0, 16);
+}
+
+function sastWallClockToIso(value: string) {
+  return new Date(`${value}:00+02:00`).toISOString();
+}
+
+function ContactMethodIcon({ method }: { method: ContactMethod }) {
+  if (method === "phone") return <Phone className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (method === "in_person") return <MapPin className="h-3.5 w-3.5" aria-hidden="true" />;
+  return <Video className="h-3.5 w-3.5" aria-hidden="true" />;
 }
 
 export default function ClientMeetingRequestCard() {
@@ -94,8 +103,8 @@ export default function ClientMeetingRequestCard() {
         p_subject: subject.trim(),
         p_notes: notes.trim() || null,
         p_contact_method: contactMethod,
-        p_preferred_start: new Date(preferredStart).toISOString(),
-        p_alternate_start: alternateStart ? new Date(alternateStart).toISOString() : null,
+        p_preferred_start: sastWallClockToIso(preferredStart),
+        p_alternate_start: alternateStart ? sastWallClockToIso(alternateStart) : null,
         p_timezone: "Africa/Johannesburg",
       });
       if (error) throw error;
@@ -251,7 +260,7 @@ export default function ClientMeetingRequestCard() {
                   <div>
                     <p className="text-sm font-bold">{request.subject}</p>
                     <p className="mt-1 flex items-center gap-1.5 text-xs text-white/45">
-                      {request.contact_method === "phone" ? <Phone className="h-3.5 w-3.5" aria-hidden="true" /> : <Video className="h-3.5 w-3.5" aria-hidden="true" />}
+                      <ContactMethodIcon method={request.contact_method} />
                       {confirmedTime ? `Confirmed for ${confirmedTime}` : `Requested ${formatDateTime(request.preferred_start)}`}
                     </p>
                   </div>
@@ -268,7 +277,7 @@ export default function ClientMeetingRequestCard() {
                 {request.status === "pending" ? (
                   <button
                     type="button"
-                    disabled={cancelRequest.isPending}
+                    disabled={cancelRequest.isPending && cancelRequest.variables === request.id}
                     onClick={() => cancelRequest.mutate(request.id)}
                     className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-white/45 hover:text-red-200 disabled:opacity-50"
                   >
