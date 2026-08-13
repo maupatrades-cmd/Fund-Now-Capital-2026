@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { FilePlus2, Home, LogOut } from "lucide-react";
+import { FilePlus2, Home, LogOut, Send } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -8,6 +8,7 @@ import { useSession } from "@/lib/useSession";
 const navigation = [
   { to: "/lead-referrer", label: "Dashboard", icon: Home, end: true },
   { to: "/lead-referrer/submit-lead", label: "New lead", icon: FilePlus2, end: false },
+  { to: "/lead-referrer/client-invitations", label: "Client invitations", icon: Send, end: false },
 ];
 
 export function LeadReferrerShell({ children }: { children: ReactNode }) {

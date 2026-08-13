@@ -22,6 +22,7 @@ import {
   HandCoins,
   Coins,
   ShieldCheck,
+  Send,
   type LucideIcon,
 } from "lucide-react";
 
@@ -38,6 +39,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/pipeline", label: "Pipeline", icon: GitBranch },
   { to: "/tasks", label: "Tasks", icon: ListTodo },
   { to: "/clients", label: "Clients", icon: Users },
+  { to: "/client-invitations", label: "Client Invitations", icon: Send },
   { to: "/documents", label: "Documents", icon: FolderOpen },
   { to: "/funders", label: "Funders", icon: Landmark },
   { to: "/invoices", label: "Invoices", icon: Receipt },
