@@ -183,6 +183,9 @@ export default function ClientHomePage() {
               </div>
               <h2 className="mt-5 text-xl font-extrabold">Smart document checklist</h2>
               <p className="mt-2 text-sm leading-6 text-white/48">Your checklist will combine your funding type, Owner review and the selected funder’s requirements—without exposing private funder details.</p>
+              <Link to="/client/legal-documents" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-extrabold text-[#a2eb80] transition hover:bg-white/10 hover:text-white">
+                View legal documents <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
             </article>
 
             <ClientMeetingRequestCard />
