@@ -32,7 +32,10 @@ async function loadReadiness(): Promise<Row[]> {
 
 export default function ClientLegalDocumentsPage() {
   const query = useQuery({ queryKey: ["client-legal-readiness"], queryFn: loadReadiness });
-  const byKey = new Map(query.data?.map((row) => [row.document_key, row]));
+  const byKey = new Map<Row["document_key"], Row>();
+  for (const row of query.data ?? []) {
+    if (!byKey.has(row.document_key)) byKey.set(row.document_key, row);
+  }
   const completed = documents.filter((document) => byKey.get(document.key)?.status === "complete").length;
 
   return (
