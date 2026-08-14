@@ -53,3 +53,9 @@ verify_jwt = false
 
 [functions.resolve-client-invitation]
 verify_jwt = false
+
+# generate-legal-document-pdf renders a branded A4 legal document PDF (spec PR 6).
+# Invoked server-side with a shared X-Webhook-Secret header (no caller JWT), same
+# pattern as generate-invoice-pdf / send-notification-email.
+[functions.generate-legal-document-pdf]
+verify_jwt = false
