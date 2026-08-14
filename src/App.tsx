@@ -66,6 +66,7 @@ import IndustriesPage from "@/pages/IndustriesPage";
 import FundersSettingsPage from "@/pages/FundersSettingsPage";
 import TeamPage from "@/pages/TeamPage";
 import TermsAdminPage from "@/pages/TermsAdminPage";
+import LegalStudioPage from "@/pages/LegalStudioPage";
 import OwnerPayeesPage from "@/pages/OwnerPayeesPage";
 import { ConfettiProvider } from "@/lib/celebration/ConfettiProvider";
 import { useProfileRole } from "@/hooks/useProfileRole";
@@ -228,6 +229,7 @@ function AppRoutes() {
         <Route path="/settings/industries" element={<IndustriesPage />} />
         <Route path="/settings/funders" element={<FundersSettingsPage />} />
         <Route path="/settings/terms" element={<TermsAdminPage />} />
+        <Route path="/settings/legal-studio" element={<LegalStudioPage />} />
         <Route path="/settings/payees" element={<OwnerPayeesPage />} />
       </Route>
 
