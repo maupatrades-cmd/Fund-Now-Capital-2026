@@ -23,6 +23,7 @@ import {
   Coins,
   ShieldCheck,
   Send,
+  Gavel,
   type LucideIcon,
 } from "lucide-react";
 
@@ -59,4 +60,5 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/settings/funders", label: "Funder rates", icon: Percent },
   { to: "/settings/payees", label: "Payee banking", icon: Banknote },
   { to: "/settings/terms", label: "Terms", icon: ScrollText },
+  { to: "/settings/legal-studio", label: "Document Studio", icon: Gavel },
 ];
