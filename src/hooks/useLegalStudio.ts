@@ -175,3 +175,47 @@ export function useSupersedeVersion() {
     onSuccess: invalidate,
   });
 }
+
+export type IngestSourceAssetInput = {
+  sourceKey: string;
+  storagePath: string;
+  templateId?: string | null;
+  version?: string | null;
+};
+
+// Build 4 — invoke the ingest-legal-source-asset Edge Function, which hashes the
+// uploaded PDF server-side and verifies it against the approved digest (and,
+// optionally, creates a source-backed template version). functions.invoke
+// attaches the owner's session JWT; the function authorises is_owner() itself.
+export function useIngestSourceAsset() {
+  const invalidate = useStudioInvalidator();
+  return useMutation({
+    mutationFn: async (input: IngestSourceAssetInput) => {
+      const { data, error } = await supabase.functions.invoke("ingest-legal-source-asset", {
+        body: {
+          source_key: input.sourceKey,
+          storage_path: input.storagePath,
+          template_id: input.templateId ?? undefined,
+          version: input.version ?? undefined,
+        },
+      });
+      if (error) {
+        // supabase-js FunctionsHttpError hides the function's JSON body in
+        // error.context (a Response) — surface the real message when present.
+        let message = error.message;
+        try {
+          const ctx = (error as { context?: Response }).context;
+          if (ctx && typeof ctx.json === "function") {
+            const body = await ctx.json();
+            if (body?.error) message = body.error as string;
+          }
+        } catch {
+          // keep error.message
+        }
+        throw new Error(message);
+      }
+      return data as { ok: boolean; status: string; computed_sha256?: string };
+    },
+    onSuccess: invalidate,
+  });
+}
