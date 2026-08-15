@@ -223,6 +223,25 @@ export function signingUrl(token: string): string {
   return `${origin}/sign/${token}`;
 }
 
+/**
+ * States from which nothing further can happen. Shared by the register's "Open"
+ * filter and the detail page's action gating — when these two lists drifted
+ * apart, a failed agreement showed as Open while offering no action at all.
+ */
+export const TERMINAL_AGREEMENT_STATES: AgreementState[] = [
+  "executed",
+  "expired",
+  "declined",
+  "withdrawn",
+  "superseded",
+  "delivery_failed",
+  "identity_failed",
+];
+
+export function isTerminalAgreementState(state: AgreementState): boolean {
+  return TERMINAL_AGREEMENT_STATES.includes(state);
+}
+
 export const AGREEMENT_STATE_LABEL: Record<AgreementState, string> = {
   draft: "Draft",
   approved_for_send: "Approved to send",

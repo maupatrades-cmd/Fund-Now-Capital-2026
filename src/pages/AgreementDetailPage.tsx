@@ -6,6 +6,7 @@ import { useAgreement, useWithdrawAgreement } from "@/hooks/useAgreements";
 import { StatePill } from "@/pages/AgreementsPage";
 import {
   documentTypeLabel,
+  isTerminalAgreementState,
   REQUIRED_CONSENTS,
   type AgreementPartyRow,
   type ConsentRow,
@@ -19,16 +20,6 @@ import {
  * prettified summary: the signing events, the per-party acknowledgements, and
  * the document fingerprints. This page IS the audit view.
  */
-
-const TERMINAL = [
-  "executed",
-  "expired",
-  "declined",
-  "withdrawn",
-  "superseded",
-  "delivery_failed",
-  "identity_failed",
-];
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "—";
@@ -176,7 +167,7 @@ export default function AgreementDetailPage() {
   }
 
   const { instance, parties, events } = data;
-  const isTerminal = TERMINAL.includes(instance.state);
+  const isTerminal = isTerminalAgreementState(instance.state);
 
   const handleWithdraw = async () => {
     try {

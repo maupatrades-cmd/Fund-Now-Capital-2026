@@ -12,6 +12,7 @@ import {
 } from "@/hooks/useLegalStudio";
 import {
   documentTypeLabel,
+  sha256Hex,
   signingUrl,
   type AgreementPartyInput,
   type SendResult,
@@ -53,11 +54,11 @@ export default function NewAgreementPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   /*
-   * A stable idempotency key per form instance. `create_agreement_instance` is
-   * idempotent on it, so a retry after a mid-sequence failure resumes the SAME
-   * draft rather than stranding a new orphan draft on each attempt.
+   * Per-form-instance nonce. Combined with a hash of the form's contents below
+   * to build the idempotency key, so two separate sends of an identical form
+   * (e.g. the same NDA to the same person twice) still produce two agreements.
    */
-  const [idempotencyKey] = useState(() =>
+  const [formNonce] = useState(() =>
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `agr-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -126,6 +127,20 @@ export default function NewAgreementPage() {
     ];
 
     try {
+      /*
+       * Key = form nonce + a hash of everything that ends up ON the document.
+       *
+       * Retrying an unchanged form resumes the draft a failed attempt left
+       * behind (the orchestration skips parties already inserted). Retrying an
+       * EDITED form — a corrected signer name, a different template — produces a
+       * different key and therefore a NEW draft, so the correction can never be
+       * skipped as "already added" and quietly bind someone under the old name.
+       */
+      const contentHash = await sha256Hex(
+        JSON.stringify([versionId, signerProfileId, parties, variableMap, expiryDays]),
+      );
+      const idempotencyKey = `${formNonce}:${(contentHash ?? "nohash").slice(0, 32)}`;
+
       const res = await createAndSend.mutateAsync({
         templateVersionId: versionId,
         subjectProfileId: signerProfileId || null,

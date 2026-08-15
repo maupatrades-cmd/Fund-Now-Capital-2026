@@ -114,11 +114,36 @@ export function useAgreementSigning(token: string) {
         const uid = userData?.user?.id;
         if (!uid) throw new Error("You must be signed in to sign.");
 
-        const mime = SIGNATURE_ACCEPTED_TYPES.includes(input.image.type)
-          ? input.image.type
-          : "image/png";
+        /*
+         * Never RELABEL an unexpected type as PNG. The `accept` attribute on a
+         * file input is a hint, not a gate — a signer can pick a PDF or an SVG.
+         * Coercing its content-type to image/png would walk it straight past the
+         * bucket's allowed_mime_types guard (which checks the DECLARED type) and
+         * store non-image bytes as signature evidence.
+         *
+         * A drawn signature is exempt from the check because we produce it
+         * ourselves from the canvas — it is always a real PNG.
+         */
+        let mime: string;
+        if (input.method === "drawn") {
+          mime = "image/png";
+        } else {
+          if (!SIGNATURE_ACCEPTED_TYPES.includes(input.image.type)) {
+            throw new Error("Your signature image must be a PNG or JPEG file.");
+          }
+          mime = input.image.type;
+        }
+
         const bytes = await input.image.arrayBuffer();
         artifactSha = await sha256HexOfBytes(bytes);
+        // The fingerprint is the whole point of storing an artifact — it proves
+        // which bytes were signed. Recording a signature without one silently
+        // degrades the evidence, so fail loudly instead.
+        if (!artifactSha) {
+          throw new Error(
+            "Could not fingerprint the signature image on this device. Try again, or use the Type option.",
+          );
+        }
         storagePath = signatureObjectPath(uid, input.agreementId, extensionForMime(mime));
 
         const { error: uploadErr } = await supabase.storage

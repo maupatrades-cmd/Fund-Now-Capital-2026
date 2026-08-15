@@ -346,7 +346,14 @@ export default function SignAgreementPage() {
                   role="tab"
                   aria-selected={method === tab.method}
                   disabled={!allConsentsRecorded}
-                  onClick={() => setMethod(tab.method)}
+                  onClick={() => {
+                    // Switching tabs unmounts the pad, so its strokes are gone.
+                    // Clear the parent's ink flag too, or coming back to an empty
+                    // pad would leave Sign enabled over a blank canvas.
+                    setHasInk(false);
+                    setActionError(null);
+                    setMethod(tab.method);
+                  }}
                   className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
                     method === tab.method
                       ? "bg-white text-brand-navy shadow-sm"
@@ -391,6 +398,13 @@ export default function SignAgreementPage() {
                     onChange={(e) => {
                       const file = e.target.files?.[0] ?? null;
                       setActionError(null);
+                      // `accept` above is only a hint — the picker can still hand
+                      // back anything, so validate type and size for real here.
+                      if (file && !SIGNATURE_ACCEPTED_TYPES.includes(file.type)) {
+                        setActionError("Choose a PNG or JPEG image.");
+                        setUploadFile(null);
+                        return;
+                      }
                       if (file && file.size > SIGNATURE_MAX_BYTES) {
                         setActionError("That image is too large (2MB maximum).");
                         setUploadFile(null);

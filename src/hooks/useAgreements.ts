@@ -122,10 +122,10 @@ export type CreateAndSendInput = {
   variables: Record<string, string>;
   expiryDays: number;
   /*
-   * Stable per-attempt key. `create_agreement_instance` is idempotent on it, so
-   * a retry after a mid-sequence failure (e.g. the network dropped between
-   * adding party 1 and party 2) re-uses the SAME draft instead of stranding an
-   * orphan draft on every retry.
+   * Content-derived key. `create_agreement_instance` is idempotent on it, so a
+   * retry of the SAME form resumes the same draft instead of stranding an orphan
+   * on every attempt — while an EDITED form yields a different key and starts a
+   * fresh draft, so a corrected name can never be skipped as "already added".
    */
   idempotencyKey: string;
 };
@@ -154,11 +154,29 @@ export function useCreateAndSendAgreement() {
       const agreementId = (instance as { id?: string } | null)?.id;
       if (!agreementId) throw new Error("The agreement was not created.");
 
-      // Parties are added in the order given; party_order drives signing order
-      // and is unique per agreement, so a retry of an already-added party would
-      // collide. We only reach here on a fresh draft or a resumed one with no
-      // parties yet (the wizard sends the whole set in one go).
+      /*
+       * `party_order` is UNIQUE per agreement, so re-adding a party that a
+       * previous attempt already inserted would raise a unique violation and
+       * strand the draft forever — the resumability this orchestration promises
+       * only works if we skip what is already there.
+       *
+       * Safe to key on order alone because the caller's idempotency key is
+       * derived from the form's contents (see NewAgreementPage): an EDITED form
+       * produces a different key and therefore a different draft, so a resumed
+       * draft always describes the same parties we are about to add. Without
+       * that, skipping here would silently bind someone under a stale name.
+       */
+      const { data: existingParties, error: existingErr } = await supabase
+        .from("agreement_party_snapshots")
+        .select("party_order")
+        .eq("agreement_id", agreementId);
+      if (existingErr) throw existingErr;
+      const alreadyAdded = new Set(
+        (existingParties ?? []).map((r) => r.party_order as number),
+      );
+
       for (let i = 0; i < input.parties.length; i += 1) {
+        if (alreadyAdded.has(i + 1)) continue; // inserted by a prior attempt
         const p = input.parties[i];
         const { error: partyErr } = await supabase.rpc("add_agreement_party", {
           p_agreement_id: agreementId,

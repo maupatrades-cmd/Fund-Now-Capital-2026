@@ -6,6 +6,7 @@ import {
   AGREEMENT_STATE_LABEL,
   agreementStateTone,
   documentTypeLabel,
+  isTerminalAgreementState,
   type AgreementListRow,
   type AgreementState,
 } from "@/lib/agreements";
@@ -56,12 +57,7 @@ export default function AgreementsPage() {
     const visible =
       filter === "all"
         ? all
-        : all.filter(
-            (a) =>
-              !["executed", "expired", "declined", "withdrawn", "superseded"].includes(
-                a.state,
-              ),
-          );
+        : all.filter((a) => !isTerminalAgreementState(a.state));
     return [...visible].sort((a, b) => {
       const aNeeds = NEEDS_OWNER.includes(a.state) ? 0 : 1;
       const bNeeds = NEEDS_OWNER.includes(b.state) ? 0 : 1;
