@@ -6,7 +6,11 @@
 // The enum label sets are mirrored from the DB enums so the picker can never
 // offer a value the backend would reject. Keep them in sync with the migrations.
 
-export type LegalDocumentRole = "partner" | "contractor" | "lead_referrer";
+export type LegalDocumentRole =
+  | "partner"
+  | "contractor"
+  | "lead_referrer"
+  | "client";
 
 export type LegalDocumentType =
   | "referral_partner_agreement"
@@ -37,6 +41,7 @@ export const LEGAL_DOCUMENT_ROLES: LegalDocumentRole[] = [
   "partner",
   "contractor",
   "lead_referrer",
+  "client",
 ];
 
 export const LEGAL_DOCUMENT_TYPES: LegalDocumentType[] = [
@@ -60,6 +65,7 @@ export const LEGAL_DOCUMENT_ROLE_LABEL: Record<LegalDocumentRole, string> = {
   partner: "Partner",
   contractor: "Contractor",
   lead_referrer: "Lead Referrer",
+  client: "Client",
 };
 
 export const LEGAL_DOCUMENT_TYPE_LABEL: Record<LegalDocumentType, string> = {
