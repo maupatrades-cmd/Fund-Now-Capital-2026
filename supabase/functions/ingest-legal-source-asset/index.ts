@@ -142,11 +142,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_effective_date: null,
     });
     if (verErr) {
-      // The asset is already verified (that write stands); surface the version
-      // failure so the owner can retry just the version step.
+      // The asset IS verified (that write stands), but the requested template
+      // version was NOT created — a partial success. Return ok:false with a
+      // distinct status + version_error so the caller cannot mistake this for a
+      // clean verify; the owner retries only the version step.
       return json({
-        ok: true,
-        status: "verified",
+        ok: false,
+        status: "verified_version_failed",
         computed_sha256: computed,
         asset,
         version_error: verErr.message,

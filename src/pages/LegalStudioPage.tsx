@@ -205,6 +205,8 @@ export default function LegalStudioPage() {
         toast.success(`${verifyForm.asset.source_key} verified — hash matches the approved digest`);
       } else if (res.status === "mismatch") {
         toast.error(`${verifyForm.asset.source_key}: hash MISMATCH — the uploaded file does not match the approved digest. Publication stays blocked.`);
+      } else if (res.status === "verified_version_failed") {
+        toast.error(`${verifyForm.asset.source_key} verified, but the template version could not be created${res.version_error ? ` (${res.version_error})` : ""}.`);
       } else {
         toast.message(`${verifyForm.asset.source_key}: ${res.status}`);
       }

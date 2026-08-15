@@ -214,7 +214,7 @@ export function useIngestSourceAsset() {
         }
         throw new Error(message);
       }
-      return data as { ok: boolean; status: string; computed_sha256?: string };
+      return data as { ok: boolean; status: string; computed_sha256?: string; version_error?: string };
     },
     onSuccess: invalidate,
   });
