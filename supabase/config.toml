@@ -59,3 +59,10 @@ verify_jwt = false
 # pattern as generate-invoice-pdf / send-notification-email.
 [functions.generate-legal-document-pdf]
 verify_jwt = false
+
+# ingest-legal-source-asset (Build 4) hashes an uploaded legal source PDF
+# server-side and verifies it against the approved digest. Invoked from the
+# owner's browser; it authenticates the caller itself (is_owner()), so
+# verify_jwt = false (to answer CORS preflight + return clean JSON errors).
+[functions.ingest-legal-source-asset]
+verify_jwt = false

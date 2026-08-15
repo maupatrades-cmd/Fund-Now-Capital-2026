@@ -9,11 +9,13 @@ import {
   Radio,
   ShieldAlert,
   Undo2,
+  UploadCloud,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   useCreateTemplate,
   useCreateVersion,
+  useIngestSourceAsset,
   useLegalSourceAssets,
   useLegalTemplates,
   useLegalTemplateVersions,
@@ -125,11 +127,13 @@ export default function LegalStudioPage() {
   const submitForReview = useSubmitVersionForReview();
   const publish = usePublishVersion();
   const supersede = useSupersedeVersion();
+  const ingest = useIngestSourceAsset();
 
   const [templateForm, setTemplateForm] = useState<TemplateForm | null>(null);
   const [versionForm, setVersionForm] = useState<VersionForm | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [preview, setPreview] = useState<LegalTemplateVersion | null>(null);
+  const [verifyForm, setVerifyForm] = useState<{ asset: LegalSourceAsset; storagePath: string } | null>(null);
 
   // Group versions by template for quick lookup + current-version resolution.
   const versionsByTemplate = useMemo(() => {
@@ -187,6 +191,28 @@ export default function LegalStudioPage() {
       setVersionForm(null);
     } catch (error) {
       toast.error((error as Error).message || "Could not create the version");
+    }
+  };
+
+  const runVerify = async () => {
+    if (!verifyForm) return;
+    try {
+      const res = await ingest.mutateAsync({
+        sourceKey: verifyForm.asset.source_key,
+        storagePath: verifyForm.storagePath,
+      });
+      if (res.status === "verified") {
+        toast.success(`${verifyForm.asset.source_key} verified — hash matches the approved digest`);
+      } else if (res.status === "mismatch") {
+        toast.error(`${verifyForm.asset.source_key}: hash MISMATCH — the uploaded file does not match the approved digest. Publication stays blocked.`);
+      } else if (res.status === "verified_version_failed") {
+        toast.error(`${verifyForm.asset.source_key} verified, but the template version could not be created${res.version_error ? ` (${res.version_error})` : ""}.`);
+      } else {
+        toast.message(`${verifyForm.asset.source_key}: ${res.status}`);
+      }
+      setVerifyForm(null);
+    } catch (error) {
+      toast.error((error as Error).message || "Could not verify the uploaded PDF");
     }
   };
 
@@ -259,6 +285,16 @@ export default function LegalStudioPage() {
                   <div className="text-[11px] text-muted-foreground">{shortHash(asset.expected_sha256)}</div>
                 </div>
                 {sourceAssetPill(asset)}
+                {asset.status !== "verified" && (
+                  <button
+                    type="button"
+                    title="Verify an uploaded PDF against this approved hash"
+                    onClick={() => setVerifyForm({ asset, storagePath: `${asset.source_key}.pdf` })}
+                    className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-semibold text-brand-navy hover:bg-slate-50"
+                  >
+                    <UploadCloud className="h-3.5 w-3.5" /> Verify
+                  </button>
+                )}
               </div>
             ))}
             {(sourceAssets.data ?? []).length === 0 && (
@@ -465,6 +501,30 @@ export default function LegalStudioPage() {
                 No wording is attached to this version{preview.source_filename ? ` (source file: ${preview.source_filename})` : ""}.
               </p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Verify-upload modal ------------------------------------------------- */}
+      {verifyForm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Verify uploaded PDF">
+          <div className="w-full max-w-lg space-y-4 rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-brand-navy">Verify uploaded PDF</h2>
+            <p className="text-xs text-muted-foreground">
+              Confirm the file you uploaded to the private <span className="font-mono">legal-source-approved</span> bucket for
+              <span className="font-semibold"> {verifyForm.asset.source_key}</span>. Its SHA-256 is computed server-side and
+              checked against the approved digest — a mismatch is recorded and keeps publication blocked.
+            </p>
+            <label className="block text-sm font-medium text-brand-navy">Storage path (in legal-source-approved)
+              <input className={inputClass + " mt-1 font-mono"} value={verifyForm.storagePath} onChange={(e) => setVerifyForm({ ...verifyForm, storagePath: e.target.value })} placeholder="client_nda.pdf" />
+            </label>
+            <p className="text-[11px] text-muted-foreground">Approved digest: <span className="font-mono">{shortHash(verifyForm.asset.expected_sha256)}</span></p>
+            <div className="flex justify-end gap-2">
+              <button className="rounded-lg border border-border px-4 py-2 text-sm font-medium" onClick={() => setVerifyForm(null)}>Cancel</button>
+              <button disabled={ingest.isPending || !verifyForm.storagePath.trim()} className="inline-flex items-center gap-2 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" onClick={() => void runVerify()}>
+                {ingest.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Verify
+              </button>
+            </div>
           </div>
         </div>
       )}
