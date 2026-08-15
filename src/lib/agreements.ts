@@ -93,6 +93,191 @@ export type SigningPackage = {
   required_consent_kinds: ConsentKind[];
 };
 
+/* ------------------------------------------------------------------------- *
+ * Owner-side dispatch shapes (Build 8.2).
+ * ------------------------------------------------------------------------- */
+
+export type AgreementState =
+  | "draft"
+  | "approved_for_send"
+  | "sent"
+  | "viewed"
+  | "in_progress"
+  | "signer_signed"
+  | "countersign_pending"
+  | "executed"
+  | "expired"
+  | "declined"
+  | "withdrawn"
+  | "superseded"
+  | "delivery_failed"
+  | "identity_failed";
+
+export type AgreementListRow = {
+  id: string;
+  reference: string;
+  document_type: string;
+  title_snapshot: string;
+  state: AgreementState;
+  sent_at: string | null;
+  executed_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+};
+
+export type AgreementPartyRow = SigningParty & {
+  agreement_id: string;
+  party_order: number;
+  email: string | null;
+  profile_id: string | null;
+  frozen: boolean;
+};
+
+export type SignatureEventRow = {
+  id: string;
+  event_type: string;
+  occurred_at: string;
+  party_snapshot_id: string | null;
+  actor_profile_id: string | null;
+  signature_method: string | null;
+  detail: Record<string, unknown> | null;
+};
+
+export type ConsentRow = {
+  id: string;
+  party_snapshot_id: string;
+  consent_kind: string;
+  accepted: boolean;
+  notice_version: string | null;
+  created_at: string;
+};
+
+export type SignatureRequestRow = {
+  id: string;
+  party_snapshot_id: string;
+  issued_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  last_opened_at: string | null;
+  consumed_at: string | null;
+  delivery_status: string;
+};
+
+export type AgreementDetail = {
+  instance: AgreementListRow & {
+    template_version_id: string;
+    subject_profile_id: string | null;
+    unsigned_sha256: string | null;
+    executed_sha256: string | null;
+    decline_reason: string | null;
+    withdraw_reason: string | null;
+    frozen_at: string | null;
+    first_viewed_at: string | null;
+    signer_signed_at: string | null;
+    terminal_at: string | null;
+  };
+  parties: AgreementPartyRow[];
+  events: SignatureEventRow[];
+  consents: ConsentRow[];
+  requests: SignatureRequestRow[];
+};
+
+export type SignableProfile = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  role: string;
+};
+
+export type AgreementPartyInput = {
+  party_role: "signer" | "countersignatory" | "witness" | "data_subject";
+  legal_name: string;
+  represented_party: string;
+  capacity: string;
+  email: string;
+  profile_id: string | null;
+  is_fnc: boolean;
+};
+
+/**
+ * `send_agreement` returns the RAW signing tokens — the only time they exist in
+ * plaintext anywhere. Only the SHA-256 is stored, so these cannot be re-read
+ * later; the dispatch UI must surface them immediately and say so.
+ */
+export type SendResult = {
+  agreementId: string;
+  was_transitioned: boolean;
+  state: string;
+  reason?: string;
+  tokens?: Array<{
+    party_snapshot_id: string;
+    token: string;
+    expires_at: string;
+  }>;
+};
+
+/** Signing URL for a raw token, absolute so the owner can paste it into a message. */
+export function signingUrl(token: string): string {
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/sign/${token}`;
+}
+
+/**
+ * States from which nothing further can happen. Shared by the register's "Open"
+ * filter and the detail page's action gating — when these two lists drifted
+ * apart, a failed agreement showed as Open while offering no action at all.
+ */
+export const TERMINAL_AGREEMENT_STATES: AgreementState[] = [
+  "executed",
+  "expired",
+  "declined",
+  "withdrawn",
+  "superseded",
+  "delivery_failed",
+  "identity_failed",
+];
+
+export function isTerminalAgreementState(state: AgreementState): boolean {
+  return TERMINAL_AGREEMENT_STATES.includes(state);
+}
+
+export const AGREEMENT_STATE_LABEL: Record<AgreementState, string> = {
+  draft: "Draft",
+  approved_for_send: "Approved to send",
+  sent: "Sent",
+  viewed: "Viewed",
+  in_progress: "In progress",
+  signer_signed: "Signed",
+  countersign_pending: "Awaiting your countersignature",
+  executed: "Executed",
+  expired: "Expired",
+  declined: "Declined",
+  withdrawn: "Withdrawn",
+  superseded: "Superseded",
+  delivery_failed: "Delivery failed",
+  identity_failed: "Identity check failed",
+};
+
+/** Pill tone per state — green = done, amber = needs attention, slate = inert. */
+export function agreementStateTone(
+  state: AgreementState,
+): "ok" | "warn" | "live" | "muted" {
+  switch (state) {
+    case "executed":
+      return "ok";
+    case "countersign_pending":
+      return "warn";
+    case "sent":
+    case "viewed":
+    case "in_progress":
+    case "signer_signed":
+      return "live";
+    default:
+      return "muted";
+  }
+}
+
 /** Lowercase 64-hex SHA-256 of a UTF-8 string, or null where WebCrypto is absent. */
 export async function sha256Hex(input: string): Promise<string | null> {
   try {
@@ -124,6 +309,60 @@ export async function userAgentHash(): Promise<string | null> {
   const ua = (navigator.userAgent ?? "").trim();
   if (!ua) return null;
   return sha256Hex(ua.slice(0, 1024));
+}
+
+/* ------------------------------------------------------------------------- *
+ * Signature artifacts (Build 8.3).
+ * ------------------------------------------------------------------------- */
+
+export type SignatureMethod = "typed" | "drawn" | "uploaded";
+
+export const SIGNATURE_BUCKET = "legal-signature-artifacts";
+
+/** Max upload size, mirroring the bucket's server-side `file_size_limit`. */
+export const SIGNATURE_MAX_BYTES = 2 * 1024 * 1024;
+
+export const SIGNATURE_ACCEPTED_TYPES = ["image/png", "image/jpeg"];
+
+/**
+ * Storage path for a signature image: `signature/{uid}/{agreementId}/{uuid}.{ext}`.
+ *
+ * Segment 2 is the uploader, which is what the storage policy checks — a signer
+ * can only write inside their own folder. The fresh uuid per attempt means a
+ * re-draw writes a NEW object rather than overwriting the previous one: the
+ * bucket grants no UPDATE or DELETE to signers, because a signature artifact is
+ * evidence of a legal act. The path recorded on `signature_artifacts` is the
+ * one that counts.
+ */
+export function signatureObjectPath(
+  uid: string,
+  agreementId: string,
+  extension: string,
+): string {
+  const unique =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `signature/${uid}/${agreementId}/${unique}.${extension}`;
+}
+
+/** Lowercase 64-hex SHA-256 of raw bytes — the artifact's integrity fingerprint. */
+export async function sha256HexOfBytes(
+  buffer: ArrayBuffer,
+): Promise<string | null> {
+  try {
+    if (typeof crypto === "undefined" || !crypto.subtle) return null;
+    const digest = await crypto.subtle.digest("SHA-256", buffer);
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  } catch {
+    return null;
+  }
+}
+
+export function extensionForMime(mime: string): string {
+  return mime === "image/jpeg" ? "jpg" : "png";
 }
 
 /** A signing token is the 64-hex raw token issued by `send_agreement`. */

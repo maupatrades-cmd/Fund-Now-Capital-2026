@@ -2,7 +2,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import {
   CONSENT_NOTICE_VERSION,
+  extensionForMime,
+  sha256HexOfBytes,
+  SIGNATURE_ACCEPTED_TYPES,
+  SIGNATURE_BUCKET,
+  SIGNATURE_MAX_BYTES,
+  signatureObjectPath,
   type ConsentKind,
+  type SignatureMethod,
   type SigningPackage,
   userAgentHash,
 } from "@/lib/agreements";
@@ -73,16 +80,86 @@ export function useAgreementSigning(token: string) {
     },
   });
 
+  /*
+   * Signing, for all three methods.
+   *
+   * For `drawn` / `uploaded` the image is uploaded FIRST and only then attached:
+   * if the upload fails we stop with nothing recorded, which is recoverable.
+   * The reverse order could consume the single-use signing token while leaving
+   * the artifact missing — an executed signature pointing at nothing.
+   *
+   * The hash is computed over the exact bytes uploaded, client-side, so
+   * `signature_artifacts.artifact_sha256` fingerprints what actually landed in
+   * the bucket rather than what we intended to send.
+   */
   const sign = useMutation({
-    mutationFn: async (input: { adoptedText: string }) => {
+    mutationFn: async (input: {
+      method: SignatureMethod;
+      adoptedText: string;
+      agreementId: string;
+      /** Required for `drawn` / `uploaded`; ignored for `typed`. */
+      image?: Blob | null;
+    }) => {
       const uaHash = await userAgentHash();
+      let storagePath: string | null = null;
+      let artifactSha: string | null = null;
+
+      if (input.method !== "typed") {
+        if (!input.image) throw new Error("Draw or upload a signature first.");
+        if (input.image.size > SIGNATURE_MAX_BYTES) {
+          throw new Error("That signature image is too large (2MB maximum).");
+        }
+
+        const { data: userData } = await supabase.auth.getUser();
+        const uid = userData?.user?.id;
+        if (!uid) throw new Error("You must be signed in to sign.");
+
+        /*
+         * Never RELABEL an unexpected type as PNG. The `accept` attribute on a
+         * file input is a hint, not a gate — a signer can pick a PDF or an SVG.
+         * Coercing its content-type to image/png would walk it straight past the
+         * bucket's allowed_mime_types guard (which checks the DECLARED type) and
+         * store non-image bytes as signature evidence.
+         *
+         * A drawn signature is exempt from the check because we produce it
+         * ourselves from the canvas — it is always a real PNG.
+         */
+        let mime: string;
+        if (input.method === "drawn") {
+          mime = "image/png";
+        } else {
+          if (!SIGNATURE_ACCEPTED_TYPES.includes(input.image.type)) {
+            throw new Error("Your signature image must be a PNG or JPEG file.");
+          }
+          mime = input.image.type;
+        }
+
+        const bytes = await input.image.arrayBuffer();
+        artifactSha = await sha256HexOfBytes(bytes);
+        // The fingerprint is the whole point of storing an artifact — it proves
+        // which bytes were signed. Recording a signature without one silently
+        // degrades the evidence, so fail loudly instead.
+        if (!artifactSha) {
+          throw new Error(
+            "Could not fingerprint the signature image on this device. Try again, or use the Type option.",
+          );
+        }
+        storagePath = signatureObjectPath(uid, input.agreementId, extensionForMime(mime));
+
+        const { error: uploadErr } = await supabase.storage
+          .from(SIGNATURE_BUCKET)
+          .upload(storagePath, input.image, { contentType: mime, upsert: false });
+        if (uploadErr) throw uploadErr;
+      }
+
       const { data, error } = await supabase.rpc("submit_agreement_signature", {
         p_token: token,
-        // Build 8.1 is typed-adoption only. `drawn` / `uploaded` need a
-        // signer-scoped policy on the (currently owner-only)
-        // legal-signature-artifacts bucket — that is Build 8.2, not a silent
-        // fallback here.
-        p_method: "typed",
+        p_method: input.method,
+        p_artifact_sha256: artifactSha,
+        p_storage_path: storagePath,
+        // The adopted name is recorded for EVERY method, not just typed: it is
+        // how the signer spelled their own name at signing time, and a drawn
+        // squiggle alone is poor evidence of who drew it.
         p_adopted_text: input.adoptedText,
         p_user_agent_hash: uaHash,
       });

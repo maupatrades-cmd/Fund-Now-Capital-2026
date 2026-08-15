@@ -5,13 +5,26 @@ import { Input } from "@/components/ui/input";
 import { TermsMarkdown } from "@/components/terms/TermsMarkdown";
 import { useAgreementSigning } from "@/hooks/useAgreementSigning";
 import {
+  SignaturePad,
+  type SignaturePadHandle,
+} from "@/components/legal/SignaturePad";
+import {
   documentTypeLabel,
   isValidSigningToken,
   REQUIRED_CONSENTS,
+  SIGNATURE_ACCEPTED_TYPES,
+  SIGNATURE_MAX_BYTES,
   signingUnavailableReason,
   type ConsentKind,
+  type SignatureMethod,
   type SigningParty,
 } from "@/lib/agreements";
+
+const METHOD_TABS: ReadonlyArray<{ method: SignatureMethod; label: string }> = [
+  { method: "typed", label: "Type" },
+  { method: "drawn", label: "Draw" },
+  { method: "uploaded", label: "Upload" },
+];
 
 /*
  * Build 8.1 — the signing surface.
@@ -71,6 +84,10 @@ export default function SignAgreementPage() {
     useAgreementSigning(tokenValid ? token : "");
 
   const [adoptedName, setAdoptedName] = useState("");
+  const [method, setMethod] = useState<SignatureMethod>("typed");
+  const [hasInk, setHasInk] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const padRef = useRef<SignaturePadHandle | null>(null);
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
   const [declineOpen, setDeclineOpen] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
@@ -104,7 +121,20 @@ export default function SignAgreementPage() {
   const handleSign = async () => {
     setActionError(null);
     try {
-      await sign.mutateAsync({ adoptedText: adoptedName.trim() });
+      let image: Blob | null = null;
+      if (method === "drawn") {
+        image = (await padRef.current?.toBlob()) ?? null;
+        if (!image) throw new Error("Draw your signature before signing.");
+      } else if (method === "uploaded") {
+        image = uploadFile;
+        if (!image) throw new Error("Choose a signature image before signing.");
+      }
+      await sign.mutateAsync({
+        method,
+        adoptedText: adoptedName.trim(),
+        agreementId: pkg!.agreement.id,
+        image,
+      });
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Could not record your signature.");
     }
@@ -159,11 +189,17 @@ export default function SignAgreementPage() {
     adoptedName.trim().toLowerCase().replace(/\s+/g, " ") !==
       party.legal_name.trim().toLowerCase().replace(/\s+/g, " ");
 
+  // Each method has its own "there is actually something to submit" test —
+  // typed needs the name alone, drawn needs ink, uploaded needs a file.
+  const methodReady =
+    method === "typed" ? true : method === "drawn" ? hasInk : uploadFile !== null;
+
   const canSubmit =
     pkg.can_sign &&
     allConsentsRecorded &&
     scrolledToEnd &&
     adoptedName.trim().length > 1 &&
+    methodReady &&
     !sign.isPending;
 
   return (
@@ -287,7 +323,8 @@ export default function SignAgreementPage() {
           <section className="mt-6">
             <h2 className="mb-1 text-sm font-semibold text-brand-navy">Sign</h2>
             <p className="mb-3 text-xs text-slate-500">
-              Type your full legal name to adopt it as your electronic signature.
+              Your full legal name is recorded whichever way you sign — a drawn mark on
+              its own is weak evidence of who made it.
             </p>
             <Input
               value={adoptedName}
@@ -296,17 +333,99 @@ export default function SignAgreementPage() {
               disabled={!allConsentsRecorded}
               aria-label="Your full legal name"
             />
-            {adoptedName.trim().length > 1 && (
-              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">Your signature</p>
-                <p
-                  className="mt-1 text-2xl text-brand-navy"
-                  style={{ fontFamily: "'Segoe Script', 'Brush Script MT', cursive" }}
+
+            <div
+              className="mt-4 flex gap-1 rounded-lg bg-slate-100 p-1"
+              role="tablist"
+              aria-label="Signature method"
+            >
+              {METHOD_TABS.map((tab) => (
+                <button
+                  key={tab.method}
+                  type="button"
+                  role="tab"
+                  aria-selected={method === tab.method}
+                  disabled={!allConsentsRecorded}
+                  onClick={() => {
+                    // Switching tabs unmounts the pad, so its strokes are gone.
+                    // Clear the parent's ink flag too, or coming back to an empty
+                    // pad would leave Sign enabled over a blank canvas.
+                    setHasInk(false);
+                    setActionError(null);
+                    setMethod(tab.method);
+                  }}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
+                    method === tab.method
+                      ? "bg-white text-brand-navy shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
                 >
-                  {adoptedName.trim()}
-                </p>
-              </div>
-            )}
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-3">
+              {method === "typed" && adoptedName.trim().length > 1 && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                    Your signature
+                  </p>
+                  <p
+                    className="mt-1 text-2xl text-brand-navy"
+                    style={{ fontFamily: "'Segoe Script', 'Brush Script MT', cursive" }}
+                  >
+                    {adoptedName.trim()}
+                  </p>
+                </div>
+              )}
+
+              {method === "drawn" && (
+                <SignaturePad
+                  ref={padRef}
+                  disabled={!allConsentsRecorded}
+                  onInkChange={setHasInk}
+                />
+              )}
+
+              {method === "uploaded" && (
+                <div className="rounded-lg border-2 border-dashed border-slate-300 p-4">
+                  <input
+                    type="file"
+                    accept={SIGNATURE_ACCEPTED_TYPES.join(",")}
+                    disabled={!allConsentsRecorded}
+                    aria-label="Upload a signature image"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      setActionError(null);
+                      // `accept` above is only a hint — the picker can still hand
+                      // back anything, so validate type and size for real here.
+                      if (file && !SIGNATURE_ACCEPTED_TYPES.includes(file.type)) {
+                        setActionError("Choose a PNG or JPEG image.");
+                        setUploadFile(null);
+                        return;
+                      }
+                      if (file && file.size > SIGNATURE_MAX_BYTES) {
+                        setActionError("That image is too large (2MB maximum).");
+                        setUploadFile(null);
+                        return;
+                      }
+                      setUploadFile(file);
+                    }}
+                    className="w-full text-sm"
+                  />
+                  <p className="mt-2 text-xs text-slate-500">
+                    A photo or scan of your signature. PNG or JPEG, up to 2MB.
+                  </p>
+                  {uploadFile && (
+                    <p className="mt-2 text-xs text-brand-green">
+                      Ready: {uploadFile.name}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
             {nameMismatch && (
               <p className="mt-2 text-xs text-amber-700">
                 This does not match the name on the document ({party.legal_name}). Sign in the name you
