@@ -17,6 +17,7 @@ import { DealPackageReadiness } from "@/components/deals/DealPackageReadiness";
 import { DealPackageDispatches } from "@/components/deals/DealPackageDispatches";
 import { CommunicationsLog } from "@/components/deals/CommunicationsLog";
 import { DealDocuments } from "@/components/deals/DealDocuments";
+import { DealDocumentRequirements } from "@/components/deals/DealDocumentRequirements";
 import { StageHistory } from "@/components/deals/StageHistory";
 import { ActivityFeed } from "@/components/activity/ActivityFeed";
 
@@ -253,6 +254,8 @@ export default function DealDetailPage() {
       </div>
 
       <DealPackageReadiness clientId={deal.client_id} isPurchaseOrder={deal.is_purchase_order} amountRequested={deal.amount_requested} />
+
+      <DealDocumentRequirements dealId={deal.id} clientId={deal.client_id} />
 
       {/* The deal-specific key guarantees a draft can never survive navigation to another deal. */}
       <DealPackageDispatches key={deal.id} dealId={deal.id} />
