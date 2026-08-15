@@ -440,10 +440,17 @@ Deno.serve(async (req: Request) => {
       const { data: parties, error: partiesErr } = await supabase.from("agreement_party_snapshots")
         .select("party_role, party_order, legal_name, represented_party, capacity, email, is_fnc").eq("agreement_id", agreementId);
       if (partiesErr) return err(partiesErr.message, 502);
-      // Optional evidence reads — a missing row is legitimate (e.g. preview before
-      // execution), so these stay optional; only their absence is tolerated.
-      const { data: vars } = await supabase.from("agreement_variable_snapshots").select("fee_summary").eq("agreement_id", agreementId).maybeSingle();
-      const { data: exec } = await supabase.from("executed_document_artifacts").select("certificate_reference, executed_pdf_sha256, executed_at, unsigned_sha256").eq("agreement_id", agreementId).maybeSingle();
+      // Optional evidence rows may legitimately be absent (e.g. a draft before fee
+      // configuration or execution), but a failed query is not the same as an
+      // absent row. Fail closed so a transient/backend error cannot produce and
+      // optionally store a valid-looking PDF with missing legal evidence.
+      const { data: vars, error: varsErr } = await supabase.from("agreement_variable_snapshots")
+        .select("fee_summary").eq("agreement_id", agreementId).maybeSingle();
+      if (varsErr) return err(`agreement variables: ${varsErr.message}`, 502);
+      const { data: exec, error: execErr } = await supabase.from("executed_document_artifacts")
+        .select("certificate_reference, executed_pdf_sha256, executed_at, unsigned_sha256")
+        .eq("agreement_id", agreementId).maybeSingle();
+      if (execErr) return err(`execution evidence: ${execErr.message}`, 502);
 
       const isExecuted = ai.state === "executed";
       const mode = reqMode === "executed" && isExecuted ? "executed" : "preview";
@@ -469,14 +476,15 @@ Deno.serve(async (req: Request) => {
       const { data: tv, error: tvErr } = await supabase.from("legal_document_template_versions")
         .select("version, effective_date, content_markdown, template_id").eq("id", templateVersionId).single();
       if (tvErr || !tv) return err(tvErr?.message ?? "template version not found", 404);
-      const { data: tpl } = await supabase.from("legal_document_templates")
+      const { data: tpl, error: tplErr } = await supabase.from("legal_document_templates")
         .select("title, legal_entity, jurisdiction, document_type").eq("id", tv.template_id).single();
+      if (tplErr || !tpl) return err(tplErr?.message ?? "template not found", 404);
       input = {
         reference: "PREVIEW",
-        title: tpl?.title ?? "Legal document",
-        documentType: tpl?.document_type ?? "agreement",
-        legalEntity: tpl?.legal_entity ?? FNC.name,
-        jurisdiction: tpl?.jurisdiction ?? "ZA",
+        title: tpl.title,
+        documentType: tpl.document_type,
+        legalEntity: tpl.legal_entity,
+        jurisdiction: tpl.jurisdiction,
         templateVersion: tv.version,
         effectiveDate: tv.effective_date,
         contentMarkdown: tv.content_markdown ?? "",
