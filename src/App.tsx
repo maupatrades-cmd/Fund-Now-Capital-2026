@@ -4,7 +4,6 @@ import { Toaster } from "sonner";
 import AuthPage from "@/pages/AuthPage";
 import PublicApplyPage from "@/pages/PublicApplyPage";
 import TermsViewPage from "@/pages/TermsViewPage";
-import SignAgreementPage from "@/pages/SignAgreementPage";
 import AgreementsPage from "@/pages/AgreementsPage";
 import NewAgreementPage from "@/pages/NewAgreementPage";
 import AgreementDetailPage from "@/pages/AgreementDetailPage";
@@ -107,7 +106,7 @@ function AppRoutes() {
     typeof window !== "undefined"
       ? window.location.pathname.replace(/\/+$/, "")
       : "";
-  const onPublicRoute = publicPath === "/apply" || publicPath === "/terms/current" || publicPath.startsWith("/sign/");
+  const onPublicRoute = publicPath === "/apply" || publicPath === "/terms/current";
 
   // Brief loading state while we read the persisted session.
   if (session === undefined && !onPublicRoute) {
@@ -149,10 +148,6 @@ function AppRoutes() {
         e-sign surface. An unauthenticated visitor is bounced to the login page,
         signs in, and returns to the same link.
       */}
-      <Route
-        path="/sign/:token"
-        element={session ? <SignAgreementPage /> : <Navigate to="/" replace />}
-      />
 
       {/*
         Role portals — the route entries live here because App.tsx owns
