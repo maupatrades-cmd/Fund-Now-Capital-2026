@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import AuthPage from "@/pages/AuthPage";
 import PublicApplyPage from "@/pages/PublicApplyPage";
 import TermsViewPage from "@/pages/TermsViewPage";
+import SignAgreementPage from "@/pages/SignAgreementPage";
 import OwnerGate from "@/components/layout/OwnerGate";
 import PartnerGate from "@/pages/PartnerGate";
 import PartnerHomePage from "@/pages/PartnerHomePage";
@@ -132,6 +133,21 @@ function AppRoutes() {
         the FNC website footer links here. RLS exposes the current version to anon.
       */}
       <Route path="/terms/current" element={<TermsViewPage />} />
+
+      {/*
+        Agreement signing (Build 8.1). ROLE-AGNOSTIC on purpose: the token in the
+        URL identifies the signing party, so a partner, contractor or
+        lead-referrer all sign here rather than each portal growing its own copy.
+
+        It sits behind a session (not a role gate) because every signer RPC is
+        granted to `authenticated` only — anon is explicitly revoked across the
+        e-sign surface. An unauthenticated visitor is bounced to the login page,
+        signs in, and returns to the same link.
+      */}
+      <Route
+        path="/sign/:token"
+        element={session ? <SignAgreementPage /> : <Navigate to="/" replace />}
+      />
 
       {/*
         Role portals — the route entries live here because App.tsx owns
