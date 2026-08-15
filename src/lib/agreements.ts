@@ -292,6 +292,60 @@ export async function userAgentHash(): Promise<string | null> {
   return sha256Hex(ua.slice(0, 1024));
 }
 
+/* ------------------------------------------------------------------------- *
+ * Signature artifacts (Build 8.3).
+ * ------------------------------------------------------------------------- */
+
+export type SignatureMethod = "typed" | "drawn" | "uploaded";
+
+export const SIGNATURE_BUCKET = "legal-signature-artifacts";
+
+/** Max upload size, mirroring the bucket's server-side `file_size_limit`. */
+export const SIGNATURE_MAX_BYTES = 2 * 1024 * 1024;
+
+export const SIGNATURE_ACCEPTED_TYPES = ["image/png", "image/jpeg"];
+
+/**
+ * Storage path for a signature image: `signature/{uid}/{agreementId}/{uuid}.{ext}`.
+ *
+ * Segment 2 is the uploader, which is what the storage policy checks — a signer
+ * can only write inside their own folder. The fresh uuid per attempt means a
+ * re-draw writes a NEW object rather than overwriting the previous one: the
+ * bucket grants no UPDATE or DELETE to signers, because a signature artifact is
+ * evidence of a legal act. The path recorded on `signature_artifacts` is the
+ * one that counts.
+ */
+export function signatureObjectPath(
+  uid: string,
+  agreementId: string,
+  extension: string,
+): string {
+  const unique =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `signature/${uid}/${agreementId}/${unique}.${extension}`;
+}
+
+/** Lowercase 64-hex SHA-256 of raw bytes — the artifact's integrity fingerprint. */
+export async function sha256HexOfBytes(
+  buffer: ArrayBuffer,
+): Promise<string | null> {
+  try {
+    if (typeof crypto === "undefined" || !crypto.subtle) return null;
+    const digest = await crypto.subtle.digest("SHA-256", buffer);
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  } catch {
+    return null;
+  }
+}
+
+export function extensionForMime(mime: string): string {
+  return mime === "image/jpeg" ? "jpg" : "png";
+}
+
 /** A signing token is the 64-hex raw token issued by `send_agreement`. */
 export function isValidSigningToken(token: string | undefined): boolean {
   return !!token && /^[0-9a-f]{64}$/.test(token);
