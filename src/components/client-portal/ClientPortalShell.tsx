@@ -4,6 +4,7 @@ import { BadgeCheck, Bell, CalendarDays, ClipboardList, FileSignature, Files, Ga
 import { useClientPortalIdentity } from "@/hooks/useClientPortalIdentity";
 import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
+import { GradientBackground } from "@/components/ui/oceanic-depths";
 import "@/components/client-portal/client-portal.css";
 
 const navigation = [
@@ -39,6 +40,10 @@ export default function ClientPortalShell({ children }: { children: ReactNode })
 
   return (
     <div className="client-portal min-h-screen bg-[#06131d] text-white">
+      <div className="pointer-events-none fixed inset-0 z-0 opacity-30" aria-hidden="true">
+        <GradientBackground className="h-full w-full" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,19,29,0.48),rgba(6,19,29,0.82)_58%,#06131d)]" />
+      </div>
       <div className="client-aurora client-aurora--green" aria-hidden="true" />
       <div className="client-aurora client-aurora--blue" aria-hidden="true" />
       <div className="client-grid" aria-hidden="true" />
