@@ -53,6 +53,8 @@ export default function ClientPortalShell({ children }: { children: ReactNode })
   useEffect(() => {
     if (!isMobileMenuOpen) return;
 
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     firstMobileMenuLinkRef.current?.focus();
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -80,7 +82,10 @@ export default function ClientPortalShell({ children }: { children: ReactNode })
     };
 
     document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.body.style.overflow = previousBodyOverflow;
+    };
   }, [isMobileMenuOpen]);
 
   return (
@@ -196,7 +201,10 @@ export default function ClientPortalShell({ children }: { children: ReactNode })
             type="button"
             className="absolute inset-0 bg-black/55 backdrop-blur-sm"
             aria-label="Close more navigation"
-            onClick={() => setIsMobileMenuOpen(false)}
+            onClick={() => {
+              setIsMobileMenuOpen(false);
+              mobileMenuButtonRef.current?.focus();
+            }}
           />
           <section
             ref={mobileMenuRef}
