@@ -93,6 +93,172 @@ export type SigningPackage = {
   required_consent_kinds: ConsentKind[];
 };
 
+/* ------------------------------------------------------------------------- *
+ * Owner-side dispatch shapes (Build 8.2).
+ * ------------------------------------------------------------------------- */
+
+export type AgreementState =
+  | "draft"
+  | "approved_for_send"
+  | "sent"
+  | "viewed"
+  | "in_progress"
+  | "signer_signed"
+  | "countersign_pending"
+  | "executed"
+  | "expired"
+  | "declined"
+  | "withdrawn"
+  | "superseded"
+  | "delivery_failed"
+  | "identity_failed";
+
+export type AgreementListRow = {
+  id: string;
+  reference: string;
+  document_type: string;
+  title_snapshot: string;
+  state: AgreementState;
+  sent_at: string | null;
+  executed_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+};
+
+export type AgreementPartyRow = SigningParty & {
+  agreement_id: string;
+  party_order: number;
+  email: string | null;
+  profile_id: string | null;
+  frozen: boolean;
+};
+
+export type SignatureEventRow = {
+  id: string;
+  event_type: string;
+  occurred_at: string;
+  party_snapshot_id: string | null;
+  actor_profile_id: string | null;
+  signature_method: string | null;
+  detail: Record<string, unknown> | null;
+};
+
+export type ConsentRow = {
+  id: string;
+  party_snapshot_id: string;
+  consent_kind: string;
+  accepted: boolean;
+  notice_version: string | null;
+  created_at: string;
+};
+
+export type SignatureRequestRow = {
+  id: string;
+  party_snapshot_id: string;
+  issued_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  last_opened_at: string | null;
+  consumed_at: string | null;
+  delivery_status: string;
+};
+
+export type AgreementDetail = {
+  instance: AgreementListRow & {
+    template_version_id: string;
+    subject_profile_id: string | null;
+    unsigned_sha256: string | null;
+    executed_sha256: string | null;
+    decline_reason: string | null;
+    withdraw_reason: string | null;
+    frozen_at: string | null;
+    first_viewed_at: string | null;
+    signer_signed_at: string | null;
+    terminal_at: string | null;
+  };
+  parties: AgreementPartyRow[];
+  events: SignatureEventRow[];
+  consents: ConsentRow[];
+  requests: SignatureRequestRow[];
+};
+
+export type SignableProfile = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  role: string;
+};
+
+export type AgreementPartyInput = {
+  party_role: "signer" | "countersignatory" | "witness" | "data_subject";
+  legal_name: string;
+  represented_party: string;
+  capacity: string;
+  email: string;
+  profile_id: string | null;
+  is_fnc: boolean;
+};
+
+/**
+ * `send_agreement` returns the RAW signing tokens — the only time they exist in
+ * plaintext anywhere. Only the SHA-256 is stored, so these cannot be re-read
+ * later; the dispatch UI must surface them immediately and say so.
+ */
+export type SendResult = {
+  agreementId: string;
+  was_transitioned: boolean;
+  state: string;
+  reason?: string;
+  tokens?: Array<{
+    party_snapshot_id: string;
+    token: string;
+    expires_at: string;
+  }>;
+};
+
+/** Signing URL for a raw token, absolute so the owner can paste it into a message. */
+export function signingUrl(token: string): string {
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/sign/${token}`;
+}
+
+export const AGREEMENT_STATE_LABEL: Record<AgreementState, string> = {
+  draft: "Draft",
+  approved_for_send: "Approved to send",
+  sent: "Sent",
+  viewed: "Viewed",
+  in_progress: "In progress",
+  signer_signed: "Signed",
+  countersign_pending: "Awaiting your countersignature",
+  executed: "Executed",
+  expired: "Expired",
+  declined: "Declined",
+  withdrawn: "Withdrawn",
+  superseded: "Superseded",
+  delivery_failed: "Delivery failed",
+  identity_failed: "Identity check failed",
+};
+
+/** Pill tone per state — green = done, amber = needs attention, slate = inert. */
+export function agreementStateTone(
+  state: AgreementState,
+): "ok" | "warn" | "live" | "muted" {
+  switch (state) {
+    case "executed":
+      return "ok";
+    case "countersign_pending":
+      return "warn";
+    case "sent":
+    case "viewed":
+    case "in_progress":
+    case "signer_signed":
+      return "live";
+    default:
+      return "muted";
+  }
+}
+
 /** Lowercase 64-hex SHA-256 of a UTF-8 string, or null where WebCrypto is absent. */
 export async function sha256Hex(input: string): Promise<string | null> {
   try {

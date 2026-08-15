@@ -5,6 +5,9 @@ import AuthPage from "@/pages/AuthPage";
 import PublicApplyPage from "@/pages/PublicApplyPage";
 import TermsViewPage from "@/pages/TermsViewPage";
 import SignAgreementPage from "@/pages/SignAgreementPage";
+import AgreementsPage from "@/pages/AgreementsPage";
+import NewAgreementPage from "@/pages/NewAgreementPage";
+import AgreementDetailPage from "@/pages/AgreementDetailPage";
 import OwnerGate from "@/components/layout/OwnerGate";
 import PartnerGate from "@/pages/PartnerGate";
 import PartnerHomePage from "@/pages/PartnerHomePage";
@@ -230,6 +233,10 @@ function AppRoutes() {
         <Route path="/clients/:id/edit" element={<ClientFormPage />} />
         <Route path="/client-invitations" element={<ClientInvitationsPage />} />
         <Route path="/documents" element={<DocumentsPage />} />
+        {/* Static /agreements/new must rank above /agreements/:id. */}
+        <Route path="/agreements" element={<AgreementsPage />} />
+        <Route path="/agreements/new" element={<NewAgreementPage />} />
+        <Route path="/agreements/:id" element={<AgreementDetailPage />} />
         <Route path="/funders" element={<FundersPage />} />
         <Route path="/funders/new" element={<FunderFormPage />} />
         <Route path="/funders/:id" element={<FunderDetailPage />} />
