@@ -17,6 +17,7 @@ import ContractorInvoiceDetailPage from "./contractor/ContractorInvoiceDetailPag
 import ContractorNotificationSettingsPage from "./contractor/NotificationSettingsPage";
 import ContractorPaymentSettingsPage from "./contractor/PaymentSettingsPage";
 import ClientInvitationsPage from "./ClientInvitationsPage";
+import PortalBookingPage from "./portal/PortalBookingPage";
 
 // Session + role guard for everything under /contractor/*. The contractor
 // portal is its own world: contractors never see the owner CRM, and
@@ -67,6 +68,7 @@ export default function ContractorGate() {
         <Route path="leads" element={<ContractorMyLeadsPage />} />
         <Route path="deals" element={<ContractorDealsPage />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
+        <Route path="calendar" element={<PortalBookingPage portal="contractor" />} />
         <Route path="badges" element={<ContractorBadgesPage />} />
         <Route path="training" element={<ContractorTrainingPage />} />
         <Route path="training/:moduleId" element={<ContractorTrainingModulePage />} />
