@@ -6,6 +6,9 @@ project_id = "fund-now-capital-2026"
 [functions.send-notification-email]
 verify_jwt = false
 
+[functions.send-booking-confirmation]
+verify_jwt = false
+
 # admin-invite-user / admin-deactivate-user are invoked from the owner's browser.
 # They authenticate the CALLER: read the Bearer JWT, verify is_owner() against the
 # DB, then use the service-role key for admin work. verify_jwt = false (not true)
