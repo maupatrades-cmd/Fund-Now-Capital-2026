@@ -236,6 +236,7 @@ function AvailabilityForm() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (bookingTypes.length === 0) return toast.error("Select at least one booking reason.");
+    if (new Date(endsAt) <= new Date(startsAt)) return toast.error("The end time must be after the start time.");
     if (bookingTypes.includes("consultation") && !isConsultationTimeAllowed(startsAt, endsAt)) return toast.error("Consultation availability must be between 14:00 and 20:00.");
     try {
       await publish.mutateAsync({ startsAt: new Date(startsAt).toISOString(), endsAt: new Date(endsAt).toISOString(), bookingTypes });

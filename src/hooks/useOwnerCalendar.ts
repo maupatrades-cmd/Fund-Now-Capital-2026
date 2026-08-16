@@ -81,7 +81,9 @@ export function useOwnerCalendarRange(start: Date, end: Date) {
         supabase
           .from("crm_bookings")
           .select("id,booking_type,agenda,status,owner_note,created_at,slot:owner_availability_slots(id,starts_at,ends_at),requester:profiles!crm_bookings_requester_id_fkey(full_name,email),client:clients(business_name),deal:deals(reference)")
-          .order("created_at", { ascending: false }),
+          .in("status", ["requested", "confirmed"])
+          .order("created_at", { ascending: false })
+          .limit(200),
       ]);
 
       if (slotResult.error) throw slotResult.error;
