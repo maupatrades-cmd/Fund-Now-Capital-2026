@@ -30,7 +30,10 @@ create table public.owner_calendar_events (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles(id) on delete restrict,
   title text not null check (length(btrim(title)) between 3 and 160),
-  category text not null check (category in ('urgent','submission','submission_update','consultation')),
+  category text not null check (category in (
+    'urgent','submission','submission_update','consultation',
+    'presentation','call','paperwork_review'
+  )),
   starts_at timestamptz not null,
   ends_at timestamptz not null,
   timezone text not null default 'Africa/Johannesburg',
@@ -151,6 +154,8 @@ create or replace function public.calendar_is_consultation_window(
     and (p_ends_at at time zone 'Africa/Johannesburg')::time<=time '20:00'
     and p_ends_at>p_starts_at;
 $$;
+revoke all on function public.calendar_is_consultation_window(timestamptz,timestamptz)
+  from public,anon,authenticated;
 
 create or replace function public.calendar_reference_is_visible(
   p_client_id uuid default null,p_lead_id uuid default null,p_deal_id uuid default null
@@ -189,7 +194,7 @@ begin
   if v_event.booking_id is not null then raise exception 'Booking events are managed from booking decisions'; end if;
   if v_event.status<>'scheduled' then raise exception 'Only scheduled events can be edited'; end if;
   if length(btrim(coalesce(p_title,''))) not between 3 and 160 then raise exception 'Event title must be 3 to 160 characters'; end if;
-  if p_category not in ('urgent','submission','submission_update','consultation') then raise exception 'Unsupported event category'; end if;
+  if p_category not in ('urgent','submission','submission_update','consultation','presentation','call','paperwork_review') then raise exception 'Unsupported event category'; end if;
   if p_visibility not in ('private','busy','public') then raise exception 'Unsupported event visibility'; end if;
   if p_visibility='public' and length(btrim(coalesce(p_public_title,''))) not between 3 and 120 then raise exception 'A public event requires a safe public title'; end if;
   if p_ends_at<=p_starts_at or p_starts_at<=now() or p_ends_at-p_starts_at>interval '12 hours' then raise exception 'Event must be a future positive interval no longer than twelve hours'; end if;
@@ -239,18 +244,6 @@ create trigger crm_bookings_activity after insert or update on public.crm_bookin
 create trigger owner_calendar_events_activity after insert or update on public.owner_calendar_events
   for each row execute function public.log_calendar_activity();
 
-create or replace function public.calendar_is_consultation_window(
-  p_starts_at timestamptz,p_ends_at timestamptz
-) returns boolean language sql immutable set search_path='' as $$
-  select
-    (p_starts_at at time zone 'Africa/Johannesburg')::date=(p_ends_at at time zone 'Africa/Johannesburg')::date
-    and (p_starts_at at time zone 'Africa/Johannesburg')::time>=time '14:00'
-    and (p_ends_at at time zone 'Africa/Johannesburg')::time<=time '20:00'
-    and p_ends_at>p_starts_at;
-$$;
-revoke all on function public.calendar_is_consultation_window(timestamptz,timestamptz)
-  from public,anon,authenticated;
-
 create or replace function public.invoke_send_booking_confirmation(p_delivery_id uuid)
 returns void language plpgsql security definer set search_path='' as $$
 declare v_base_url text; v_secret text;
@@ -278,7 +271,12 @@ declare v_delivery public.booking_confirmation_outbox%rowtype;
 begin
   update public.booking_confirmation_outbox
   set status='processing',attempts=attempts+1,error_message=null
-  where id=p_delivery_id and status in ('queued','failed') and attempts<5
+  where id=p_delivery_id
+    and (
+      status in ('queued','failed')
+      or (status='processing' and updated_at<now()-interval '15 minutes')
+    )
+    and attempts<5
   returning * into v_delivery;
   if not found then raise exception 'Delivery is not claimable'; end if;
   return v_delivery;
@@ -355,7 +353,7 @@ declare
 begin
   if not public.is_owner() then raise exception 'Only the owner can create calendar events' using errcode='42501'; end if;
   if length(btrim(coalesce(p_title,''))) not between 3 and 160 then raise exception 'Event title must be 3 to 160 characters'; end if;
-  if p_category not in ('urgent','submission','submission_update','consultation') then raise exception 'Unsupported event category'; end if;
+  if p_category not in ('urgent','submission','submission_update','consultation','presentation','call','paperwork_review') then raise exception 'Unsupported event category'; end if;
   if p_visibility not in ('private','busy','public') then raise exception 'Unsupported event visibility'; end if;
   if p_visibility='public' and length(btrim(coalesce(p_public_title,''))) not between 3 and 120 then
     raise exception 'A public event requires a safe public title';
@@ -422,7 +420,8 @@ begin
     into v_open_slots from public.owner_availability_slots s
     where s.is_open and s.starts_at>=greatest(now(),p_window_start) and s.starts_at<p_window_end;
   select coalesce(jsonb_agg(jsonb_build_object('id',e.id,'starts_at',e.starts_at,'ends_at',e.ends_at,
-    'category',e.category,'display_title',case when v_owner then e.title when e.visibility='public' then e.public_title else 'Busy' end,
+    'category',case when v_owner or e.visibility='public' then e.category else null end,
+    'display_title',case when v_owner then e.title when e.visibility='public' then e.public_title else 'Busy' end,
     'visibility',case when v_owner then e.visibility when e.visibility='public' then 'public' else 'busy' end)
     order by e.starts_at),'[]'::jsonb) into v_blocks from public.owner_calendar_events e
     where e.status='scheduled' and e.ends_at>p_window_start and e.starts_at<p_window_end
@@ -550,7 +549,7 @@ begin
     insert into public.owner_calendar_events(owner_id,title,category,starts_at,ends_at,visibility,private_notes,
       client_id,lead_id,deal_id,task_id,booking_id,created_by)
       values(v_uid,left(v_title||' - '||replace(initcap(v_booking.booking_type),'_',' '),160),
-        case when v_booking.booking_type in ('urgent','submission','submission_update','consultation') then v_booking.booking_type else 'consultation' end,
+        v_booking.booking_type,
         v_slot.starts_at,v_slot.ends_at,'private',v_booking.agenda,v_client,v_lead,v_booking.deal_id,v_task.id,v_booking.id,v_uid)
       returning * into v_event;
     update public.crm_bookings set calendar_event_id=v_event.id where id=p_booking_id returning * into v_booking;
