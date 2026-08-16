@@ -27,7 +27,7 @@ type Booking = {
   slot_id: string;
 };
 
-type Slot = { starts_at: string; ends_at: string; timezone: string };
+type Slot = { starts_at: string; ends_at: string };
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -92,9 +92,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (claimError) return json({ error: "Could not claim delivery" }, 500);
   if (!claimed) return json({ status: "already_claimed" });
   if (!validEmail(claimed.recipient_email)) {
-    await service.from("booking_confirmation_outbox").update({
-      status: "skipped", error_message: "Recipient email is missing or invalid",
-    }).eq("id", claimed.id);
+    const { error: resultError } = await service.rpc("record_booking_confirmation_delivery_result", {
+      p_delivery_id: claimed.id,
+      p_status: "failed",
+      p_external_id: null,
+      p_error_message: "Recipient email is missing or invalid",
+    });
+    if (resultError) console.error("Failed to record invalid recipient", claimed.id, resultError);
     return json({ status: "skipped" });
   }
 
@@ -102,21 +106,29 @@ Deno.serve(async (req: Request): Promise<Response> => {
     service.from("crm_bookings").select("booking_type,status,slot_id").eq("id", claimed.booking_id).single<Booking>(),
   ]);
   if (bookingError || !booking || booking.status !== "confirmed") {
-    await service.from("booking_confirmation_outbox").update({
-      status: "failed", error_message: "Confirmed booking could not be resolved",
-    }).eq("id", claimed.id);
+    const { error: resultError } = await service.rpc("record_booking_confirmation_delivery_result", {
+      p_delivery_id: claimed.id,
+      p_status: "failed",
+      p_external_id: null,
+      p_error_message: "Confirmed booking could not be resolved",
+    });
+    if (resultError) console.error("Failed to record unresolved booking", claimed.id, resultError);
     return json({ error: "Confirmed booking could not be resolved" }, 409);
   }
 
   const { data: slot, error: slotError } = await service
     .from("owner_availability_slots")
-    .select("starts_at,ends_at,timezone")
+    .select("starts_at,ends_at")
     .eq("id", booking.slot_id)
     .single<Slot>();
   if (slotError || !slot) {
-    await service.from("booking_confirmation_outbox").update({
-      status: "failed", error_message: "Appointment time could not be resolved",
-    }).eq("id", claimed.id);
+    const { error: resultError } = await service.rpc("record_booking_confirmation_delivery_result", {
+      p_delivery_id: claimed.id,
+      p_status: "failed",
+      p_external_id: null,
+      p_error_message: "Appointment time could not be resolved",
+    });
+    if (resultError) console.error("Failed to record unresolved appointment time", claimed.id, resultError);
     return json({ error: "Appointment time could not be resolved" }, 409);
   }
 
@@ -136,7 +148,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       headers: {
         Authorization: `Bearer ${RESEND_API_KEY}`,
         "Content-Type": "application/json",
-        "Idempotency-Key": `fnc-booking-${claimed.booking_id}`,
+        "Idempotency-Key": `fnc-booking-${claimed.id}`,
       },
       body: JSON.stringify({
         from: FROM,
@@ -150,14 +162,25 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const result = await response.json().catch(() => ({})) as { id?: string; message?: string };
     if (!response.ok) throw new Error(result.message || `Resend returned ${response.status}`);
 
-    await service.from("booking_confirmation_outbox").update({
-      status: "sent", sent_at: new Date().toISOString(), external_id: result.id ?? null, error_message: null,
-    }).eq("id", claimed.id);
+    const { error: sentError } = await service.rpc("record_booking_confirmation_delivery_result", {
+      p_delivery_id: claimed.id,
+      p_status: "sent",
+      p_external_id: result.id ?? null,
+      p_error_message: null,
+    });
+    if (sentError) {
+      console.error("Email sent but delivery result could not be recorded", claimed.id, sentError);
+      return json({ error: "Email sent but delivery status could not be recorded" }, 500);
+    }
     return json({ status: "sent" });
   } catch (error) {
-    await service.from("booking_confirmation_outbox").update({
-      status: "failed", error_message: (error as Error).message.slice(0, 500),
-    }).eq("id", claimed.id);
+    const { error: resultError } = await service.rpc("record_booking_confirmation_delivery_result", {
+      p_delivery_id: claimed.id,
+      p_status: "failed",
+      p_external_id: null,
+      p_error_message: (error as Error).message.slice(0, 500),
+    });
+    if (resultError) console.error("Failed to record email delivery failure", claimed.id, resultError);
     return json({ error: "Email delivery failed" }, 502);
   }
 });
