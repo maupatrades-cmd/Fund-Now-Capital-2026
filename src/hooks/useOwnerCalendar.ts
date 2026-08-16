@@ -34,6 +34,7 @@ export type OwnerBooking = {
   id: string;
   booking_type: CalendarCategory;
   agenda: string;
+  client_name: string | null;
   status: BookingStatus;
   owner_note: string | null;
   created_at: string;
@@ -80,7 +81,7 @@ export function useOwnerCalendarRange(start: Date, end: Date) {
           .order("starts_at"),
         supabase
           .from("crm_bookings")
-          .select("id,booking_type,agenda,status,owner_note,created_at,slot:owner_availability_slots(id,starts_at,ends_at),requester:profiles!crm_bookings_requester_id_fkey(full_name,email),client:clients(business_name),deal:deals(reference)")
+          .select("id,booking_type,agenda,client_name,status,owner_note,created_at,slot:owner_availability_slots(id,starts_at,ends_at),requester:profiles!crm_bookings_requester_id_fkey(full_name,email),client:clients(business_name),deal:deals(reference)")
           .in("status", ["requested", "confirmed"])
           .order("created_at", { ascending: false })
           .limit(200),

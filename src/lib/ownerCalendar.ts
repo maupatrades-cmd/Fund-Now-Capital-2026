@@ -69,7 +69,7 @@ export function toLocalDateTimeInput(value: Date) {
   return local.toISOString().slice(0, 16);
 }
 
-export function isConsultationTimeAllowed(startsAt: string, endsAt: string) {
+export function isPresentationTimeAllowed(startsAt: string, endsAt: string) {
   const start = new Date(startsAt);
   const end = new Date(endsAt);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;

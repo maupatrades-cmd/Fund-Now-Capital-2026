@@ -56,6 +56,7 @@ type Body = {
   contact_name?: string;
   contact_phone?: string;
   business_name?: string;
+  lead_id?: string;
 };
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -95,13 +96,26 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (body.authorised_email_verified !== true || !body.contact_email) {
       return json(req, { error: "Client email and authorised-email verification are required" }, 400);
     }
-    const { data: quickRows, error: quickError } = await service.rpc("service_create_quick_client_invitation", {
-      p_actor_id: caller.id,
-      p_email: body.contact_email,
-      p_contact_name: body.contact_name ?? null,
-      p_phone: body.contact_phone ?? null,
-      p_business_name: body.business_name ?? null,
-    });
+    const quickRpc = body.lead_id
+      ? "service_create_quick_client_invitation_for_lead"
+      : "service_create_quick_client_invitation";
+    const quickArguments = body.lead_id
+      ? {
+          p_actor_id: caller.id,
+          p_source_lead_id: body.lead_id,
+          p_email: body.contact_email,
+          p_contact_name: body.contact_name ?? null,
+          p_phone: body.contact_phone ?? null,
+          p_business_name: body.business_name ?? null,
+        }
+      : {
+          p_actor_id: caller.id,
+          p_email: body.contact_email,
+          p_contact_name: body.contact_name ?? null,
+          p_phone: body.contact_phone ?? null,
+          p_business_name: body.business_name ?? null,
+        };
+    const { data: quickRows, error: quickError } = await service.rpc(quickRpc, quickArguments);
     const quick = Array.isArray(quickRows) ? quickRows[0] : null;
     if (quickError || !quick) {
       const message = quickError?.message?.includes("another CRM relationship")

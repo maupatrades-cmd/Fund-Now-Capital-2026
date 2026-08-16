@@ -36,7 +36,7 @@ import {
   CATEGORY_LABELS,
   formatCalendarDay,
   formatCalendarTime,
-  isConsultationTimeAllowed,
+  isPresentationTimeAllowed,
   startOfCalendarDay,
   toLocalDateTimeInput,
   type CalendarCategory,
@@ -92,8 +92,8 @@ function EventForm({ eventsSupported }: { eventsSupported: boolean }) {
       toast.error("The end time must be after the start time.");
       return;
     }
-    if (category === "consultation" && !isConsultationTimeAllowed(startsAt, endsAt)) {
-      toast.error("Client consultations must be scheduled between 14:00 and 20:00.");
+    if (category === "presentation" && !isPresentationTimeAllowed(startsAt, endsAt)) {
+      toast.error("Presentations must be scheduled between 14:00 and 20:00.");
       return;
     }
     try {
@@ -164,7 +164,7 @@ function EventForm({ eventsSupported }: { eventsSupported: boolean }) {
           <input className={`${fieldClass} mt-1`} type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} required />
         </label>
       </div>
-      {category === "consultation" && <p className="text-xs text-slate-500">Consultation window: 14:00–20:00, Africa/Johannesburg.</p>}
+      {category === "presentation" && <p className="text-xs text-slate-500">Presentation window: 14:00–20:00, Africa/Johannesburg. Every other category can use any available time.</p>}
 
       <fieldset className="rounded-xl border border-slate-200 p-3">
         <legend className="px-1 text-xs font-semibold text-slate-700">Portal visibility</legend>
@@ -210,7 +210,7 @@ function EventForm({ eventsSupported }: { eventsSupported: boolean }) {
         </label>
       </div>
 
-      <label className="block text-xs font-semibold text-slate-700">Private Owner notes
+      <label className="block text-xs font-semibold text-slate-700">Purpose / private Owner notes
         <textarea className={`${fieldClass} mt-1 min-h-20 resize-y`} value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={1000} placeholder="Preparation notes, documents to review, follow-up details…" />
       </label>
 
@@ -237,7 +237,7 @@ function AvailabilityForm() {
     event.preventDefault();
     if (bookingTypes.length === 0) return toast.error("Select at least one booking reason.");
     if (new Date(endsAt) <= new Date(startsAt)) return toast.error("The end time must be after the start time.");
-    if (bookingTypes.includes("consultation") && !isConsultationTimeAllowed(startsAt, endsAt)) return toast.error("Consultation availability must be between 14:00 and 20:00.");
+    if (bookingTypes.includes("presentation") && !isPresentationTimeAllowed(startsAt, endsAt)) return toast.error("Presentation availability must be between 14:00 and 20:00.");
     try {
       await publish.mutateAsync({ startsAt: new Date(startsAt).toISOString(), endsAt: new Date(endsAt).toISOString(), bookingTypes });
       toast.success("Availability published to approved portal roles");
@@ -307,7 +307,7 @@ function BookingInbox({ bookings }: { bookings: OwnerBooking[] }) {
               <span className={`rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${categoryTone(booking.booking_type)}`}>{CATEGORY_LABELS[booking.booking_type] ?? booking.booking_type}</span>
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">{booking.status}</span>
             </div>
-            <p className="mt-3 font-bold text-brand-navy">{client?.business_name ?? "Unlinked client"}</p>
+            <p className="mt-3 font-bold text-brand-navy">{client?.business_name ?? booking.client_name ?? "Standalone booking"}</p>
             <p className="mt-1 text-xs text-slate-500">Requested by {requester?.full_name || requester?.email || "CRM user"}{deal?.reference ? ` · ${deal.reference}` : ""}</p>
           </div>
           {slot && <p className="rounded-xl bg-slate-100 px-3 py-2 text-right text-xs font-semibold text-brand-navy">{formatCalendarDay(slot.starts_at)}<br />{formatCalendarTime(slot.starts_at)}–{formatCalendarTime(slot.ends_at)}</p>}

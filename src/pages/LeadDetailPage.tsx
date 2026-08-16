@@ -30,6 +30,7 @@ import { ActivityFeed } from "@/components/activity/ActivityFeed";
 import { DocumentsPanel } from "@/components/clients/DocumentsPanel";
 import { StoryPanel } from "@/components/clients/StoryPanel";
 import { StakeholdersPanel } from "@/components/stakeholders/StakeholdersPanel";
+import LeadClientInvitationPanel from "@/components/leads/LeadClientInvitationPanel";
 
 const labelList = (options: { value: string; label: string }[], values: string[] | null) =>
   values && values.length ? values.map((v) => labelFor(options, v)).join(", ") : null;
@@ -84,6 +85,14 @@ export default function LeadDetailPage() {
       </div>
 
       <QualificationPanel lead={lead} />
+
+      <LeadClientInvitationPanel
+        leadId={lead.id}
+        businessName={lead.business_name}
+        contactName={lead.contact_name}
+        contactEmail={lead.contact_email}
+        contactPhone={lead.contact_cell}
+      />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Section title="Business info">

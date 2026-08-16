@@ -7,6 +7,7 @@ export const REQUESTED_BOOKING_TYPES = [
   "submission",
   "submission_update",
   "consultation",
+  "presentation",
 ] as const;
 
 export type RequestedBookingType = (typeof REQUESTED_BOOKING_TYPES)[number];
@@ -16,6 +17,7 @@ export const BOOKING_TYPE_LABEL: Record<RequestedBookingType, string> = {
   submission: "Funding submission",
   submission_update: "Submission update",
   consultation: "Consultation",
+  presentation: "Presentation",
 };
 
 export type BookingSlot = {
@@ -43,6 +45,7 @@ export type MyBooking = {
   timezone: string;
   booking_type: string;
   agenda: string;
+  client_name: string | null;
   status: "requested" | "confirmed" | "declined" | "cancelled" | "completed";
   owner_note: string | null;
   client_id: string | null;
@@ -68,6 +71,7 @@ export type RequestBookingInput = {
   slotId: string;
   bookingType: RequestedBookingType;
   agenda: string;
+  clientName: string;
   reference: BookableReference | null;
   clientId?: string | null;
 };
@@ -127,10 +131,11 @@ export function useRequestOwnerBooking() {
       const referenceLeadId =
         input.reference?.reference_kind === "lead" ? input.reference.reference_id : null;
 
-      const { data, error } = await supabase.rpc("request_owner_booking_v2", {
+      const { data, error } = await supabase.rpc("request_owner_booking_v3", {
         p_slot_id: input.slotId,
         p_booking_type: input.bookingType,
         p_agenda: input.agenda.trim(),
+        p_client_name: input.clientName.trim() || null,
         p_client_id: input.clientId ?? referenceClientId,
         p_lead_id: referenceLeadId,
         p_deal_id: null,

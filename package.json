@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test:client-portal-smoke": "node --test tests/client-portal-smoke.test.mjs"
+    "test:client-portal-smoke": "node --test tests/client-portal-smoke.test.mjs",
+    "test:calendar-booking-rules": "node --test tests/calendar-booking-rules.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
