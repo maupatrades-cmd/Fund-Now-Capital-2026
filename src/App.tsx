@@ -36,6 +36,8 @@ import LeadReferrerGate from "@/pages/LeadReferrerGate";
 import LeadReferrerHomePage from "@/pages/lead-referrer/LeadReferrerHomePage";
 import LeadReferrerSubmitLeadPage from "@/pages/lead-referrer/LeadReferrerSubmitLeadPage";
 import ClientInvitationsPage from "@/pages/ClientInvitationsPage";
+import PortalBookingPage from "@/pages/portal/PortalBookingPage";
+import LeadReferrerBookingPage from "@/pages/lead-referrer/LeadReferrerBookingPage";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
 import DealDetailPage from "@/pages/DealDetailPage";
@@ -168,6 +170,7 @@ function AppRoutes() {
         <Route path="leads" element={<PartnerMyLeadsPage />} />
         <Route path="deals" element={<PartnerDealsPage />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
+        <Route path="calendar" element={<PortalBookingPage portal="partner" />} />
         <Route path="statements" element={<PartnerStatementsPage />} />
         <Route path="invoices" element={<PartnerInvoicesPage />} />
         <Route path="invoices/:invoiceId" element={<PartnerInvoiceDetailPage />} />
@@ -194,6 +197,7 @@ function AppRoutes() {
         <Route index element={<LeadReferrerHomePage />} />
         <Route path="submit-lead" element={<LeadReferrerSubmitLeadPage />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
+        <Route path="calendar" element={<LeadReferrerBookingPage />} />
         <Route path="*" element={<Navigate to="/lead-referrer" replace />} />
       </Route>
 

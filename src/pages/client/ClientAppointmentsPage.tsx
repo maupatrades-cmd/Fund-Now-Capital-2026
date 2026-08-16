@@ -1,6 +1,17 @@
-import { CalendarDays } from "lucide-react";
-import ClientPortalPlaceholder from "@/components/client-portal/ClientPortalPlaceholder";
+import ClientPortalShell from "@/components/client-portal/ClientPortalShell";
+import SharedBookingCalendar from "@/components/calendar/SharedBookingCalendar";
+import { useClientPortalIdentity } from "@/hooks/useClientPortalIdentity";
 
 export default function ClientAppointmentsPage() {
-  return <ClientPortalPlaceholder eyebrow="Owner calendar" title="Book time with Fund Now Capital" description="Request an available consultation, presentation, call or paperwork-review slot with the Owner." icon={CalendarDays} />;
+  const identity = useClientPortalIdentity();
+
+  return (
+    <ClientPortalShell>
+      <SharedBookingCalendar
+        tone="client"
+        clientId={identity.data?.clientId ?? null}
+        clientName={identity.data?.businessName ?? null}
+      />
+    </ClientPortalShell>
+  );
 }
