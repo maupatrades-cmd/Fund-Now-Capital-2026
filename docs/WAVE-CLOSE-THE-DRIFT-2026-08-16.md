@@ -47,22 +47,49 @@ Two signing implementations existed simultaneously after PR #246 merged alongsid
 
 ---
 
-## Lane 3 — Edge Function reconciliation ⬜
+## Lane 3 — Edge Function reconciliation ✅ DONE (2026-08-16)
 
-| Function | Action |
-|---|---|
-| `submit-client-application` | Deploy |
-| `create-client-invitation` | Deploy |
-| `resolve-client-invitation` | Deploy |
-| `generate-legal-document-pdf` | Deploy (needed by legal Build 9) |
-| `ingest-legal-source-asset` | Deploy once its PR merges |
-| `sign-invoice-url` | **Recover source into the repo** — runs in production, untracked |
-| `ops-storage-remove` | **Recover source into the repo** — runs in production, untracked |
-| `pdflibtest` | **Delete** — leftover experiment |
+| Function | Action | Result |
+|---|---|---|
+| `resolve-client-invitation` | Deploy | ✅ deployed v1 |
+| `create-client-invitation` | Deploy | ✅ deployed v1 |
+| `submit-client-application` | Deploy | ✅ deployed v1 |
+| `ingest-legal-source-asset` | Deploy | ✅ already live (v2) |
+| `sign-invoice-url` | Recover source | ✅ **recovered into the repo**, verbatim from the deployed v2 |
+| `ops-storage-remove` | Recover source | ➖ not needed — see below |
+| `pdflibtest` | Delete | ⬜ owner action (dashboard) |
+| `generate-legal-document-pdf` | Deploy | ⬜ **deliberately deferred** — see below |
 
-Three production functions with no source in version control cannot be reviewed, changed safely, or rebuilt after a loss. This is the highest-risk item left in the wave.
+### Correction to the audit
 
----
+The audit reported "three production functions with no source in the repository". True, but it overstated the risk: **`ops-storage-remove` and `pdflibtest` are already decommissioned tombstones** — three-line stubs returning `410 Gone`, deliberately left inert until they can be deleted from the dashboard. Only **`sign-invoice-url`** was real, load-bearing (it backs the C1.2 invoice download button and the private-bucket cleanup path) and untracked. It is now in the repo.
+
+Neither tombstone is worth tracking; both should simply be **deleted from the Supabase dashboard** — an owner action, since the MCP surface has no delete.
+
+### ⚠️ Deployed but NOT yet working — two missing secrets
+
+Deploying was necessary but not sufficient. Probed live via `pg_net`:
+
+| Function | Probe | Meaning |
+|---|---|---|
+| `submit-client-application` | `503 "Intake is not configured"` | `CLIENT_REFERRAL_HASH_SECRET` **not set** |
+| `create-client-invitation` | `503 "Invitations are not configured"` | `CLIENT_INVITATION_HASH_SECRET` and/or `APP_BASE_URL` **not set** |
+| `resolve-client-invitation` | `503` | `CLIENT_INVITATION_HASH_SECRET` **not set** |
+| `sign-invoice-url` | `401 Unauthorized` | ✅ correct — `WEBHOOK_SECRET` is set; the probe carried no secret header |
+
+**Owner action:** set `CLIENT_REFERRAL_HASH_SECRET` and `CLIENT_INVITATION_HASH_SECRET` as Supabase Edge Function secrets (long random values). They are hash salts, so **once set they must not change** — rotating either invalidates every existing invitation/referral hash. Setting them now is free: there are currently **0 invitation tokens and 0 client applications**.
+
+All three fail *closed* (503) rather than misbehaving, so nothing is unsafe meanwhile — the features simply do not work yet.
+
+### `generate-legal-document-pdf` — deferred on purpose
+
+35 KB across three files, including a 10 KB embedded base64 logo. Reproducing that by hand through this interface risks a silent byte-level corruption in a **legal-document renderer** — precisely the artefact where corruption must not happen. Deploy it with the Supabase CLI, which transfers files byte-for-byte:
+
+```
+supabase functions deploy generate-legal-document-pdf --project-ref hvxruwkgmhjoypepffgv
+```
+
+Nothing calls it today and legal Build 9 (which needs it) is gated on the approved PDFs, so this is not urgent.
 
 ## Lane 4 — Make the documents true ⬜
 
