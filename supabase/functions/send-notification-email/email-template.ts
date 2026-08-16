@@ -57,6 +57,7 @@ export type EmailVariant =
   | "weekly_summary"
   | "commission_paid"
   | "bonus_paid"
+  | "booking_confirmation"
   | "generic";
 
 export type EmailModel = {
@@ -198,6 +199,11 @@ function accentIcon(variant: EmailVariant): { svg: string; label: string } {
         label: "Commission",
         svg: `${open} aria-label="Payment received"><circle cx="12" cy="12" r="9" ${s}/><text x="12" y="16" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="${ICON}">R</text></svg>`,
       };
+    case "booking_confirmation":
+      return {
+        label: "Appointment confirmed",
+        svg: `${open} aria-label="Appointment confirmed"><rect x="4" y="5" width="16" height="15" rx="2" ${s}/><path d="M8 3v4M16 3v4M4 10h16M8 15l2 2 5-5" ${s}/></svg>`,
+      };
     default:
       return {
         label: "Notification",
@@ -235,6 +241,17 @@ function variantContent(m: EmailModel, variant: EmailVariant): VariantContent {
   // reason's internal notes here — the trigger already withholds notes from the
   // partner recipient's body_text.
   switch (m.eventType) {
+    case "BOOKING_CONFIRMED":
+      return {
+        subject: "Your Fund Now Capital appointment is confirmed",
+        h1: "Your appointment is confirmed",
+        ctaLabel: "Open Fund Now Capital",
+        category: "appointment",
+        paras: [
+          fallback || "Your appointment with Fund Now Capital has been confirmed.",
+          "Please keep this email for your records. If anything changes, contact Fund Now Capital so we can help you reschedule.",
+        ],
+      };
     case "CLIENT_MAGIC_LINK":
       return {
         subject: "Your secure Fund Now Capital sign-in link",
@@ -455,7 +472,7 @@ function ctaButton(url: string, label: string): string {
 }
 
 export function renderEmail(m: EmailModel): { subject: string; html: string; text: string } {
-  const variant = m.variant ?? resolveVariant(m.eventType);
+  const variant = m.variant ?? (m.eventType === "BOOKING_CONFIRMED" ? "booking_confirmation" : resolveVariant(m.eventType));
   const c = variantContent(m, variant);
   const base = m.appBaseUrl.replace(/\/$/, "");
   const ctaUrl = m.linkUrl ? absoluteUrl(base, m.linkUrl) : base;
