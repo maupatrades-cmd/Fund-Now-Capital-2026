@@ -10,6 +10,7 @@ import {
 } from "@/components/legal/SignaturePad";
 import {
   documentTypeLabel,
+  downloadReviewCopy,
   isValidSigningToken,
   REQUIRED_CONSENTS,
   SIGNATURE_ACCEPTED_TYPES,
@@ -257,7 +258,18 @@ export default function SignAgreementPage() {
       {/* The execution copy. Rendered as the renderer draws it — raw markdown,
           no substitution — so the screen and the executed PDF cannot diverge. */}
       <section className="mt-5">
-        <h2 className="mb-2 text-sm font-semibold text-brand-navy">The document</h2>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-brand-navy">The document</h2>
+          {document.content_markdown && (
+            <button
+              type="button"
+              onClick={() => downloadReviewCopy(agreement.reference, agreement.title, document.content_markdown!)}
+              className="text-xs font-semibold text-brand-teal underline underline-offset-2"
+            >
+              Download a copy to keep
+            </button>
+          )}
+        </div>
         {document.content_markdown ? (
           <div
             ref={docRef}
