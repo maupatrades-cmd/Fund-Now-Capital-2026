@@ -136,6 +136,7 @@ export default function SharedBookingCalendar({
       {
         onSuccess: () => {
           setSlotId("");
+          setReferenceValue("");
           setAgenda("");
           toast.success("Booking request sent to the Owner.");
         },
@@ -146,7 +147,7 @@ export default function SharedBookingCalendar({
     );
   }
 
-  if (workspace.isLoading) {
+  if (workspace.isPending) {
     return (
       <div className={cn("grid min-h-56 place-items-center rounded-3xl border p-6", dark ? "border-white/10 bg-white/5" : "border-slate-200 bg-white")}>
         <p className={cn("inline-flex items-center gap-2 text-sm", dark ? "text-white/55" : "text-slate-500")}>

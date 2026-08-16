@@ -30,7 +30,7 @@ export type ScheduleBlock = {
   id: string;
   starts_at: string;
   ends_at: string;
-  category: string;
+  category: string | null;
   display_title: string;
   visibility: "busy" | "public" | string;
 };
