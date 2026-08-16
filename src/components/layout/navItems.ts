@@ -25,6 +25,7 @@ import {
   Send,
   FileSignature,
   Gavel,
+  CalendarDays,
   type LucideIcon,
 } from "lucide-react";
 
@@ -40,6 +41,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/leads", label: "Leads", icon: ClipboardList },
   { to: "/pipeline", label: "Pipeline", icon: GitBranch },
   { to: "/tasks", label: "Tasks", icon: ListTodo },
+  { to: "/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/clients", label: "Clients", icon: Users },
   { to: "/client-invitations", label: "Client Invitations", icon: Send },
   { to: "/documents", label: "Documents", icon: FolderOpen },

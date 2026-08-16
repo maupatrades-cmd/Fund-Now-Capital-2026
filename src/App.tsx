@@ -41,6 +41,7 @@ import PipelinePage from "@/pages/PipelinePage";
 import DealDetailPage from "@/pages/DealDetailPage";
 import ArchivedDealsPage from "@/pages/ArchivedDealsPage";
 import TasksPage from "@/pages/TasksPage";
+import OwnerCalendarPage from "@/pages/OwnerCalendarPage";
 import DealPackagePage from "@/pages/DealPackagePage";
 import ClientsPage from "@/pages/ClientsPage";
 import ClientDetailPage from "@/pages/ClientDetailPage";
@@ -209,6 +210,7 @@ function AppRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/calendar" element={<OwnerCalendarPage />} />
         <Route path="/deals/:id" element={<DealDetailPage />} />
         <Route path="/deals/archived" element={<ArchivedDealsPage />} />
         <Route path="/deals/:id/package" element={<DealPackagePage />} />
