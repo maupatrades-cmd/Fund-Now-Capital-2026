@@ -169,8 +169,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   let notificationId: string | undefined;
+  let requestedDeliveryId: string | undefined;
   try {
-    notificationId = (await req.json())?.notification_id;
+    const body = await req.json();
+    notificationId = body?.notification_id;
+    requestedDeliveryId = body?.delivery_id;
   } catch {
     return json({ error: "invalid json body" }, 400);
   }
@@ -194,23 +197,40 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // this the single serialization point — a duplicate or concurrent invocation's
   // insert hits a unique violation (23505) and bails, so the email is sent at
   // most once even under a race. We then finalize this row to its outcome.
-  const { data: claim, error: claimErr } = await supabase
-    .from("notification_deliveries")
-    .insert({ notification_id: n.id, channel: "email", delivery_status: "pending" })
-    .select("id")
-    .single();
-  if (claimErr) {
-    if (claimErr.code === "23505") return json({ ok: false, skipped: "already processed" });
-    console.error("delivery claim failed", claimErr);
-    return json({ error: "could not claim delivery" }, 500);
+  let deliveryId: string;
+  let attemptNumber = 1;
+  if (requestedDeliveryId) {
+    const { data: retry, error: retryErr } = await supabase
+      .from("notification_deliveries")
+      .select("id,attempt_number")
+      .eq("id", requestedDeliveryId)
+      .eq("notification_id", n.id)
+      .eq("channel", "email")
+      .eq("delivery_status", "pending")
+      .single();
+    if (retryErr || !retry) return json({ error: "retry delivery is not pending" }, 409);
+    deliveryId = retry.id;
+    attemptNumber = retry.attempt_number;
+  } else {
+    const { data: claim, error: claimErr } = await supabase
+      .from("notification_deliveries")
+      .insert({ notification_id: n.id, channel: "email", delivery_status: "pending", attempt_number: 1 })
+      .select("id,attempt_number")
+      .single();
+    if (claimErr) {
+      if (claimErr.code === "23505") return json({ ok: false, skipped: "already processed" });
+      console.error("delivery claim failed", claimErr);
+      return json({ error: "could not claim delivery" }, 500);
+    }
+    deliveryId = claim!.id;
+    attemptNumber = claim!.attempt_number;
   }
-  const deliveryId = claim!.id;
 
   // Finalize the claimed row to its terminal outcome. Checks the write (per the
   // CLAUDE.md rule) and logs — never throws, so a recording failure can't mask
   // the send outcome.
   const finalize = async (
-    status: "sent" | "failed" | "skipped",
+    status: "sent" | "failed" | "skipped" | "dead_letter",
     extra: { error_message?: string; external_id?: string } = {},
   ) => {
     const { data, error } = await supabase
@@ -220,8 +240,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
         sent_at: status === "sent" ? new Date().toISOString() : null,
         error_message: extra.error_message ?? null,
         external_id: extra.external_id ?? null,
+        updated_at: new Date().toISOString(),
       })
       .eq("id", deliveryId)
+      .eq("delivery_status", "pending")
       .select("id");
     if (error || !data?.length) {
       console.error("failed to finalize notification delivery", { status, error });
@@ -328,13 +350,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
       timeout,
     ]);
     if (error) {
-      await finalize("failed", { error_message: String(error.message ?? error) });
+      await finalize(attemptNumber >= 3 ? "dead_letter" : "failed", { error_message: String(error.message ?? error) });
       return json({ ok: false, error: error.message ?? "send failed" });
     }
     await finalize("sent", { external_id: data?.id });
     return json({ ok: true, id: data?.id });
   } catch (e) {
-    await finalize("failed", { error_message: e instanceof Error ? e.message : String(e) });
+    await finalize(attemptNumber >= 3 ? "dead_letter" : "failed", { error_message: e instanceof Error ? e.message : String(e) });
     return json({ ok: false, error: "send threw" });
   }
 });

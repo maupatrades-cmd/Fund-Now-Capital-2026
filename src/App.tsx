@@ -80,6 +80,7 @@ import TermsAdminPage from "@/pages/TermsAdminPage";
 import LegalStudioPage from "@/pages/LegalStudioPage";
 import OwnerPayeesPage from "@/pages/OwnerPayeesPage";
 import MoneyCommandCenterPage from "@/pages/MoneyCommandCenterPage";
+import NotificationDeliveryPage from "@/pages/NotificationDeliveryPage";
 import { ConfettiProvider } from "@/lib/celebration/ConfettiProvider";
 import { useProfileRole } from "@/hooks/useProfileRole";
 import { roleHome } from "@/lib/roles";
@@ -271,6 +272,7 @@ function AppRoutes() {
         <Route path="/partner-network" element={<PartnerNetworkPage surface="owner" />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings/notifications" element={<NotificationPreferencesPage />} />
+        <Route path="/settings/notification-delivery" element={<NotificationDeliveryPage />} />
         <Route path="/settings/industries" element={<IndustriesPage />} />
         <Route path="/settings/funders" element={<FundersSettingsPage />} />
         <Route path="/settings/terms" element={<TermsAdminPage />} />
