@@ -2,11 +2,13 @@ import { CheckCircle2, Circle, PackageCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useClientDocuments } from "@/hooks/useClientDocuments";
 import { docTypeLabel, type DocumentType } from "@/lib/documents";
+import { useDealDocumentTaskEvidence } from "@/hooks/useDealDocumentTaskEvidence";
 
 const STANDARD: DocumentType[] = ["cipc_cert", "bank_statement", "id_copy", "credit_consent", "application_form"];
 
-export function DealPackageReadiness({ clientId, isPurchaseOrder, amountRequested }: { clientId: string | null; isPurchaseOrder: boolean; amountRequested: string | null }) {
+export function DealPackageReadiness({ dealId, clientId, isPurchaseOrder, amountRequested }: { dealId: string; clientId: string | null; isPurchaseOrder: boolean; amountRequested: string | null }) {
   const query = useClientDocuments(clientId ?? undefined);
+  const taskEvidence = useDealDocumentTaskEvidence(dealId);
   const required = isPurchaseOrder ? [...STANDARD, "purchase_order" as const, "quotation" as const] : STANDARD;
   const accepted = new Set((query.data ?? []).filter((d) => d.is_current_version && d.status === "active" && d.verification_status === "accepted").map((d) => d.document_type));
   const checks = required.map((type) => ({ label: docTypeLabel(type), ready: accepted.has(type) }));
@@ -19,5 +21,13 @@ export function DealPackageReadiness({ clientId, isPurchaseOrder, amountRequeste
     {!query.isError && <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-brand-teal" style={{ width: `${percentage}%` }} /></div>}
     {query.isLoading ? <p className="mt-4 text-sm text-muted-foreground">Checking documents...</p> : query.isError ? <div className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">Unable to check documents. <button type="button" onClick={() => void query.refetch()} className="font-semibold underline">Retry</button></div> : <div className="mt-4 grid gap-2 sm:grid-cols-2">{checks.map((item) => <div key={item.label} className="flex items-center gap-2 text-sm">{item.ready?<CheckCircle2 className="h-4 w-4 text-green-600"/>:<Circle className="h-4 w-4 text-amber-500"/>}<span className={item.ready?"text-brand-navy":"text-muted-foreground"}>{item.label}</span></div>)}</div>}
     {clientId && !query.isError && percentage < 100 && <Link to={`/clients/${clientId}`} className="mt-4 inline-block text-sm font-semibold text-brand-teal hover:underline">Complete missing client documents →</Link>}
+    {(taskEvidence.data ?? []).some((item) => item.is_submission_blocker) && <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="document-task-blockers">
+      <p className="text-sm font-semibold text-amber-900">Funder submission is blocked</p>
+      <ul className="mt-2 space-y-1 text-xs text-amber-800">
+        {(taskEvidence.data ?? []).filter((item) => item.is_submission_blocker).map((item) => <li key={item.document_type}>
+          {docTypeLabel(item.document_type)} — {item.blocking_reason}{item.task_id ? " · linked task active" : ""}
+        </li>)}
+      </ul>
+    </div>}
   </section>;
 }
