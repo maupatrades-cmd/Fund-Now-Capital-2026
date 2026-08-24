@@ -33,12 +33,14 @@ import {
 } from "@/hooks/useTeam";
 import {
   ASSIGNABLE_ROLES,
+  INVITE_ROLE_OPTIONS,
   roleLabel,
   roleBadgeClass,
   statusBadgeClass,
   formatJoined,
   type TeamFilter,
   type TeamMember,
+  type TeamInviteRole,
   type UserRole,
 } from "@/lib/team";
 import ApplicationsPanel from "@/components/team/ApplicationsPanel";
@@ -82,6 +84,7 @@ const FILTER_TABS: { value: TeamTab; label: string }[] = [
   { value: "owner", label: "Owners" },
   { value: "partner", label: "Partners" },
   { value: "contractor", label: "Contractors" },
+  { value: "lead_referrer", label: "Lead Referrers" },
   { value: "deactivated", label: "Deactivated" },
   { value: "applications", label: "Applications" },
 ];
@@ -119,6 +122,7 @@ export default function TeamPage() {
       owner: list.filter((m) => m.is_active && m.role === "owner").length,
       partner: list.filter((m) => m.is_active && m.role === "partner").length,
       contractor: list.filter((m) => m.is_active && m.role === "contractor").length,
+      lead_referrer: list.filter((m) => m.is_active && m.role === "lead_referrer").length,
       deactivated: list.filter((m) => !m.is_active).length,
       applications: applications?.length ?? 0,
     };
@@ -172,7 +176,7 @@ export default function TeamPage() {
         <div>
           <h1 className="text-2xl font-bold text-brand-navy">Team Management</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Invite and manage the people who use the CRM — referral partners and FNC contractors. Owner accounts are
+            Invite and manage partners, contractors, lead referrers and partner sub-agents. Owner accounts are
             created outside the app and can't be changed here.
           </p>
         </div>
@@ -304,14 +308,18 @@ function TeamTable({
             <tr key={m.id} className="border-b border-border/60 last:border-0">
               <td className="px-4 py-3">
                 <div className="font-medium text-brand-navy">{m.full_name || "—"}</div>
-                {m.role === "partner" && m.referral_partner_name && (
-                  <div className="text-xs text-muted-foreground">{m.referral_partner_name}</div>
+                {m.referral_partner_name && (
+                  <div className="text-xs text-muted-foreground">
+                    {m.is_sub_agent ? `Sub-agent under ${m.referral_partner_name}` : m.referral_partner_name}
+                  </div>
                 )}
               </td>
               <td className="px-4 py-3 text-brand-navy">{m.email || "—"}</td>
               <td className="px-4 py-3 text-muted-foreground">{m.phone_number || "—"}</td>
               <td className="px-4 py-3">
-                <Badge className={roleBadgeClass(m.role)}>{roleLabel(m.role)}</Badge>
+                <Badge className={roleBadgeClass(m.is_sub_agent ? "sub_agent" : m.role)}>
+                  {m.is_sub_agent ? "Sub-agent" : roleLabel(m.role)}
+                </Badge>
               </td>
               <td className="px-4 py-3">
                 <Badge className={statusBadgeClass(m.is_active)}>{m.is_active ? "Active" : "Deactivated"}</Badge>
@@ -372,7 +380,7 @@ function RowActions({
   }, [open]);
 
   // The owner account and deactivated users have no actions.
-  if (member.role === "owner" || !member.is_active) {
+  if (member.role === "owner" || member.role === "client" || !member.is_active) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
 
@@ -393,7 +401,7 @@ function RowActions({
         email: member.email ?? "",
         full_name: member.full_name ?? "",
         phone: member.phone_number ?? "",
-        role: member.role as Exclude<UserRole, "owner">,
+        role: member.role as TeamInviteRole,
         invite_method: "magic_link",
       })) as InviteResult;
       if (res.email_sent === false) {
@@ -516,16 +524,27 @@ const inviteSchema = z
     full_name: z.string().trim().min(1, "Full name is required."),
     email: z.string().trim().email("Enter a valid email address."),
     phone: z.string().trim().min(1, "Phone is required."),
-    role: z.enum(["partner", "contractor"]),
+    role: z.enum(["partner", "contractor", "lead_referrer", "sub_agent"]),
+    parent_partner_id: z.string(),
     invite_method: z.enum(["magic_link", "temp_password"]),
     temp_password: z.string(),
   })
   .superRefine((v, ctx) => {
-    if (v.invite_method === "temp_password" && v.temp_password.trim().length < 8) {
+    if (v.invite_method === "temp_password") {
+      const password = v.temp_password.trim();
+      if (password.length < 12 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["temp_password"],
+          message: "Use at least 12 characters with uppercase, lowercase, a number and a symbol.",
+        });
+      }
+    }
+    if (v.role === "sub_agent" && !v.parent_partner_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["temp_password"],
-        message: "Temporary password must be at least 8 characters.",
+        path: ["parent_partner_id"],
+        message: "Choose the partner this sub-agent belongs to.",
       });
     }
   });
@@ -542,6 +561,7 @@ function InviteDialog({
   onAuditWarning: (w: AuditWarning) => void;
 }) {
   const invite = useInviteUser();
+  const { data: partners, isLoading: partnersLoading } = useReferralPartnerOptions();
   const [serverErr, setServerErr] = useState<string | null>(null);
   const [showTemp, setShowTemp] = useState(false);
   const {
@@ -556,7 +576,8 @@ function InviteDialog({
       email: "",
       phone: "",
       role: "partner",
-      invite_method: "magic_link",
+      parent_partner_id: "",
+      invite_method: "temp_password",
       temp_password: "",
     },
   });
@@ -578,6 +599,7 @@ function InviteDialog({
         full_name: v.full_name.trim(),
         phone: v.phone.trim(),
         role: v.role,
+        parent_partner_id: v.role === "sub_agent" ? v.parent_partner_id : null,
         invite_method: v.invite_method,
         temp_password: v.invite_method === "temp_password" ? v.temp_password.trim() : undefined,
       });
@@ -666,16 +688,38 @@ function InviteDialog({
         <div>
           <label className={labelCls} htmlFor="inv-role">Role</label>
           <select id="inv-role" className={fieldCls} {...register("role")}>
-            {ASSIGNABLE_ROLES.map((r) => (
+            {INVITE_ROLE_OPTIONS.map((r) => (
               <option key={r.value} value={r.value}>{r.label}</option>
             ))}
           </select>
           <p className="mt-1 text-xs text-muted-foreground">
             {role === "partner"
               ? "Referral partners refer leads and see only their own, with fictional funder names."
-              : "Contractors are FNC's direct team, with their own portal."}
+              : role === "contractor"
+                ? "Contractors are FNC's direct team, with their own portal."
+                : role === "sub_agent"
+                  ? "A sub-agent is a lead referrer connected to one selected partner."
+                  : "A direct lead referrer is connected to Fund Now Capital, not to a partner."}
           </p>
         </div>
+
+        {role === "sub_agent" && (
+          <div>
+            <label className={labelCls} htmlFor="inv-parent-partner">Which partner does this sub-agent belong to?</label>
+            <select
+              id="inv-parent-partner"
+              className={fieldCls}
+              disabled={partnersLoading}
+              {...register("parent_partner_id")}
+            >
+              <option value="">{partnersLoading ? "Loading partners…" : "Select a partner"}</option>
+              {(partners ?? []).map((partner) => (
+                <option key={partner.id} value={partner.id}>{partner.name}</option>
+              ))}
+            </select>
+            {errors.parent_partner_id && <p className={errCls}>{errors.parent_partner_id.message}</p>}
+          </div>
+        )}
 
         <fieldset className="space-y-2">
           <legend className={labelCls}>How to send login access?</legend>
@@ -691,7 +735,7 @@ function InviteDialog({
             <span>
               <span className="font-medium text-brand-navy">Temporary password</span>
               <span className="block text-xs text-muted-foreground">
-                You set a password and share it verbally — no email is sent.
+                You set a temporary password. The person must replace it after their first login.
               </span>
             </span>
           </label>
@@ -705,7 +749,7 @@ function InviteDialog({
                 id="inv-temp"
                 type={showTemp ? "text" : "password"}
                 className={fieldCls + " pr-10"}
-                placeholder="At least 8 characters"
+                placeholder="At least 12 characters"
                 autoComplete="new-password"
                 {...register("temp_password")}
               />
@@ -720,7 +764,7 @@ function InviteDialog({
             </div>
             {errors.temp_password && <p className={errCls}>{errors.temp_password.message}</p>}
             <p className="mt-1 text-xs text-muted-foreground">
-              Hidden by default — use the eye to check it before sharing verbally.
+              Hidden by default. Share it securely; the invitee will be forced to choose a new password.
             </p>
           </div>
         )}
@@ -748,9 +792,13 @@ function EditRoleDialog({ member, onClose }: { member: TeamMember; onClose: () =
   const update = useUpdateUserRole();
   const { data: partners } = useReferralPartnerOptions();
   const [newRole, setNewRole] = useState<Exclude<UserRole, "owner">>(
-    member.role === "partner" || member.role === "contractor" ? member.role : "partner",
+    member.role === "partner" || member.role === "contractor" || member.role === "lead_referrer"
+      ? member.role
+      : "partner",
   );
-  const [partnerId, setPartnerId] = useState<string>(member.referral_partner_id ?? "");
+  const [partnerId, setPartnerId] = useState<string>(
+    member.sourced_via_partner_id ?? member.referral_partner_id ?? "",
+  );
   const [serverErr, setServerErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -761,7 +809,11 @@ function EditRoleDialog({ member, onClose }: { member: TeamMember; onClose: () =
 
   const unchanged =
     newRole === member.role &&
-    (newRole !== "partner" || (partnerId || null) === (member.referral_partner_id ?? null));
+    ((newRole !== "partner" && newRole !== "lead_referrer") ||
+      (partnerId || null) ===
+        (newRole === "lead_referrer"
+          ? member.sourced_via_partner_id ?? null
+          : member.referral_partner_id ?? null));
 
   const onConfirm = async () => {
     setServerErr(null);
@@ -769,7 +821,8 @@ function EditRoleDialog({ member, onClose }: { member: TeamMember; onClose: () =
       await update.mutateAsync({
         user_id: member.id,
         new_role: newRole,
-        new_referral_partner_id: newRole === "partner" ? partnerId || null : null,
+        new_referral_partner_id:
+          newRole === "partner" || newRole === "lead_referrer" ? partnerId || null : null,
       });
       toast.success(`${member.full_name || member.email} is now a ${roleLabel(newRole)}`);
       onClose();
@@ -802,9 +855,11 @@ function EditRoleDialog({ member, onClose }: { member: TeamMember; onClose: () =
           </select>
         </div>
 
-        {newRole === "partner" && (
+        {(newRole === "partner" || newRole === "lead_referrer") && (
           <div>
-            <label className={labelCls} htmlFor="edit-partner">Referral partner (optional)</label>
+            <label className={labelCls} htmlFor="edit-partner">
+              {newRole === "lead_referrer" ? "Parent partner (optional — leave empty for FNC-direct)" : "Referral partner (optional)"}
+            </label>
             <select id="edit-partner" className={fieldCls} value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
               <option value="">— None —</option>
               {(partners ?? []).map((p) => (
@@ -816,8 +871,8 @@ function EditRoleDialog({ member, onClose }: { member: TeamMember; onClose: () =
 
         <p className="flex items-start gap-2 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800">
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          Changing role will reset their referral partner link (unless they stay a partner) and requires the user to
-          re-authenticate for the new access to take effect.
+          Changing role updates the person's access. A lead referrer with a parent partner is shown as that partner's
+          sub-agent; without one they remain FNC-direct. The user must sign in again for access changes to take effect.
         </p>
 
         {serverErr && <p className={errCls}>{serverErr}</p>}
@@ -944,7 +999,8 @@ function TempPasswordModal({
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
           Share this password with <strong className="text-brand-navy">{name}</strong> verbally or through a secure
-          channel — it is shown once and won't be retrievable later.
+          channel — it is shown once and won't be retrievable later. Their first login will stop at the mandatory
+          Change Password screen before any portal data is shown.
         </p>
         <div className="flex items-center gap-2">
           <code className="flex-1 select-all break-all rounded-lg border border-border bg-slate-50 px-3 py-2 font-mono text-sm text-brand-navy">

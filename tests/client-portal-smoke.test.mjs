@@ -32,7 +32,9 @@ test("login and role boundaries fail closed", async () => {
   ]);
   includesAll(app, [
     'element={session ? <RoleLanding /> : <AuthPage />}',
-    'element={session ? <SignAgreementPage /> : <Navigate to="/" replace />}',
+    'element={session ? <AgreementSigningPage /> : <AuthPage />}',
+    'path="/change-password"',
+    'must_change_password === true',
   ], "session boundary");
   includesAll(gate, [
     'if (role !== "client")',

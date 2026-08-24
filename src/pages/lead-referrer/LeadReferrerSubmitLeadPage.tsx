@@ -28,8 +28,8 @@ export default function LeadReferrerSubmitLeadPage() {
       const { error } = await supabase.rpc("lead_referrer_submit_lead", {
         p_business_name: form.businessName.trim(),
         p_contact_name: form.contactName.trim(),
-        p_email: form.email.trim(),
-        p_phone: form.phone.trim(),
+        p_contact_email: form.email.trim(),
+        p_contact_cell: form.phone.trim(),
         p_funding_amount: amount,
         p_funding_purpose: [form.fundingPurpose.trim()],
       });

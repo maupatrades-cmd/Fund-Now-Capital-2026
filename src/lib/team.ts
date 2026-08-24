@@ -7,6 +7,8 @@ import type { UserRole } from "@/lib/roles";
 export type { UserRole };
 
 export type InviteMethod = "magic_link" | "temp_password";
+export type TeamInviteRole = "partner" | "contractor" | "lead_referrer" | "sub_agent";
+export type AssignableTeamRole = Exclude<UserRole, "owner" | "client">;
 
 // A person in the CRM (a profiles row), with the referral partner name resolved
 // for display.
@@ -17,6 +19,8 @@ export type TeamMember = {
   role: UserRole;
   referral_partner_id: string | null;
   referral_partner_name: string | null;
+  sourced_via_partner_id: string | null;
+  is_sub_agent: boolean;
   is_active: boolean;
   phone_number: string | null;
   created_at: string;
@@ -24,19 +28,27 @@ export type TeamMember = {
 
 export type ReferralPartnerOption = { id: string; name: string };
 
-export type TeamFilter = "all" | "owner" | "partner" | "contractor" | "deactivated";
+export type TeamFilter = "all" | "owner" | "partner" | "contractor" | "lead_referrer" | "deactivated";
 
 // Roles the owner may assign through the UI. The owner role is deliberately
 // absent — owner accounts are provisioned out-of-band, not created here.
-export const ASSIGNABLE_ROLES: { value: Exclude<UserRole, "owner">; label: string }[] = [
+export const ASSIGNABLE_ROLES: { value: AssignableTeamRole; label: string }[] = [
   { value: "partner", label: "Partner" },
   { value: "contractor", label: "Contractor" },
+  { value: "lead_referrer", label: "Lead Referrer" },
+];
+
+export const INVITE_ROLE_OPTIONS: { value: TeamInviteRole; label: string }[] = [
+  ...ASSIGNABLE_ROLES,
+  { value: "sub_agent", label: "Sub-agent (under a partner)" },
 ];
 
 export const ROLE_LABEL: Record<string, string> = {
   owner: "Owner",
   partner: "Partner",
   contractor: "Contractor",
+  lead_referrer: "Lead Referrer",
+  sub_agent: "Sub-agent",
 };
 
 export function roleLabel(role: string): string {
@@ -52,6 +64,9 @@ export function roleBadgeClass(role: string): string {
       return "bg-brand-teal/10 text-brand-teal ring-brand-teal/20";
     case "contractor":
       return "bg-brand-green/10 text-brand-green ring-brand-green/20";
+    case "lead_referrer":
+    case "sub_agent":
+      return "bg-amber-50 text-amber-800 ring-amber-200";
     default:
       return "bg-slate-100 text-slate-600 ring-slate-200";
   }

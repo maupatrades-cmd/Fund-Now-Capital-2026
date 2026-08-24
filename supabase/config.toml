@@ -20,6 +20,12 @@ verify_jwt = false
 [functions.admin-deactivate-user]
 verify_jwt = false
 
+# Authenticated self-service password change. The function verifies the caller
+# JWT and re-authenticates the current password before using Auth Admin to rotate
+# the credential and clear the first-login marker.
+[functions.change-user-password]
+verify_jwt = false
+
 # apply-submit-application is the PUBLIC /apply endpoint — anyone on the internet
 # can submit an application, so there is no caller to authenticate. verify_jwt =
 # false keeps it open; all privileged work goes through the service-role key and
