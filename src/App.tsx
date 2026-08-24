@@ -37,6 +37,8 @@ import AgreementSigningPage from "@/pages/AgreementSigningPage";
 import LeadReferrerGate from "@/pages/LeadReferrerGate";
 import LeadReferrerHomePage from "@/pages/lead-referrer/LeadReferrerHomePage";
 import LeadReferrerSubmitLeadPage from "@/pages/lead-referrer/LeadReferrerSubmitLeadPage";
+import LeadReferrerLeadsPage from "@/pages/lead-referrer/LeadReferrerLeadsPage";
+import LeadReferrerPipelinePage from "@/pages/lead-referrer/LeadReferrerPipelinePage";
 import ClientInvitationsPage from "@/pages/ClientInvitationsPage";
 import PortalBookingPage from "@/pages/portal/PortalBookingPage";
 import LeadReferrerBookingPage from "@/pages/lead-referrer/LeadReferrerBookingPage";
@@ -208,6 +210,8 @@ function AppRoutes() {
       <Route path="/lead-referrer" element={<LeadReferrerGate />}>
         <Route index element={<LeadReferrerHomePage />} />
         <Route path="submit-lead" element={<LeadReferrerSubmitLeadPage />} />
+        <Route path="leads" element={<LeadReferrerLeadsPage />} />
+        <Route path="pipeline" element={<LeadReferrerPipelinePage />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="calendar" element={<LeadReferrerBookingPage />} />
         <Route path="*" element={<Navigate to="/lead-referrer" replace />} />
