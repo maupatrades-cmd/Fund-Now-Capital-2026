@@ -128,7 +128,7 @@ export default function ClientActionCenter() {
     });
   }
 
-  if (!progress.isLoading && !progress.data?.length) {
+  if (!progress.isLoading && !progress.isError && !progress.data?.length) {
     actions.push({
       key: "application",
       title: "Tell us what your business needs",
@@ -177,7 +177,7 @@ export default function ClientActionCenter() {
         </p>
       ) : null}
 
-      {!isLoading && actions.length === 0 ? (
+      {!isLoading && failedCount === 0 && actions.length === 0 ? (
         <div className="mt-6 flex flex-col items-center rounded-2xl border border-[#6ec144]/20 bg-[#6ec144]/8 px-5 py-9 text-center">
           <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#6ec144]/15 text-[#a2eb80]"><CheckCircle2 className="h-6 w-6" aria-hidden="true" /></span>
           <p className="mt-4 font-extrabold">You are up to date</p>
