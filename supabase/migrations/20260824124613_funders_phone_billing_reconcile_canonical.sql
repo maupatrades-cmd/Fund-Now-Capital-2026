@@ -1,3 +1,5 @@
+-- Canonical successor of the original duplicate-version reconciliation file.
+-- Generated with `supabase migration new` so the repository migration chain is unambiguous.
 -- Reconcile main <-> live: funders.phone column + the funder data mutations that were
 -- applied DIRECTLY to live during the 2026-07-27 funder-billing session (never captured
 -- in a migration until now). This file brings main's migration history in line with live.

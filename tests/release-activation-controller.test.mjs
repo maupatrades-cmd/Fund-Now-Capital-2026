@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { buildActivationPlan, renderMarkdown } from "../scripts/ops/plan-release-activation.mjs";
+import { buildActivationPlan, normalizeMigrationName, renderMarkdown } from "../scripts/ops/plan-release-activation.mjs";
 
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), "fnc-activation-plan-"));
@@ -29,6 +29,40 @@ test("orders only unapplied migrations and undeployed functions", async () => {
   assert.equal(plan.blockers.length, 0);
   assert.equal(plan.safety.live_changes_performed, false);
   assert.match(renderMarkdown(plan), /SINGLE ACTOR REQUIRED/);
+});
+
+test("reconciles MCP-applied timestamp aliases by unambiguous logical name", async () => {
+  const root = await fixture();
+  const plan = await buildActivationPlan(root, {
+    captured_at: "2026-08-24T10:00:00Z",
+    baseline_commit: "abcdef1",
+    applied_migrations: [
+      { version: "20260103000000", name: "20260101000000_first" },
+    ],
+    deployed_edge_functions: [],
+  });
+  assert.deepEqual(plan.pending_migrations.map(({ version }) => version), ["20260102000000"]);
+  assert.equal(plan.logical_name_aliases.length, 1);
+  assert.equal(plan.logical_name_aliases[0].repository.version, "20260101000000");
+  assert.deepEqual(plan.blockers, []);
+});
+
+test("normalizes repeated timestamp prefixes only", () => {
+  assert.equal(normalizeMigrationName("20260812193636_20260812093000_Role_Document_Requirements.sql"), "role_document_requirements");
+  assert.equal(normalizeMigrationName("client_portal_profile"), "client_portal_profile");
+});
+
+test("blocks ambiguous logical-name reconciliation", async () => {
+  const root = await fixture();
+  await writeFile(path.join(root, "supabase", "migrations", "20260103000000_20260101000000_first.sql"), "select 3;\n");
+  const plan = await buildActivationPlan(root, {
+    captured_at: "2026-08-24T10:00:00Z",
+    baseline_commit: "abcdef1",
+    applied_migrations: [{ version: "20260104000000", name: "first" }],
+    deployed_edge_functions: [],
+  });
+  assert.ok(plan.blockers.some(({ code }) => code === "AMBIGUOUS_REPOSITORY_MIGRATION_NAME"));
+  assert.equal(plan.logical_name_aliases.length, 0);
 });
 
 test("blocks when live inventory contains source-less objects", async () => {

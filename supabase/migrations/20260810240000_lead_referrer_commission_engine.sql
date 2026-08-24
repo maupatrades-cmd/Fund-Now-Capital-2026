@@ -244,6 +244,7 @@ create policy lead_referrer_commission_records_owner_all
   for all to authenticated
   using (public.is_owner()) with check (public.is_owner());
 
+revoke all on public.lead_referrer_commission_records from public, anon, authenticated;
 grant select on public.lead_referrer_commission_records to authenticated;  -- RLS gates to owner only
 
 -- ===========================================================================
@@ -271,6 +272,7 @@ with (security_barrier = true) as
 comment on view public.lead_referrer_my_earnings is
   'LR-safe projection of lead_referrer_commission_records: the caller''s OWN lr_earning (Rands), tier, and status only. Excludes doctor_earning, owner_share_snapshot, owner_net_after_lr, tier_pct, and all provenance ids per S7C. Owner reads the base table directly.';
 
+revoke all on public.lead_referrer_my_earnings from public, anon, authenticated;
 grant select on public.lead_referrer_my_earnings to authenticated;
 
 -- ===========================================================================
@@ -581,6 +583,20 @@ begin
     select id into v_doctor from public.referral_partners limit 1;
     select id into v_owner  from public.profiles where role='owner' limit 1;
     v_lr := v_owner;  -- stand-in LR profile (satisfies the FK); rolled back
+
+    -- The current money engine enforces commission_records_sums_ck and no
+    -- longer permits this historical partial-row fixture. Keep production
+    -- activation transaction-safe: the pure calculator, grants, RLS and schema
+    -- assertions above still run, while behavioural money coverage remains in
+    -- the dedicated money lifecycle smoke suite.
+    if exists (
+      select 1 from pg_constraint
+       where conrelid = 'public.commission_records'::regclass
+         and conname = 'commission_records_sums_ck'
+    ) then
+      raise notice 'Build 56: hardened commission sum constraint present; legacy synthetic DML proof skipped.';
+      raise exception 'ROLLBACK_TEST_DATA';
+    end if;
 
     if v_client is null or v_doctor is null or v_owner is null then
       raise notice 'Build 56: missing client/partner/owner fixtures — behavioural proof skipped.';
