@@ -4,7 +4,8 @@ import { invalidateActivity } from "@/hooks/useActivity";
 
 export type OwnerTask = {
   id: string; title: string; notes: string | null; due_at: string | null;
-  priority: "low" | "normal" | "high"; status: "open" | "completed" | "cancelled";
+  priority: "low" | "normal" | "high"; status: "open" | "in_progress" | "blocked" | "completed" | "cancelled";
+  task_kind: "follow_up" | "document_request" | "paperwork_review" | "client_contact" | "funder_follow_up" | "meeting" | "payment";
   created_at: string; client: { business_name: string } | { business_name: string }[] | null;
   deal: { reference: string | null } | { reference: string | null }[] | null;
 };
@@ -12,7 +13,7 @@ export type OwnerTask = {
 export function useOwnerTasks() {
   return useQuery({ queryKey: ["owner-tasks"], queryFn: async () => {
     const { data, error } = await supabase.from("owner_tasks")
-      .select("id,title,notes,due_at,priority,status,created_at,client:clients(business_name),deal:deals(reference)")
+      .select("id,title,notes,due_at,priority,status,task_kind,created_at,client:clients(business_name),deal:deals(reference)")
       .order("status").order("due_at", { ascending: true, nullsFirst: false });
     if (error) throw error;
     return (data ?? []) as unknown as OwnerTask[];
@@ -29,7 +30,7 @@ export function useCreateOwnerTask() {
 
 export function useSetOwnerTaskStatus() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: async ({ id, status }: { id: string; status: OwnerTask["status"] }) => {
+  return useMutation({ mutationFn: async ({ id, status }: { id: string; status: "open" | "completed" | "cancelled" }) => {
     const { error } = await supabase.rpc("owner_set_task_status", { p_task_id: id, p_status: status });
     if (error) throw error;
   }, onSuccess: () => { void qc.invalidateQueries({ queryKey: ["owner-tasks"] }); invalidateActivity(qc); }});

@@ -28,6 +28,7 @@ import {
   CalendarDays,
   Network,
   CircleDollarSign,
+  MailWarning,
   type LucideIcon,
 } from "lucide-react";
 
@@ -63,6 +64,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/team", label: "Team", icon: UserCog },
   { to: "/partner-network", label: "Partner Network", icon: Network },
   { to: "/settings/notifications", label: "Notifications", icon: Bell },
+  { to: "/settings/notification-delivery", label: "Delivery Centre", icon: MailWarning },
   { to: "/settings/industries", label: "Industries", icon: Factory },
   { to: "/settings/funders", label: "Funder rates", icon: Percent },
   { to: "/settings/payees", label: "Payee banking", icon: Banknote },

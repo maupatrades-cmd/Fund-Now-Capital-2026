@@ -37,3 +37,13 @@ test("runner refuses known production targets", async () => {
   assert.match(runner, /supabase\.co/)
   assert.match(runner, /Refusing to run the cross-role harness against a production target/)
 })
+
+test("authenticated mode is separately armed and always namespaced", async () => {
+  const runner = await readFile(new URL("../scripts/run-cross-role-e2e.mjs", import.meta.url), "utf8")
+  const authenticated = await readFile(new URL("./e2e/authenticated-cross-role-runner.mjs", import.meta.url), "utf8")
+  assert.match(runner, /I_UNDERSTAND_THIS_CREATES_DISPOSABLE_FIXTURES/)
+  assert.match(authenticated, /fnc-e2e-/)
+  assert.match(authenticated, /finally/)
+  assert.match(authenticated, /cleanup/)
+  assert.match(authenticated, /cross-role denial assertion/)
+})

@@ -42,6 +42,8 @@ import LeadReferrerPipelinePage from "@/pages/lead-referrer/LeadReferrerPipeline
 import ClientInvitationsPage from "@/pages/ClientInvitationsPage";
 import PortalBookingPage from "@/pages/portal/PortalBookingPage";
 import LeadReferrerBookingPage from "@/pages/lead-referrer/LeadReferrerBookingPage";
+import LeadReferrerTasksPage from "@/pages/lead-referrer/LeadReferrerTasksPage";
+import RoleDocumentTasksPage from "@/pages/portal/RoleDocumentTasksPage";
 import DashboardPage from "@/pages/DashboardPage";
 import PipelinePage from "@/pages/PipelinePage";
 import DealDetailPage from "@/pages/DealDetailPage";
@@ -80,6 +82,7 @@ import TermsAdminPage from "@/pages/TermsAdminPage";
 import LegalStudioPage from "@/pages/LegalStudioPage";
 import OwnerPayeesPage from "@/pages/OwnerPayeesPage";
 import MoneyCommandCenterPage from "@/pages/MoneyCommandCenterPage";
+import NotificationDeliveryPage from "@/pages/NotificationDeliveryPage";
 import { ConfettiProvider } from "@/lib/celebration/ConfettiProvider";
 import { useProfileRole } from "@/hooks/useProfileRole";
 import { roleHome } from "@/lib/roles";
@@ -183,6 +186,7 @@ function AppRoutes() {
         <Route path="submit-lead" element={<PartnerSubmitLeadPage />} />
         <Route path="leads" element={<PartnerMyLeadsPage />} />
         <Route path="deals" element={<PartnerDealsPage />} />
+        <Route path="tasks" element={<RoleDocumentTasksPage portal="partner" />} />
         <Route path="network" element={<PartnerNetworkPage surface="partner" />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="calendar" element={<PortalBookingPage portal="partner" />} />
@@ -213,6 +217,7 @@ function AppRoutes() {
         <Route path="submit-lead" element={<LeadReferrerSubmitLeadPage />} />
         <Route path="leads" element={<LeadReferrerLeadsPage />} />
         <Route path="pipeline" element={<LeadReferrerPipelinePage />} />
+        <Route path="tasks" element={<LeadReferrerTasksPage />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="calendar" element={<LeadReferrerBookingPage />} />
         <Route path="*" element={<Navigate to="/lead-referrer" replace />} />
@@ -271,6 +276,7 @@ function AppRoutes() {
         <Route path="/partner-network" element={<PartnerNetworkPage surface="owner" />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings/notifications" element={<NotificationPreferencesPage />} />
+        <Route path="/settings/notification-delivery" element={<NotificationDeliveryPage />} />
         <Route path="/settings/industries" element={<IndustriesPage />} />
         <Route path="/settings/funders" element={<FundersSettingsPage />} />
         <Route path="/settings/terms" element={<TermsAdminPage />} />
