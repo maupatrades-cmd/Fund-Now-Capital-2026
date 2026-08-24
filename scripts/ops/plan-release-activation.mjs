@@ -11,6 +11,7 @@ const DEFAULT_ROOT = path.resolve(SCRIPT_DIR, "../..");
 const ALLOWED_INVENTORY_KEYS = new Set([
   "captured_at",
   "baseline_commit",
+  "applied_migrations",
   "applied_migration_versions",
   "deployed_edge_functions",
 ]);
@@ -37,18 +38,37 @@ function assertInventory(inventory) {
   if (!inventory.baseline_commit || !/^[0-9a-f]{7,40}$/i.test(inventory.baseline_commit)) {
     throw new Error("Inventory baseline_commit must be the 7-40 character Git commit audited for release.");
   }
-  for (const field of ["applied_migration_versions", "deployed_edge_functions"]) {
-    if (!Array.isArray(inventory[field]) || inventory[field].some((value) => typeof value !== "string")) {
-      throw new Error(`Inventory ${field} must be an array of strings.`);
-    }
+  if (!Array.isArray(inventory.deployed_edge_functions) || inventory.deployed_edge_functions.some((value) => typeof value !== "string")) {
+    throw new Error("Inventory deployed_edge_functions must be an array of strings.");
   }
-  const badVersion = inventory.applied_migration_versions.find((version) => !/^\d{14}$/.test(version));
+  if (!Array.isArray(inventory.applied_migrations) && !Array.isArray(inventory.applied_migration_versions)) {
+    throw new Error("Inventory must provide applied_migrations or applied_migration_versions.");
+  }
+  if (inventory.applied_migrations && inventory.applied_migrations.some((row) => (
+    !row || typeof row !== "object" || !/^\d{14}$/.test(row.version) || typeof row.name !== "string" || !row.name.trim()
+  ))) {
+    throw new Error("Inventory applied_migrations must contain { version, name } rows.");
+  }
+  if (inventory.applied_migration_versions && inventory.applied_migration_versions.some((value) => typeof value !== "string")) {
+    throw new Error("Inventory applied_migration_versions must be an array of strings.");
+  }
+  const badVersion = (inventory.applied_migration_versions ?? []).find((version) => !/^\d{14}$/.test(version));
   if (badVersion) throw new Error(`Invalid migration version in inventory: ${badVersion}`);
   const badFunction = inventory.deployed_edge_functions.find((name) => !/^[a-z0-9][a-z0-9-]*$/.test(name));
   if (badFunction) throw new Error(`Invalid Edge Function name in inventory: ${badFunction}`);
-  for (const field of ["applied_migration_versions", "deployed_edge_functions"]) {
-    if (new Set(inventory[field]).size !== inventory[field].length) throw new Error(`Inventory ${field} contains duplicate values.`);
+  if (inventory.applied_migration_versions && new Set(inventory.applied_migration_versions).size !== inventory.applied_migration_versions.length) {
+    throw new Error("Inventory applied_migration_versions contains duplicate values.");
   }
+  if (inventory.applied_migrations && new Set(inventory.applied_migrations.map(({ version }) => version)).size !== inventory.applied_migrations.length) {
+    throw new Error("Inventory applied_migrations contains duplicate versions.");
+  }
+  if (new Set(inventory.deployed_edge_functions).size !== inventory.deployed_edge_functions.length) throw new Error("Inventory deployed_edge_functions contains duplicate values.");
+}
+
+export function normalizeMigrationName(name) {
+  let normalized = name.trim().toLowerCase().replace(/\.sql$/, "");
+  while (/^\d{14}_/.test(normalized)) normalized = normalized.slice(15);
+  return normalized;
 }
 
 function smokeCommands(pendingMigrations, pendingFunctions) {
@@ -98,21 +118,61 @@ export async function buildActivationPlan(root, inventory) {
       .filter((entry) => entry.isDirectory() && existsSync(path.join(functionDirectory, entry.name, "index.ts")))
       .map(({ name }) => name).sort()
     : [];
-  const applied = new Set(inventory.applied_migration_versions);
+  const appliedRows = inventory.applied_migrations ?? inventory.applied_migration_versions.map((version) => ({ version, name: "" }));
+  const applied = new Set(appliedRows.map(({ version }) => version));
   const deployed = new Set(inventory.deployed_edge_functions);
   const localVersions = new Set(validMigrations.map(({ version }) => version));
-  const pendingMigrations = validMigrations.filter(({ version }) => !applied.has(version));
-  const liveOnlyMigrationVersions = [...applied].filter((version) => !localVersions.has(version)).sort();
+  const repositoryByLogicalName = new Map();
+  for (const migration of validMigrations) {
+    const name = normalizeMigrationName(migration.name);
+    const group = repositoryByLogicalName.get(name) ?? [];
+    group.push(migration);
+    repositoryByLogicalName.set(name, group);
+  }
+  const liveByLogicalName = new Map();
+  for (const migration of appliedRows) {
+    if (!migration.name) continue;
+    const name = normalizeMigrationName(migration.name);
+    const group = liveByLogicalName.get(name) ?? [];
+    group.push(migration);
+    liveByLogicalName.set(name, group);
+  }
+  const ambiguousRepositoryNames = [...repositoryByLogicalName]
+    .filter(([, rows]) => rows.length > 1)
+    .map(([name, rows]) => ({ name, files: rows.map(({ file }) => file) }));
+  const ambiguousLiveNames = [...liveByLogicalName]
+    .filter(([, rows]) => rows.length > 1)
+    .map(([name, rows]) => ({ name, migrations: rows }));
+  const matchedRepositoryVersions = new Set();
+  const logicalNameAliases = [];
+  const liveOnlyMigrations = [];
+  for (const live of appliedRows) {
+    if (localVersions.has(live.version)) {
+      matchedRepositoryVersions.add(live.version);
+      continue;
+    }
+    const candidates = live.name ? (repositoryByLogicalName.get(normalizeMigrationName(live.name)) ?? []) : [];
+    if (candidates.length === 1) {
+      matchedRepositoryVersions.add(candidates[0].version);
+      logicalNameAliases.push({ live, repository: candidates[0] });
+    } else {
+      liveOnlyMigrations.push(live);
+    }
+  }
+  const pendingMigrations = validMigrations.filter(({ version }) => !matchedRepositoryVersions.has(version));
+  const liveOnlyMigrationVersions = liveOnlyMigrations.map(({ version }) => version).sort();
   const pendingFunctions = repoFunctionNames.filter((name) => !deployed.has(name));
   const liveOnlyFunctions = [...deployed].filter((name) => !repoFunctionNames.includes(name)).sort();
 
   const blockers = [];
   if (invalidMigrationFiles.length) blockers.push({ code: "INVALID_MIGRATION_FILENAME", details: invalidMigrationFiles });
   if (duplicateVersions.length) blockers.push({ code: "DUPLICATE_MIGRATION_VERSION", details: duplicateVersions });
-  const firstPendingIndex = validMigrations.findIndex(({ version }) => !applied.has(version));
+  if (ambiguousRepositoryNames.length) blockers.push({ code: "AMBIGUOUS_REPOSITORY_MIGRATION_NAME", details: ambiguousRepositoryNames });
+  if (ambiguousLiveNames.length) blockers.push({ code: "AMBIGUOUS_LIVE_MIGRATION_NAME", details: ambiguousLiveNames });
+  const firstPendingIndex = validMigrations.findIndex(({ version }) => !matchedRepositoryVersions.has(version));
   const appliedAfterGap = firstPendingIndex < 0
     ? []
-    : validMigrations.slice(firstPendingIndex + 1).filter(({ version }) => applied.has(version)).map(({ version, file }) => ({ version, file }));
+    : validMigrations.slice(firstPendingIndex + 1).filter(({ version }) => matchedRepositoryVersions.has(version)).map(({ version, file }) => ({ version, file }));
   if (appliedAfterGap.length) {
     blockers.push({
       code: "MIGRATION_LEDGER_GAP",
@@ -145,6 +205,8 @@ export async function buildActivationPlan(root, inventory) {
     blockers,
     pending_migrations: pendingMigrations,
     pending_edge_functions: pendingFunctions,
+    logical_name_aliases: logicalNameAliases,
+    live_only_migrations: liveOnlyMigrations,
     live_only_migration_versions: liveOnlyMigrationVersions,
     live_only_edge_functions: liveOnlyFunctions,
     smoke_commands: smokeCommands(pendingMigrations, pendingFunctions),
@@ -166,11 +228,14 @@ export function renderMarkdown(plan) {
     `- Repository migrations: ${plan.counts.repository_migrations}`,
     `- Applied migration versions reported: ${plan.counts.applied_migrations}`,
     `- Pending migrations: ${plan.counts.pending_migrations}`,
+    `- Logical-name ledger aliases reconciled: ${plan.logical_name_aliases.length}`,
     `- Repository Edge Functions: ${plan.counts.repository_edge_functions}`,
     `- Deployed Edge Functions reported: ${plan.counts.deployed_edge_functions}`,
     `- Pending Edge Functions: ${plan.counts.pending_edge_functions}`, "",
     "## Drift blockers", "",
     ...(plan.blockers.length ? plan.blockers.map((finding) => `- **${finding.code}**: \`${JSON.stringify(finding.details)}\``) : ["None."]), "",
+    "## Reconciled migration aliases", "",
+    ...(plan.logical_name_aliases.length ? plan.logical_name_aliases.map(({ live, repository }) => `- Live \`${live.version}_${live.name}\` matches repository \`${repository.file}\` by normalized logical name.`) : ["None."]), "",
     "## Ordered migration activation", "",
     ...(plan.pending_migrations.length ? plan.pending_migrations.flatMap((migration, index) => [
       `${index + 1}. Apply \`${migration.file}\` (version \`${migration.version}\`, SHA-256 \`${migration.sha256}\`).`,
