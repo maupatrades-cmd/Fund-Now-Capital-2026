@@ -69,10 +69,10 @@
       "id": "CLIENT-OFFERS",
       "area": "Client portal",
       "outcome": "Owner publishes client-safe funding offers and client compares, accepts or declines with immutable evidence.",
-      "status": "in_review",
+      "status": "verification_required",
       "pr": 260,
-      "repo_evidence": ["src/pages/client/ClientOffersPage.tsx"],
-      "remaining": "Resolve the main-branch conflict, complete bot review, merge, apply its migration through the single actor and run offer-decision smoke tests.",
+      "repo_evidence": ["src/pages/client/ClientOffersPage.tsx", "src/hooks/useClientFundingOffers.ts", "supabase/migrations/20260824120000_client_funding_offers_outcomes.sql", "supabase/migrations/20260824121000_client_offer_notification_readiness.sql", "supabase/migrations/20260824121100_client_offer_notification_triggers.sql"],
+      "remaining": "Apply the merged offer and notification migrations through the single actor, deploy the reviewed delivery function if required, and run publish, notification, accept, decline and retry smoke tests.",
       "depends_on": ["CLIENT-PORTAL-CORE"]
     },
     {

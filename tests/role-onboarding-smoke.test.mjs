@@ -21,7 +21,7 @@ test("team invitations are owner-only and expose both supported delivery paths",
     'invite_method: z.enum(["magic_link", "temp_password"])',
     'value="magic_link"',
     'value="temp_password"',
-    'v.temp_password.trim().length < 8',
+    'password.length < 12',
   ], "team invite UI");
   includesAll(teamHook, [
     'supabase.functions.invoke("admin-invite-user"',

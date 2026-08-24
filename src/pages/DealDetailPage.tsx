@@ -19,6 +19,7 @@ import { CommunicationsLog } from "@/components/deals/CommunicationsLog";
 import { DealDocuments } from "@/components/deals/DealDocuments";
 import { StageHistory } from "@/components/deals/StageHistory";
 import { ActivityFeed } from "@/components/activity/ActivityFeed";
+import { ClientFundingOffers } from "@/components/deals/ClientFundingOffers";
 
 export default function DealDetailPage() {
   const { id } = useParams();
@@ -265,6 +266,8 @@ export default function DealDetailPage() {
           dealStage={deal.stage}
         />
       </section>
+
+      <ClientFundingOffers dealId={deal.id} clientId={deal.client_id} />
 
       {/* Commission Calculation — owner-only picker (POTENTIAL → PENDING → LOCKED) */}
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
