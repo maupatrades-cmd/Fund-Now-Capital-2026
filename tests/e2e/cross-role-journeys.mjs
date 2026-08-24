@@ -17,10 +17,10 @@ export const transactionalSqlSuites = [
 ]
 
 export const journeys = [
-  { role: "owner", proof: ["role-onboarding", "calendar", "offer-follow-up"] },
-  { role: "client", proof: ["portal", "offer", "notification"] },
+  { role: "owner", proof: ["role-onboarding", "calendar", "offer-follow-up", "all-tenant-visibility"] },
+  { role: "client", proof: ["portal", "offer", "notification", "cross-role-denial"] },
   { role: "partner", proof: ["role-gate", "sub-agent-directory", "cross-tenant-denial"] },
-  { role: "contractor", proof: ["role-gate", "document-chase", "money-lifecycle"] },
-  { role: "lead_referrer", proof: ["role-gate", "own-leads", "own-deals"] },
+  { role: "contractor", proof: ["role-gate", "document-chase", "money-lifecycle", "cross-role-denial"] },
+  { role: "lead_referrer", proof: ["role-gate", "own-leads", "own-deals", "cross-role-denial"] },
   { role: "partner_sub_agent", proof: ["parent-partner-attribution", "own-leads", "cross-tenant-denial"] },
 ]
