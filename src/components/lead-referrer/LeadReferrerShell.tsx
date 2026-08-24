@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CalendarDays, FilePlus2, Home, LogOut, Send } from "lucide-react";
+import { Briefcase, CalendarDays, FilePlus2, Home, ListChecks, LogOut, Send } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -8,6 +8,8 @@ import { useSession } from "@/lib/useSession";
 const navigation = [
   { to: "/lead-referrer", label: "Dashboard", icon: Home, end: true },
   { to: "/lead-referrer/submit-lead", label: "New lead", icon: FilePlus2, end: false },
+  { to: "/lead-referrer/leads", label: "My leads", icon: ListChecks, end: false },
+  { to: "/lead-referrer/pipeline", label: "My pipeline", icon: Briefcase, end: false },
   { to: "/lead-referrer/client-invitations", label: "Client invitations", icon: Send, end: false },
   { to: "/lead-referrer/calendar", label: "Book the Owner", icon: CalendarDays, end: false },
 ];
