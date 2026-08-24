@@ -365,6 +365,25 @@ export function extensionForMime(mime: string): string {
   return mime === "image/jpeg" ? "jpg" : "png";
 }
 
+/**
+ * Hand the signer a copy of exactly what they are being asked to sign, before
+ * they sign it. A signer who cannot keep a copy of the wording is relying on
+ * the counterparty's record of it — which is the wrong way round.
+ */
+export function downloadReviewCopy(
+  reference: string,
+  title: string,
+  markdown: string,
+): void {
+  const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${reference}-${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.md`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 /** A signing token is the 64-hex raw token issued by `send_agreement`. */
 export function isValidSigningToken(token: string | undefined): boolean {
   return !!token && /^[0-9a-f]{64}$/.test(token);
