@@ -19,6 +19,7 @@
     "test:repository-contracts": "node --test tests/repository-contract-drift.test.mjs && node scripts/verify-repository-contracts.mjs",
     "test:client-funding-offers": "node --test tests/client-funding-offers-contract.test.mjs",
     "test:cross-role-e2e": "node scripts/run-cross-role-e2e.mjs",
+    "test:cross-role-e2e-contract": "node --test tests/cross-role-e2e-harness.test.mjs tests/authenticated-cross-role-runner.test.mjs",
     "plan:release-activation": "node scripts/ops/plan-release-activation.mjs",
     "test:release-activation": "node --test tests/release-activation-controller.test.mjs",
     "test:money-command-center": "node --test tests/money-command-center.test.mjs"
