@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import ClientPortalShell from "@/components/client-portal/ClientPortalShell";
 import ClientApplicationProgress from "@/components/client-portal/ClientApplicationProgress";
+import ClientActionCenter from "@/components/client-portal/ClientActionCenter";
 import ClientMeetingRequestCard from "@/components/client-portal/ClientMeetingRequestCard";
 import ClientMessagesPanel from "@/components/client-portal/ClientMessagesPanel";
 import { useClientPortalIdentity } from "@/hooks/useClientPortalIdentity";
@@ -76,6 +77,8 @@ export default function ClientHomePage() {
             <p className="mt-1 text-amber-100/70">{identity.error.message} Fund Now Capital can complete this connection without asking you to create another account.</p>
           </section>
         ) : null}
+
+        <ClientActionCenter />
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Portal readiness">
           {[
