@@ -10,10 +10,10 @@ This register answers what remains without treating a committed file, merged PR 
 
 | Status | Count | Meaning |
 |---|---:|---|
-| built_repository | 0 | Implementation and automated source evidence are on main; live deployment and role smoke may still be required. |
+| built_repository | 1 | Implementation and automated source evidence are on main; live deployment and role smoke may still be required. |
 | partial | 5 | Some implementation exists, but an identified user-visible or verification slice remains. |
-| in_review | 2 | A PR exists outside main and must be reviewed, fixed and merged before deployment. |
-| verification_required | 7 | Repository implementation exists, but the last production audit found drift or no current live proof exists. |
+| in_review | 0 | A PR exists outside main and must be reviewed, fixed and merged before deployment. |
+| verification_required | 8 | Repository implementation exists, but the last production audit found drift or no current live proof exists. |
 | gated | 2 | Implementation depends on an explicit business, legal, accounting or architecture ruling. |
 | missing | 2 | No implementation evidence was found for the scoped outcome. |
 
@@ -26,10 +26,10 @@ This register answers what remains without treating a committed file, merged PR 
 | PARTNER-SUBAGENT-DIRECTORY | Partner operations | verification_required | #263 | Partner sees only its attributed sub-agents and operational roll-up; owner retains global oversight. | Apply through the single migration actor, then prove same-partner visibility and cross-partner denial with real role sessions. |
 | LEAD-REFERRER-PIPELINE | Lead referrer operations | verification_required | #262 | Lead referrer has own leads and a role-safe operational pipeline. | Apply through the single migration actor and smoke direct and partner-linked lead-referrer sessions, including cross-user denial. |
 | CLIENT-PORTAL-CORE | Client portal | partial | — | Client can access profile, application, progress, documents, messages, meetings and legal-readiness surfaces. | Run a real magic-link client session end to end; confirm live RPCs, private storage, messages, booking and mobile rendering. The committed test is source-level only. |
-| CLIENT-OFFERS | Client portal | in_review | #260 | Owner publishes client-safe funding offers and client compares, accepts or declines with immutable evidence. | Resolve the main-branch conflict, complete bot review, merge, apply its migration through the single actor and run offer-decision smoke tests. |
-| REPOSITORY-DRIFT-GUARD | Release safety | in_review | #261 | CI-friendly guard detects frontend RPC or Edge Function references with no committed server source. | Merge PR 261, then add its npm command to required CI checks. It does not replace live deployment verification. |
+| CLIENT-OFFERS | Client portal | verification_required | #260 | Owner publishes client-safe funding offers and client compares, accepts or declines with immutable evidence. | Apply the merged offer and notification migrations through the single actor, deploy the reviewed delivery function if required, and run publish, notification, accept, decline and retry smoke tests. |
+| REPOSITORY-DRIFT-GUARD | Release safety | built_repository | #261 | CI-friendly guard detects frontend RPC or Edge Function references with no committed server source. | Add the merged npm command to required CI checks and keep live deployment verification separate from repository-source verification. |
 | CONTRACTOR-APPLICATION | Contractor portal | verification_required | — | Public contractor application submits and owner screens or rejects it. | The 2026-08-15 production audit found the RPCs and Edge Function absent live. Reverify; if still absent, deploy/apply reviewed artifacts and smoke /apply plus Team review controls. |
-| CONTRACTOR-COMPLIANCE | Contractor portal | verification_required | — | Contractor progression and required-document checklist operate end to end. | The 2026-08-15 production audit found these objects absent live. Reverify, apply if required, and add role UI/browser smoke coverage for upload, owner verification and progression. |
+| CONTRACTOR-COMPLIANCE | Contractor portal | verification_required | — | Contractor progression and required-document checklist operate end to end. | Apply the merged contractor checklist and chase-workspace migrations through the single actor, reverify progression objects, and run browser role smoke for missing/rejected paperwork, task creation, owner verification and progression. |
 | CLIENT-SECURE-DOCUMENTS | Client portal | verification_required | — | Client document workspace uploads and registers private documents safely. | The 2026-08-15 audit found both document RPCs absent live. Reverify, apply if needed, and run upload/download plus another-client denial tests. |
 | LEGAL-TEMPLATE-CONTENT | Legal and e-sign | gated | — | Approved source PDFs become published versioned templates for client and role agreements. | Verify approved PDF hashes and source status, ingest exact approved content, publish template versions and confirm the chosen client-agreement projection. Do not invent legal wording. |
 | AGREEMENT-EXECUTION | Legal and e-sign | partial | #246 | Invitee/client reviews, consents, signs, receives an executed PDF and appears ready in the relevant portal. | Complete approved-template ingestion, deploy/verify renderer and signing dependencies, then smoke dispatch, signature, countersignature, executed artifact, portal projection and cross-role denial. |
@@ -42,14 +42,14 @@ This register answers what remains without treating a committed file, merged PR 
 
 ## Recommended build and verification order
 
-1. **CLIENT-OFFERS** — Resolve the main-branch conflict, complete bot review, merge, apply its migration through the single actor and run offer-decision smoke tests.
-2. **REPOSITORY-DRIFT-GUARD** — Merge PR 261, then add its npm command to required CI checks. It does not replace live deployment verification.
+1. **CLIENT-OFFERS** — Apply the merged offer and notification migrations through the single actor, deploy the reviewed delivery function if required, and run publish, notification, accept, decline and retry smoke tests.
+2. **REPOSITORY-DRIFT-GUARD** — Add the merged npm command to required CI checks and keep live deployment verification separate from repository-source verification.
 3. **ROLE-ONBOARDING** — Confirm the migration and both Edge Functions are live, then execute owner-to-each-role login and password-change smoke tests.
 4. **PARTNER-SUBAGENT-DIRECTORY** — Apply through the single migration actor, then prove same-partner visibility and cross-partner denial with real role sessions.
 5. **LEAD-REFERRER-PIPELINE** — Apply through the single migration actor and smoke direct and partner-linked lead-referrer sessions, including cross-user denial.
 6. **CALENDAR-BOOKING** — Run the committed manual smoke for standalone bookings, presentation-hour enforcement, owner acceptance, task linkage and client email delivery.
 7. **CONTRACTOR-APPLICATION** — The 2026-08-15 production audit found the RPCs and Edge Function absent live. Reverify; if still absent, deploy/apply reviewed artifacts and smoke /apply plus Team review controls.
-8. **CONTRACTOR-COMPLIANCE** — The 2026-08-15 production audit found these objects absent live. Reverify, apply if required, and add role UI/browser smoke coverage for upload, owner verification and progression.
+8. **CONTRACTOR-COMPLIANCE** — Apply the merged contractor checklist and chase-workspace migrations through the single actor, reverify progression objects, and run browser role smoke for missing/rejected paperwork, task creation, owner verification and progression.
 9. **CLIENT-SECURE-DOCUMENTS** — The 2026-08-15 audit found both document RPCs absent live. Reverify, apply if needed, and run upload/download plus another-client denial tests.
 10. **CLIENT-PORTAL-CORE** — Run a real magic-link client session end to end; confirm live RPCs, private storage, messages, booking and mobile rendering. The committed test is source-level only.
 11. **LEGAL-TEMPLATE-CONTENT** — Verify approved PDF hashes and source status, ingest exact approved content, publish template versions and confirm the chosen client-agreement projection. Do not invent legal wording.
@@ -91,12 +91,12 @@ This register answers what remains without treating a committed file, merged PR 
 ### CLIENT-OFFERS
 
 - Dependencies: CLIENT-PORTAL-CORE
-- Repository evidence: `src/pages/client/ClientOffersPage.tsx`
+- Repository evidence: `src/pages/client/ClientOffersPage.tsx`, `src/hooks/useClientFundingOffers.ts`, `supabase/migrations/20260824120000_client_funding_offers_outcomes.sql`, `supabase/migrations/20260824121000_client_offer_notification_readiness.sql`, `supabase/migrations/20260824121100_client_offer_notification_triggers.sql`
 
 ### REPOSITORY-DRIFT-GUARD
 
 - Dependencies: none
-- Repository evidence: none on main (PR evidence only)
+- Repository evidence: `scripts/verify-repository-contracts.mjs`, `tests/repository-contract-drift.test.mjs`
 
 ### CONTRACTOR-APPLICATION
 
@@ -106,7 +106,7 @@ This register answers what remains without treating a committed file, merged PR 
 ### CONTRACTOR-COMPLIANCE
 
 - Dependencies: ROLE-ONBOARDING, REPOSITORY-DRIFT-GUARD
-- Repository evidence: `src/hooks/useContractorProgression.ts`, `supabase/migrations/20260804130100_contractor_progression.sql`, `supabase/migrations/20260810230000_contractor_document_checklist.sql`
+- Repository evidence: `src/hooks/useContractorProgression.ts`, `src/pages/contractor/DocumentChasePage.tsx`, `src/hooks/useContractorDocumentChase.ts`, `supabase/migrations/20260804130100_contractor_progression.sql`, `supabase/migrations/20260810230000_contractor_document_checklist.sql`, `supabase/migrations/20260824220000_contractor_document_chase_workspace.sql`, `tests/contractor-document-chase.test.mjs`
 
 ### CLIENT-SECURE-DOCUMENTS
 

@@ -79,10 +79,10 @@
       "id": "REPOSITORY-DRIFT-GUARD",
       "area": "Release safety",
       "outcome": "CI-friendly guard detects frontend RPC or Edge Function references with no committed server source.",
-      "status": "in_review",
+      "status": "built_repository",
       "pr": 261,
-      "repo_evidence": [],
-      "remaining": "Merge PR 261, then add its npm command to required CI checks. It does not replace live deployment verification.",
+      "repo_evidence": ["scripts/verify-repository-contracts.mjs", "tests/repository-contract-drift.test.mjs"],
+      "remaining": "Add the merged npm command to required CI checks and keep live deployment verification separate from repository-source verification.",
       "depends_on": []
     },
     {
@@ -101,8 +101,8 @@
       "outcome": "Contractor progression and required-document checklist operate end to end.",
       "status": "verification_required",
       "pr": null,
-      "repo_evidence": ["src/hooks/useContractorProgression.ts", "supabase/migrations/20260804130100_contractor_progression.sql", "supabase/migrations/20260810230000_contractor_document_checklist.sql"],
-      "remaining": "The 2026-08-15 production audit found these objects absent live. Reverify, apply if required, and add role UI/browser smoke coverage for upload, owner verification and progression.",
+      "repo_evidence": ["src/hooks/useContractorProgression.ts", "src/pages/contractor/DocumentChasePage.tsx", "src/hooks/useContractorDocumentChase.ts", "supabase/migrations/20260804130100_contractor_progression.sql", "supabase/migrations/20260810230000_contractor_document_checklist.sql", "supabase/migrations/20260824220000_contractor_document_chase_workspace.sql", "tests/contractor-document-chase.test.mjs"],
+      "remaining": "Apply the merged contractor checklist and chase-workspace migrations through the single actor, reverify progression objects, and run browser role smoke for missing/rejected paperwork, task creation, owner verification and progression.",
       "depends_on": ["ROLE-ONBOARDING", "REPOSITORY-DRIFT-GUARD"]
     },
     {

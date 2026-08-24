@@ -16,6 +16,7 @@ import ContractorInvoicesPage from "./contractor/ContractorInvoicesPage";
 import ContractorInvoiceDetailPage from "./contractor/ContractorInvoiceDetailPage";
 import ContractorNotificationSettingsPage from "./contractor/NotificationSettingsPage";
 import ContractorPaymentSettingsPage from "./contractor/PaymentSettingsPage";
+import ContractorDocumentChasePage from "./contractor/DocumentChasePage";
 import ClientInvitationsPage from "./ClientInvitationsPage";
 import PortalBookingPage from "./portal/PortalBookingPage";
 
@@ -67,6 +68,7 @@ export default function ContractorGate() {
         <Route path="submit-lead" element={<ContractorSubmitLeadPage />} />
         <Route path="leads" element={<ContractorMyLeadsPage />} />
         <Route path="deals" element={<ContractorDealsPage />} />
+        <Route path="documents" element={<ContractorDocumentChasePage />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="calendar" element={<PortalBookingPage portal="contractor" />} />
         <Route path="badges" element={<ContractorBadgesPage />} />
