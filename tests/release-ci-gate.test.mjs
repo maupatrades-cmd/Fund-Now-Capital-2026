@@ -26,6 +26,7 @@ test("release CI is least privilege and cannot target production", async () => {
   const workflow = await readFile(workflowUrl, "utf8");
 
   assert.match(workflow, /permissions:\s*\n\s+contents: read/);
+  assert.match(workflow, /persist-credentials: false/);
   assert.doesNotMatch(workflow, /secrets\./i);
   assert.doesNotMatch(workflow, /supabase\.co|fund-now-capital-2026\.vercel\.app/i);
   assert.doesNotMatch(workflow, /supabase\s+(?:db\s+push|migration\s+up|functions\s+deploy)|vercel\s+(?:--prod|deploy)/i);
