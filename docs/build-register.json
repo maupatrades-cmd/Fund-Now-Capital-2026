@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "baseline": {
+    "repository_commit": "1a1c543",
+    "audited_on": "2026-08-24",
+    "production_evidence_cutoff": "2026-08-15",
+    "production_warning": "Live-state claims older than the cutoff must be reverified; repository presence is not proof of deployment."
+  },
+  "status_definitions": {
+    "built_repository": "Implementation and automated source evidence are on main; live deployment and role smoke may still be required.",
+    "partial": "Some implementation exists, but an identified user-visible or verification slice remains.",
+    "in_review": "A PR exists outside main and must be reviewed, fixed and merged before deployment.",
+    "verification_required": "Repository implementation exists, but the last production audit found drift or no current live proof exists.",
+    "gated": "Implementation depends on an explicit business, legal, accounting or architecture ruling.",
+    "missing": "No implementation evidence was found for the scoped outcome."
+  },
+  "items": [
+    {
+      "id": "ROLE-ONBOARDING",
+      "area": "Team and access",
+      "outcome": "Owner invites partner, contractor, direct lead referrer or partner-linked sub-agent; invitee changes the temporary password.",
+      "status": "verification_required",
+      "pr": 258,
+      "repo_evidence": ["src/pages/TeamPage.tsx", "src/pages/ChangePasswordPage.tsx", "supabase/migrations/20260816202433_team_lead_referrer_onboarding.sql", "supabase/functions/admin-invite-user/index.ts", "supabase/functions/change-user-password/index.ts", "tests/team-onboarding.test.mjs"],
+      "remaining": "Confirm the migration and both Edge Functions are live, then execute owner-to-each-role login and password-change smoke tests.",
+      "depends_on": []
+    },
+    {
+      "id": "CALENDAR-BOOKING",
+      "area": "Calendar",
+      "outcome": "Owner calendar, shared availability, booking decisions, client confirmation and task creation.",
+      "status": "partial",
+      "pr": 257,
+      "repo_evidence": ["src/pages/OwnerCalendarPage.tsx", "src/components/calendar/SharedBookingCalendar.tsx", "src/hooks/useOwnerCalendar.ts", "tests/calendar-booking-rules.test.mjs", "docs/ROLE-ONBOARDING-CALENDAR-MANUAL-SMOKE-2026-08-24.md"],
+      "remaining": "Run the committed manual smoke for standalone bookings, presentation-hour enforcement, owner acceptance, task linkage and client email delivery.",
+      "depends_on": ["ROLE-ONBOARDING"]
+    },
+    {
+      "id": "PARTNER-SUBAGENT-DIRECTORY",
+      "area": "Partner operations",
+      "outcome": "Partner sees only its attributed sub-agents and operational roll-up; owner retains global oversight.",
+      "status": "verification_required",
+      "pr": 263,
+      "repo_evidence": ["src/pages/PartnerNetworkPage.tsx", "src/hooks/usePartnerSubagentOperations.ts", "supabase/migrations/20260824210000_partner_subagent_operations.sql", "tests/partner-subagent-operations.test.mjs"],
+      "remaining": "Apply through the single migration actor, then prove same-partner visibility and cross-partner denial with real role sessions.",
+      "depends_on": ["ROLE-ONBOARDING"]
+    },
+    {
+      "id": "LEAD-REFERRER-PIPELINE",
+      "area": "Lead referrer operations",
+      "outcome": "Lead referrer has own leads and a role-safe operational pipeline.",
+      "status": "verification_required",
+      "pr": 262,
+      "repo_evidence": ["src/pages/lead-referrer/LeadReferrerLeadsPage.tsx", "src/pages/lead-referrer/LeadReferrerPipelinePage.tsx", "src/hooks/useLeadReferrerOperations.ts", "supabase/migrations/20260824095543_lead_referrer_operational_pipeline.sql", "tests/lead-referrer-operations.test.mjs"],
+      "remaining": "Apply through the single migration actor and smoke direct and partner-linked lead-referrer sessions, including cross-user denial.",
+      "depends_on": ["ROLE-ONBOARDING"]
+    },
+    {
+      "id": "CLIENT-PORTAL-CORE",
+      "area": "Client portal",
+      "outcome": "Client can access profile, application, progress, documents, messages, meetings and legal-readiness surfaces.",
+      "status": "partial",
+      "pr": null,
+      "repo_evidence": ["src/pages/client/ClientHomePage.tsx", "src/pages/client/ClientApplicationPage.tsx", "src/pages/client/ClientDocumentsPage.tsx", "src/pages/client/ClientMessagesPage.tsx", "tests/client-portal-smoke.test.mjs", "docs/testing/CLIENT-PORTAL-SMOKE-HARNESS.md"],
+      "remaining": "Run a real magic-link client session end to end; confirm live RPCs, private storage, messages, booking and mobile rendering. The committed test is source-level only.",
+      "depends_on": []
+    },
+    {
+      "id": "CLIENT-OFFERS",
+      "area": "Client portal",
+      "outcome": "Owner publishes client-safe funding offers and client compares, accepts or declines with immutable evidence.",
+      "status": "verification_required",
+      "pr": 260,
+      "repo_evidence": ["src/pages/client/ClientOffersPage.tsx", "src/hooks/useClientFundingOffers.ts", "supabase/migrations/20260824120000_client_funding_offers_outcomes.sql", "supabase/migrations/20260824121000_client_offer_notification_readiness.sql", "supabase/migrations/20260824121100_client_offer_notification_triggers.sql"],
+      "remaining": "Apply the merged offer and notification migrations through the single actor, deploy the reviewed delivery function if required, and run publish, notification, accept, decline and retry smoke tests.",
+      "depends_on": ["CLIENT-PORTAL-CORE"]
+    },
+    {
+      "id": "REPOSITORY-DRIFT-GUARD",
+      "area": "Release safety",
+      "outcome": "CI-friendly guard detects frontend RPC or Edge Function references with no committed server source.",
+      "status": "built_repository",
+      "pr": 261,
+      "repo_evidence": ["scripts/verify-repository-contracts.mjs", "tests/repository-contract-drift.test.mjs"],
+      "remaining": "Add the merged npm command to required CI checks and keep live deployment verification separate from repository-source verification.",
+      "depends_on": []
+    },
+    {
+      "id": "CONTRACTOR-APPLICATION",
+      "area": "Contractor portal",
+      "outcome": "Public contractor application submits and owner screens or rejects it.",
+      "status": "verification_required",
+      "pr": null,
+      "repo_evidence": ["src/pages/PublicApplyPage.tsx", "src/hooks/useApplications.ts", "supabase/functions/apply-submit-application/index.ts", "supabase/migrations/20260803140200_contractor_application_rpcs.sql"],
+      "remaining": "The 2026-08-15 production audit found the RPCs and Edge Function absent live. Reverify; if still absent, deploy/apply reviewed artifacts and smoke /apply plus Team review controls.",
+      "depends_on": ["REPOSITORY-DRIFT-GUARD"]
+    },
+    {
+      "id": "CONTRACTOR-COMPLIANCE",
+      "area": "Contractor portal",
+      "outcome": "Contractor progression and required-document checklist operate end to end.",
+      "status": "verification_required",
+      "pr": null,
+      "repo_evidence": ["src/hooks/useContractorProgression.ts", "src/pages/contractor/DocumentChasePage.tsx", "src/hooks/useContractorDocumentChase.ts", "supabase/migrations/20260804130100_contractor_progression.sql", "supabase/migrations/20260810230000_contractor_document_checklist.sql", "supabase/migrations/20260824220000_contractor_document_chase_workspace.sql", "tests/contractor-document-chase.test.mjs"],
+      "remaining": "Apply the merged contractor checklist and chase-workspace migrations through the single actor, reverify progression objects, and run browser role smoke for missing/rejected paperwork, task creation, owner verification and progression.",
+      "depends_on": ["ROLE-ONBOARDING", "REPOSITORY-DRIFT-GUARD"]
+    },
+    {
+      "id": "CLIENT-SECURE-DOCUMENTS",
+      "area": "Client portal",
+      "outcome": "Client document workspace uploads and registers private documents safely.",
+      "status": "verification_required",
+      "pr": null,
+      "repo_evidence": ["src/pages/client/ClientDocumentsPage.tsx", "supabase/migrations/20260812193636_client_portal_secure_documents.sql", "tests/client-portal-smoke.test.mjs"],
+      "remaining": "The 2026-08-15 audit found both document RPCs absent live. Reverify, apply if needed, and run upload/download plus another-client denial tests.",
+      "depends_on": ["CLIENT-PORTAL-CORE", "REPOSITORY-DRIFT-GUARD"]
+    },
+    {
+      "id": "LEGAL-TEMPLATE-CONTENT",
+      "area": "Legal and e-sign",
+      "outcome": "Approved source PDFs become published versioned templates for client and role agreements.",
+      "status": "gated",
+      "pr": null,
+      "repo_evidence": ["src/pages/LegalStudioPage.tsx", "src/hooks/useLegalStudio.ts", "supabase/functions/ingest-legal-source-asset/index.ts", "docs/legal/TEMPLATE-SYSTEM-RECONCILIATION-2026-08-14.md"],
+      "remaining": "Verify approved PDF hashes and source status, ingest exact approved content, publish template versions and confirm the chosen client-agreement projection. Do not invent legal wording.",
+      "depends_on": ["REPOSITORY-DRIFT-GUARD"]
+    },
+    {
+      "id": "AGREEMENT-EXECUTION",
+      "area": "Legal and e-sign",
+      "outcome": "Invitee/client reviews, consents, signs, receives an executed PDF and appears ready in the relevant portal.",
+      "status": "partial",
+      "pr": 246,
+      "repo_evidence": ["src/pages/AgreementSigningPage.tsx", "src/pages/AgreementDetailPage.tsx", "src/hooks/useAgreementSigning.ts", "supabase/functions/generate-legal-document-pdf/index.ts"],
+      "remaining": "Complete approved-template ingestion, deploy/verify renderer and signing dependencies, then smoke dispatch, signature, countersignature, executed artifact, portal projection and cross-role denial.",
+      "depends_on": ["LEGAL-TEMPLATE-CONTENT", "ROLE-ONBOARDING"]
+    },
+    {
+      "id": "PAPERWORK-TASK-AUTOMATION",
+      "area": "Tasks and documents",
+      "outcome": "Funding-product/funder requirements create assigned, linked paperwork tasks and block incomplete submissions.",
+      "status": "partial",
+      "pr": null,
+      "repo_evidence": ["supabase/migrations/20260812003740_document_requirement_tasks.sql", "supabase/migrations/20260812003805_role_task_management.sql", "src/hooks/useOwnerTasks.ts"],
+      "remaining": "Audit product/funder rule coverage against canonical requirements, expose role-appropriate task actions, and smoke automatic creation, reassignment, completion and submission blocking.",
+      "depends_on": ["CLIENT-SECURE-DOCUMENTS"]
+    },
+    {
+      "id": "R100-REWARD",
+      "area": "Rewards",
+      "outcome": "R100 locks once for an eligible fully documented submission and follows cutoff/payment rules.",
+      "status": "verification_required",
+      "pr": null,
+      "repo_evidence": ["supabase/migrations/20260810075057_complete_document_r100_reward.sql", "supabase/migrations/20260812004005_reward_legal_readiness.sql"],
+      "remaining": "Verify live objects and test direct lead referrer, partner-linked sub-agent and contractor paths: incomplete, rejected, approved/submitted, duplicate, 22nd cutoff and 25th/30th payout cases.",
+      "depends_on": ["PAPERWORK-TASK-AUTOMATION", "AGREEMENT-EXECUTION"]
+    },
+    {
+      "id": "LEAD-REFERRER-COMMISSION",
+      "area": "Money",
+      "outcome": "Direct and partner-linked lead-referrer earnings use approved Path A/Path B bases without leaking private figures.",
+      "status": "gated",
+      "pr": null,
+      "repo_evidence": ["supabase/migrations/20260810240000_lead_referrer_commission_engine.sql", "docs/lead-referrer-role.md", "docs/HANDOVER-LEGAL-LANE-2026-08-12b.md"],
+      "remaining": "Record the final Path-A base ruling in canonical docs, reconcile any forward fix, then apply and run arithmetic, cap and privacy tests before exposing earnings.",
+      "depends_on": ["PARTNER-SUBAGENT-DIRECTORY", "LEAD-REFERRER-PIPELINE"]
+    },
+    {
+      "id": "MONEY-LIFECYCLE-SMOKE",
+      "area": "Money",
+      "outcome": "Funded deal through funder invoice, receipt, payable, partner/contractor invoice and settlement is repeatably proven.",
+      "status": "partial",
+      "pr": null,
+      "repo_evidence": ["supabase/tests/money_lifecycle_smoke.sql", "src/hooks/useInvoices.ts", "src/hooks/usePartnerInvoices.ts", "src/hooks/useContractorInvoices.ts"],
+      "remaining": "Run the harness in a controlled environment plus browser role smoke; prove retries, rejections, reversals, duplicate prevention, payment evidence and no private gross leakage.",
+      "depends_on": ["REPOSITORY-DRIFT-GUARD"]
+    },
+    {
+      "id": "SYSTEM-CROSS-ROLE-SMOKE",
+      "area": "Release safety",
+      "outcome": "Repeatable owner, client, partner, contractor, direct lead-referrer and sub-agent journey with denial assertions.",
+      "status": "missing",
+      "pr": null,
+      "repo_evidence": ["docs/ROLE-ONBOARDING-CALENDAR-MANUAL-SMOKE-2026-08-24.md", "docs/testing/CLIENT-PORTAL-SMOKE-HARNESS.md"],
+      "remaining": "Build a controlled E2E harness covering authentication, attribution, calendar, documents, legal gates, offers, rewards, money and cross-tenant isolation without production test pollution.",
+      "depends_on": ["CLIENT-OFFERS", "R100-REWARD", "LEAD-REFERRER-COMMISSION", "MONEY-LIFECYCLE-SMOKE"]
+    },
+    {
+      "id": "PHASE-EF-AUTOMATION-GOVERNANCE",
+      "area": "Later roadmap",
+      "outcome": "Email sync, form autofill, nurture/AI assistance, POPIA rights, backup/restore and advanced analytics.",
+      "status": "missing",
+      "pr": null,
+      "repo_evidence": ["ROADMAP.md", "SPEC.md"],
+      "remaining": "Split into independent builds only after operational drift and cross-role smoke blockers close. External integrations require provider and security decisions.",
+      "depends_on": ["SYSTEM-CROSS-ROLE-SMOKE"]
+    }
+  ],
+  "recommended_order": ["CLIENT-OFFERS", "REPOSITORY-DRIFT-GUARD", "ROLE-ONBOARDING", "PARTNER-SUBAGENT-DIRECTORY", "LEAD-REFERRER-PIPELINE", "CALENDAR-BOOKING", "CONTRACTOR-APPLICATION", "CONTRACTOR-COMPLIANCE", "CLIENT-SECURE-DOCUMENTS", "CLIENT-PORTAL-CORE", "LEGAL-TEMPLATE-CONTENT", "AGREEMENT-EXECUTION", "PAPERWORK-TASK-AUTOMATION", "R100-REWARD", "LEAD-REFERRER-COMMISSION", "MONEY-LIFECYCLE-SMOKE", "SYSTEM-CROSS-ROLE-SMOKE", "PHASE-EF-AUTOMATION-GOVERNANCE"]
+}
