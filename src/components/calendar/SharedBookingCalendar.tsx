@@ -93,6 +93,7 @@ export default function SharedBookingCalendar({
   const [slotId, setSlotId] = useState("");
   const [bookingType, setBookingType] = useState<RequestedBookingType>("consultation");
   const [referenceValue, setReferenceValue] = useState("");
+  const [standaloneClientName, setStandaloneClientName] = useState("");
   const [agenda, setAgenda] = useState("");
   const dark = tone === "client";
 
@@ -106,14 +107,14 @@ export default function SharedBookingCalendar({
     [referenceValue, workspace.data?.bookable_references],
   );
   const clientMode = tone === "client";
-  const needsReference = !clientMode;
   const clientReady = !clientMode || Boolean(clientId);
+  const bookingClientName = clientMode ? (clientName ?? "") : standaloneClientName;
   const canSubmit =
     Boolean(selectedSlot) &&
     availableTypes.includes(bookingType) &&
     agenda.trim().length >= 3 &&
     clientReady &&
-    (!needsReference || Boolean(selectedReference));
+    (clientMode || Boolean(selectedReference) || bookingClientName.trim().length >= 2);
 
   function chooseSlot(slot: BookingSlot) {
     setSlotId(slot.id);
@@ -130,6 +131,7 @@ export default function SharedBookingCalendar({
         slotId: selectedSlot.id,
         bookingType,
         agenda,
+        clientName: bookingClientName,
         reference: selectedReference,
         clientId,
       },
@@ -137,6 +139,7 @@ export default function SharedBookingCalendar({
         onSuccess: () => {
           setSlotId("");
           setReferenceValue("");
+          setStandaloneClientName("");
           setAgenda("");
           toast.success("Booking request sent to the Owner.");
         },
@@ -198,7 +201,7 @@ export default function SharedBookingCalendar({
               Choose a time that works
             </h1>
             <p className={cn("mt-2 max-w-2xl text-sm leading-6", dark ? "text-white/50" : "text-slate-500")}>
-              Consultation windows run from 14:00 to 20:00 South Africa time. The appointment is confirmed only after the Owner accepts it.
+              Presentations run from 14:00 to 20:00 South Africa time. Urgent, submission, update and consultation bookings can use any published time. The Owner must still accept the request.
             </p>
           </div>
           <span className={cn("inline-flex w-fit items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold", dark ? "border-white/10 bg-white/5 text-white/65" : "border-slate-200 bg-slate-50 text-slate-600")}>
@@ -280,7 +283,7 @@ export default function SharedBookingCalendar({
           <div>
             <h2 className={cn("text-lg font-extrabold", dark ? "text-white" : "text-brand-navy")}>Request this appointment</h2>
             <p className={cn("mt-1 text-sm", dark ? "text-white/45" : "text-slate-500")}>
-              Choose a client or lead, select the reason and add a short preparation note.
+              Link a client or lead when relevant, or create a standalone booking with the client’s name and purpose.
             </p>
           </div>
         </div>
@@ -321,15 +324,15 @@ export default function SharedBookingCalendar({
               </p>
             </div>
           ) : (
+            <div className="space-y-4">
             <label className={cn("block space-y-2 text-xs font-bold", dark ? "text-white/65" : "text-slate-700")}>
-              Client or lead
+              Client or lead <span className="font-normal opacity-70">(optional)</span>
               <select
                 value={referenceValue}
                 onChange={(event) => setReferenceValue(event.target.value)}
-                required
                 className={cn("min-h-11 w-full rounded-xl border px-3 text-sm outline-none focus:ring-2 focus:ring-brand-teal", dark ? "border-white/12 bg-[#0a1d2a] text-white" : "border-slate-200 bg-white text-slate-800")}
               >
-                <option value="">Select a client or lead</option>
+                <option value="">Standalone booking — no CRM record</option>
                 {data.bookable_references.map((reference) => (
                   <option key={referenceKey(reference)} value={referenceKey(reference)}>
                     {reference.display_name} · {reference.reference_kind === "client" ? "Client" : "Lead"}
@@ -338,15 +341,30 @@ export default function SharedBookingCalendar({
               </select>
               {data.bookable_references.length === 0 ? (
                 <span className={cn("block font-normal", dark ? "text-white/35" : "text-slate-500")}>
-                  No attributed client or lead is available yet. Submit or receive an attributed lead before requesting a meeting.
+                  No attributed client or lead is available. You can still request a standalone booking below.
                 </span>
               ) : null}
             </label>
+            {!selectedReference ? (
+              <label className={cn("block space-y-2 text-xs font-bold", dark ? "text-white/65" : "text-slate-700")}>
+                Client or person name
+                <input
+                  value={standaloneClientName}
+                  onChange={(event) => setStandaloneClientName(event.target.value)}
+                  minLength={2}
+                  maxLength={160}
+                  required
+                  placeholder="Full name or business name"
+                  className={cn("min-h-11 w-full rounded-xl border px-3 text-sm outline-none focus:ring-2 focus:ring-brand-teal", dark ? "border-white/12 bg-[#0a1d2a] text-white" : "border-slate-200 bg-white text-slate-800")}
+                />
+              </label>
+            ) : null}
+            </div>
           )}
         </div>
 
         <label className={cn("mt-4 block space-y-2 text-xs font-bold", dark ? "text-white/65" : "text-slate-700")}>
-          Brief reason and what the Owner should prepare
+          Purpose of the booking and what the Owner should prepare
           <textarea
             value={agenda}
             onChange={(event) => setAgenda(event.target.value)}
