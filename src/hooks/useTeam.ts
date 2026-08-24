@@ -4,6 +4,7 @@ import { invalidateActivity } from "@/hooks/useActivity";
 import type {
   InviteMethod,
   ReferralPartnerOption,
+  TeamInviteRole,
   TeamMember,
   UserRole,
 } from "@/lib/team";
@@ -20,7 +21,7 @@ export function useTeamMembers() {
       const [profilesRes, partnersRes] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, email, full_name, role, referral_partner_id, is_active, phone_number, created_at")
+          .select("id, email, full_name, role, referral_partner_id, sourced_via_partner_id, is_active, phone_number, created_at")
           .order("created_at", { ascending: true }),
         supabase.from("referral_partners").select("id, name"),
       ]);
@@ -36,9 +37,11 @@ export function useTeamMembers() {
         full_name: (r.full_name as string | null) ?? null,
         role: r.role as UserRole,
         referral_partner_id: (r.referral_partner_id as string | null) ?? null,
-        referral_partner_name: r.referral_partner_id
-          ? partnerName.get(r.referral_partner_id as string) ?? null
+        referral_partner_name: (r.sourced_via_partner_id || r.referral_partner_id)
+          ? partnerName.get((r.sourced_via_partner_id || r.referral_partner_id) as string) ?? null
           : null,
+        sourced_via_partner_id: (r.sourced_via_partner_id as string | null) ?? null,
+        is_sub_agent: r.role === "lead_referrer" && Boolean(r.sourced_via_partner_id),
         is_active: r.is_active as boolean,
         phone_number: (r.phone_number as string | null) ?? null,
         created_at: r.created_at as string,
@@ -83,7 +86,8 @@ export type InviteInput = {
   email: string;
   full_name: string;
   phone: string;
-  role: Exclude<UserRole, "owner">;
+  role: TeamInviteRole;
+  parent_partner_id?: string | null;
   invite_method: InviteMethod;
   temp_password?: string;
 };

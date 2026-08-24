@@ -267,6 +267,11 @@ export default function AuthPage() {
       return;
     }
 
+    if (data.user?.app_metadata?.must_change_password === true) {
+      navigate("/change-password", { replace: true });
+      return;
+    }
+
     // Role-based landing: owner → /dashboard (unchanged), partner → /partner,
     // contractor → /contractor. A failed role lookup falls back to /dashboard,
     // where OwnerGate re-checks and routes/blocks non-owners.
@@ -494,6 +499,10 @@ export default function AuthPage() {
               <path d="M5 12h14M13 6l6 6-6 6" />
             </svg>
           </button>
+
+          <p className="mt-3 text-center text-xs text-slate-500">
+            Using an Owner-issued temporary password? Sign in and you will be asked to replace it securely.
+          </p>
 
           <div className="divider">SECURED BY</div>
           <div className="secure-row">

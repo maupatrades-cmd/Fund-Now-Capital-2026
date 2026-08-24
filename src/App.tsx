@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import AuthPage from "@/pages/AuthPage";
+import ChangePasswordPage from "@/pages/ChangePasswordPage";
 import PublicApplyPage from "@/pages/PublicApplyPage";
 import TermsViewPage from "@/pages/TermsViewPage";
 import AgreementsPage from "@/pages/AgreementsPage";
@@ -120,11 +121,20 @@ function AppRoutes() {
     );
   }
 
+  const mustChangePassword = session?.user.app_metadata?.must_change_password === true;
+  if (session && mustChangePassword && publicPath !== "/change-password" && !onPublicRoute) {
+    return <Navigate to="/change-password" replace />;
+  }
+
   return (
     <Routes>
       <Route
         path="/"
         element={session ? <RoleLanding /> : <AuthPage />}
+      />
+      <Route
+        path="/change-password"
+        element={session ? <ChangePasswordPage /> : <Navigate to="/" replace />}
       />
 
       {/*
