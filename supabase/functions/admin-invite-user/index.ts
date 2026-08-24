@@ -43,7 +43,12 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const ROLE_LABEL: Record<string, string> = { partner: "Partner", contractor: "Contractor" };
+const ROLE_LABEL: Record<string, string> = {
+  partner: "Partner",
+  contractor: "Contractor",
+  lead_referrer: "Lead Referrer",
+  sub_agent: "Sub-agent",
+};
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -93,6 +98,7 @@ type InviteBody = {
   role?: string;
   invite_method?: string;
   temp_password?: string;
+  parent_partner_id?: string | null;
 };
 
 // Send the branded magic-link email via the Resend REST API. Returns true on a
@@ -240,14 +246,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const email = (body.email ?? "").trim().toLowerCase();
   const fullName = (body.full_name ?? "").trim();
   const phone = (body.phone ?? "").trim();
-  const role = (body.role ?? "").trim();
+  const requestedRole = (body.role ?? "").trim();
+  const role = requestedRole === "sub_agent" ? "lead_referrer" : requestedRole;
+  const parentPartnerId = (body.parent_partner_id ?? "").trim() || null;
   const inviteMethod = (body.invite_method ?? "").trim();
 
   // full_name + phone are required only when CREATING a new user (below). A
   // resend to an existing member needs just email + role + method.
   if (!isEmail(email)) return json({ error: "A valid email is required" }, 400);
-  if (role !== "partner" && role !== "contractor") {
-    return json({ error: "Role must be Partner or Contractor" }, 400);
+  if (role !== "partner" && role !== "contractor" && role !== "lead_referrer") {
+    return json({ error: "Role must be Partner, Contractor, Lead Referrer or Sub-agent" }, 400);
+  }
+  if (requestedRole === "sub_agent" && !parentPartnerId) {
+    return json({ error: "A parent partner is required for a sub-agent" }, 400);
+  }
+  if (role !== "lead_referrer" && parentPartnerId) {
+    return json({ error: "A parent partner can only be assigned to a lead referrer" }, 400);
   }
   if (inviteMethod !== "magic_link" && inviteMethod !== "temp_password") {
     return json({ error: "Invite method must be magic_link or temp_password" }, 400);
@@ -255,8 +269,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   let tempPassword = (body.temp_password ?? "").trim();
   if (inviteMethod === "temp_password") {
-    if (tempPassword && tempPassword.length < 8) {
-      return json({ error: "Temporary password must be at least 8 characters" }, 400);
+    if (
+      tempPassword &&
+      (tempPassword.length < 12 ||
+        !/[a-z]/.test(tempPassword) ||
+        !/[A-Z]/.test(tempPassword) ||
+        !/\d/.test(tempPassword) ||
+        !/[^A-Za-z0-9]/.test(tempPassword))
+    ) {
+      return json({ error: "Temporary password must be at least 12 characters and include uppercase, lowercase, a number and a symbol" }, 400);
     }
     if (!tempPassword) tempPassword = generatePassword();
   }
@@ -266,10 +287,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
   });
   const callerInfo = { id: caller.id, email: caller.email ?? null };
 
+  if (parentPartnerId) {
+    const { data: partner, error: partnerErr } = await service
+      .from("referral_partners")
+      .select("id")
+      .eq("id", parentPartnerId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (partnerErr) return json({ error: "Could not validate the selected partner" }, 500);
+    if (!partner) return json({ error: "The selected partner is not active or no longer exists" }, 400);
+  }
+
   // ---- idempotency: existing user by email ---------------------------------
   const { data: existing, error: existingErr } = await service
     .from("profiles")
-    .select("id, role")
+    .select("id, role, sourced_via_partner_id")
     .eq("email", email)
     .maybeSingle();
   if (existingErr) return json({ error: "Could not check for an existing user" }, 500);
@@ -285,6 +317,37 @@ Deno.serve(async (req: Request): Promise<Response> => {
         },
         409,
       );
+    }
+    if (parentPartnerId) {
+      if (existing.sourced_via_partner_id && existing.sourced_via_partner_id !== parentPartnerId) {
+        return json({ error: "This lead referrer already belongs to another partner. Use Edit Role to reassign them." }, 409);
+      }
+      const { data: attributed, error: attributionErr } = await service
+        .from("profiles")
+        .update({ sourced_via_partner_id: parentPartnerId })
+        .eq("id", existing.id)
+        .eq("role", "lead_referrer")
+        .select("id");
+      if (attributionErr || !attributed?.length) {
+        return json({ error: "Could not link the sub-agent to the selected partner" }, 500);
+      }
+      const { error: membershipErr } = await service.from("partner_lead_referrers").upsert(
+        {
+          profile_id: existing.id,
+          referral_partner_id: parentPartnerId,
+          display_name: fullName || email,
+          status: "active",
+          invited_by: caller.id,
+        },
+        { onConflict: "profile_id" },
+      );
+      if (membershipErr) {
+        await service
+          .from("profiles")
+          .update({ sourced_via_partner_id: existing.sourced_via_partner_id ?? null })
+          .eq("id", existing.id);
+        return json({ error: "Could not create the partner sub-agent membership" }, 500);
+      }
     }
     // Same email + same role = idempotent success (no duplicate created).
     if (inviteMethod === "magic_link") {
@@ -340,8 +403,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } = {
     email,
     email_confirm: true, // we deliver access ourselves; skip Supabase's own email
-    app_metadata: { role },
-    user_metadata: { full_name: fullName },
+    app_metadata: {
+      role,
+      must_change_password: inviteMethod === "temp_password",
+      parent_partner_id: parentPartnerId,
+    },
+    user_metadata: { full_name: fullName, role },
   };
   if (inviteMethod === "temp_password") createArgs.password = tempPassword;
 
@@ -364,14 +431,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // handle_new_user() creates the profile row from service-controlled
-  // app_metadata.role plus user_metadata.full_name, but not phone_number.
+  // user_metadata.role + full_name; the upsert below remains authoritative and
+  // also fills phone/attribution (which the trigger does not copy).
   // Upsert to fill phone and guarantee the row
   // even if the trigger timing ever changed. onConflict=id.
   let phoneSaved = true;
   const { data: upserted, error: profileErr } = await service
     .from("profiles")
     .upsert(
-      { id: userId, email, full_name: fullName, role, phone_number: phone, is_active: true },
+      {
+        id: userId,
+        email,
+        full_name: fullName,
+        role,
+        phone_number: phone,
+        referral_partner_id: null,
+        sourced_via_partner_id: role === "lead_referrer" ? parentPartnerId : null,
+        is_active: true,
+      },
       { onConflict: "id" },
     )
     .select("id");
@@ -386,10 +463,32 @@ Deno.serve(async (req: Request): Promise<Response> => {
       await service.auth.admin.deleteUser(userId);
       return json({ error: "Could not create the user profile. Please try again." }, 500);
     }
+    if (parentPartnerId) {
+      await service.auth.admin.deleteUser(userId);
+      return json({ error: "Could not save the sub-agent's partner attribution. Please try again." }, 500);
+    }
     // Account is usable (login + role intact); only phone didn't save. Continue
     // so a temp password is still returned and access is delivered — the owner
     // is told to add the phone number later via phone_saved:false.
     phoneSaved = false;
+  }
+
+  if (role === "lead_referrer" && parentPartnerId) {
+    const { error: membershipErr } = await service.from("partner_lead_referrers").upsert(
+      {
+        profile_id: userId,
+        referral_partner_id: parentPartnerId,
+        display_name: fullName,
+        status: "active",
+        invited_by: caller.id,
+      },
+      { onConflict: "profile_id" },
+    );
+    if (membershipErr) {
+      console.error("partner lead-referrer membership failed:", membershipErr.message);
+      await service.auth.admin.deleteUser(userId);
+      return json({ error: "Could not link the sub-agent to the selected partner. Please try again." }, 500);
+    }
   }
 
   // ---- deliver access ------------------------------------------------------
@@ -411,8 +510,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
     "CREATE",
     userId,
     "invite_created",
-    `Invited ${fullName} as ${ROLE_LABEL[role]} (${inviteMethod})`,
-    { email, full_name: fullName, role, phone_number: phone, invite_method: inviteMethod },
+    `Invited ${fullName} as ${ROLE_LABEL[requestedRole] ?? ROLE_LABEL[role]} (${inviteMethod})`,
+    {
+      email,
+      full_name: fullName,
+      role,
+      invite_type: requestedRole,
+      parent_partner_id: parentPartnerId,
+      phone_number: phone,
+      invite_method: inviteMethod,
+      must_change_password: inviteMethod === "temp_password",
+    },
   );
 
   return json({
