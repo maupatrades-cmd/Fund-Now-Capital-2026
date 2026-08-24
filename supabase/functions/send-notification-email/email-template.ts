@@ -263,6 +263,33 @@ function variantContent(m: EmailModel, variant: EmailVariant): VariantContent {
           "This link is personal. Do not forward it.",
         ],
       };
+    case "CLIENT_OFFER_PUBLISHED":
+      return {
+        subject: "A funding offer is ready for your review",
+        h1: "Your funding offer is ready",
+        ctaLabel: "Review my offer securely",
+        category: "client offer",
+        paras: [
+          fallback || "A new evidence-backed funding offer is ready in your secure Fund Now Capital portal.",
+          "Review the terms carefully, then accept or decline the offer in the portal so your decision is recorded securely.",
+        ],
+      };
+    case "CLIENT_OFFER_ACCEPTED":
+      return {
+        subject: "Client accepted a funding offer",
+        h1: "Funding offer accepted",
+        ctaLabel: "Open the deal",
+        category: "client offer",
+        paras: [fallback || "A client accepted a funding offer. Continue with KYC and contracting."],
+      };
+    case "CLIENT_OFFER_DECLINED":
+      return {
+        subject: "Client declined a funding offer",
+        h1: "Funding offer declined",
+        ctaLabel: "Review the deal",
+        category: "client offer",
+        paras: [fallback || "A client declined a funding offer. Review the recorded reason and agree next steps."],
+      };
     case "LEAD_QUALIFIED":
       return {
         subject: "Lead qualified",
