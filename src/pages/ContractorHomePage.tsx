@@ -4,6 +4,7 @@ import PortalShell from "@/components/portal/PortalShell";
 import { BadgesCard } from "@/components/portal/BadgesCard";
 import ProgressionCard from "@/components/portal/ProgressionCard";
 import TrainingProgressCard from "@/components/training/TrainingProgressCard";
+import { QualifiedRewardSummary } from "@/components/rewards/QualifiedRewardSummary";
 
 // Contractor portal home. Branded PortalShell chrome (shared with the partner
 // portal) with the "Submit Lead" / "My Leads" nav, a welcome, and a top-level
@@ -56,6 +57,8 @@ export default function ContractorHomePage() {
 
       {/* Gamification: recently earned badges + link to the full collection. */}
       <BadgesCard portal="contractor" />
+
+      <QualifiedRewardSummary href="/contractor/rewards" />
 
       {/* Placeholder: submitted-leads snapshot grows here alongside other cards. */}
       <div className="rounded-xl border border-border bg-white p-8 text-center shadow-sm">
