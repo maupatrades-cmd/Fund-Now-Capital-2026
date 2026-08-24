@@ -27,6 +27,7 @@ import {
   Gavel,
   CalendarDays,
   Network,
+  CircleDollarSign,
   type LucideIcon,
 } from "lucide-react";
 
@@ -48,6 +49,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/documents", label: "Documents", icon: FolderOpen },
   { to: "/funders", label: "Funders", icon: Landmark },
   { to: "/invoices", label: "Invoices", icon: Receipt },
+  { to: "/money", label: "Money Centre", icon: CircleDollarSign },
   { to: "/repayments", label: "Repayments", icon: HandCoins },
   { to: "/invoices/partner-approvals", label: "Partner Invoices", icon: ReceiptText },
   { to: "/invoices/contractor-approvals", label: "Contractor Invoices", icon: ReceiptText },

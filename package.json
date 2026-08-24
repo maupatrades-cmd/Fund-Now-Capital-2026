@@ -20,7 +20,8 @@
     "test:client-funding-offers": "node --test tests/client-funding-offers-contract.test.mjs",
     "test:cross-role-e2e": "node scripts/run-cross-role-e2e.mjs",
     "plan:release-activation": "node scripts/ops/plan-release-activation.mjs",
-    "test:release-activation": "node --test tests/release-activation-controller.test.mjs"
+    "test:release-activation": "node --test tests/release-activation-controller.test.mjs",
+    "test:money-command-center": "node --test tests/money-command-center.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

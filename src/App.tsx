@@ -79,6 +79,7 @@ import TeamPage from "@/pages/TeamPage";
 import TermsAdminPage from "@/pages/TermsAdminPage";
 import LegalStudioPage from "@/pages/LegalStudioPage";
 import OwnerPayeesPage from "@/pages/OwnerPayeesPage";
+import MoneyCommandCenterPage from "@/pages/MoneyCommandCenterPage";
 import { ConfettiProvider } from "@/lib/celebration/ConfettiProvider";
 import { useProfileRole } from "@/hooks/useProfileRole";
 import { roleHome } from "@/lib/roles";
@@ -242,6 +243,7 @@ function AppRoutes() {
         <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
         <Route path="/partner-earnings" element={<PartnerEarningsPage />} />
         <Route path="/payouts" element={<PayoutsPage />} />
+        <Route path="/money" element={<MoneyCommandCenterPage />} />
         <Route path="/leads" element={<LeadsPage />} />
         <Route path="/leads/new" element={<LeadFormPage />} />
         <Route path="/leads/:id" element={<LeadDetailPage />} />
