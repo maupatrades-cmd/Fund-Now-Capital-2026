@@ -19,6 +19,8 @@ import ContractorPaymentSettingsPage from "./contractor/PaymentSettingsPage";
 import ContractorDocumentChasePage from "./contractor/DocumentChasePage";
 import ClientInvitationsPage from "./ClientInvitationsPage";
 import PortalBookingPage from "./portal/PortalBookingPage";
+import QualifiedRewardsPage from "./QualifiedRewardsPage";
+import PortalShell from "@/components/portal/PortalShell";
 
 // Session + role guard for everything under /contractor/*. The contractor
 // portal is its own world: contractors never see the owner CRM, and
@@ -71,6 +73,7 @@ export default function ContractorGate() {
         <Route path="documents" element={<ContractorDocumentChasePage />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="calendar" element={<PortalBookingPage portal="contractor" />} />
+        <Route path="rewards" element={<PortalShell portal="contractor"><QualifiedRewardsPage /></PortalShell>} />
         <Route path="badges" element={<ContractorBadgesPage />} />
         <Route path="training" element={<ContractorTrainingPage />} />
         <Route path="training/:moduleId" element={<ContractorTrainingModulePage />} />

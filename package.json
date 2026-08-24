@@ -21,7 +21,8 @@
     "test:cross-role-e2e": "node scripts/run-cross-role-e2e.mjs",
     "plan:release-activation": "node scripts/ops/plan-release-activation.mjs",
     "test:release-activation": "node --test tests/release-activation-controller.test.mjs",
-    "test:money-command-center": "node --test tests/money-command-center.test.mjs"
+    "test:money-command-center": "node --test tests/money-command-center.test.mjs",
+    "test:r100-reward-payroll": "node --test tests/r100-reward-payroll.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

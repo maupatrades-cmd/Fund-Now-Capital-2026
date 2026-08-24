@@ -55,6 +55,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/invoices/contractor-approvals", label: "Contractor Invoices", icon: ReceiptText },
   { to: "/partner-earnings", label: "Partner Earnings", icon: Wallet },
   { to: "/payouts", label: "Payouts", icon: Coins },
+  { to: "/rewards", label: "R100 Rewards", icon: Coins },
   { to: "/statements", label: "Statements", icon: FileText },
   { to: "/calculator", label: "Calculator", icon: Calculator },
   { to: "/activity", label: "Activity", icon: Activity },

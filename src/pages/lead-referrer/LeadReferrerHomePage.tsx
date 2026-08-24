@@ -3,6 +3,7 @@ import { ArrowRight, FilePlus2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { LeadReferrerShell } from "@/components/lead-referrer/LeadReferrerShell";
 import { supabase } from "@/lib/supabase";
+import { QualifiedRewardSummary } from "@/components/rewards/QualifiedRewardSummary";
 
 type LeadSummary = {
   id: string;
@@ -68,6 +69,8 @@ export default function LeadReferrerHomePage() {
           <p className="mt-2 text-3xl font-bold text-brand-navy">{summary.data?.active ?? 0}</p>
         </article>
       </div>
+
+      <QualifiedRewardSummary href="/lead-referrer/rewards" />
 
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3">

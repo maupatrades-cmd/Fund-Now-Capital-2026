@@ -18,6 +18,7 @@ import {
   Wallet,
   Send,
   Network,
+  Coins,
 } from "lucide-react";
 import { usePartnerPortalIdentity } from "@/hooks/usePartnerPortalIdentity";
 import { usePortalDeals } from "@/hooks/usePortalDeals";
@@ -53,6 +54,7 @@ function navItems(portal: PortalKind) {
       : []),
     { to: `${base}/client-invitations`, label: "Client invitations", icon: Send, end: false },
     { to: `${base}/calendar`, label: "Book the Owner", icon: CalendarDays, end: false },
+    { to: `${base}/rewards`, label: "R100 rewards", icon: Coins, end: false },
     ...(portal === "contractor"
       ? [{ to: `${base}/progression`, label: "My Progress", icon: TrendingUp, end: false }]
       : []),
@@ -75,6 +77,7 @@ function partnerPageMeta(pathname: string) {
   if (pathname.endsWith("/network")) return ["My network", "Track your partner sub-agents"] as const;
   if (pathname.endsWith("/client-invitations")) return ["Client invitations", "Send secure access to attributed clients"] as const;
   if (pathname.endsWith("/calendar")) return ["Owner calendar", "Request a privacy-safe appointment"] as const;
+  if (pathname.endsWith("/rewards")) return ["R100 rewards", "Track qualified-submission reward payouts"] as const;
   if (pathname.includes("/invoices")) return ["Invoices", "Manage your partner invoices"] as const;
   if (pathname.endsWith("/statements")) return ["Statements", "Review your settlement history"] as const;
   if (pathname.endsWith("/badges")) return ["Badges", "Your Fund Now Capital achievements"] as const;
