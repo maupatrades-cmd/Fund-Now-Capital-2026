@@ -105,7 +105,7 @@ drop policy if exists contractor_doc_catalog_read on public.contractor_document_
 create policy contractor_doc_catalog_read on public.contractor_document_type_catalog
   for select to authenticated using (true);
 
-revoke all on public.contractor_document_type_catalog from public, anon;
+revoke all on public.contractor_document_type_catalog from public, anon, authenticated;
 grant select on public.contractor_document_type_catalog to authenticated;
 
 insert into public.contractor_document_type_catalog (document_type, category, display_label, is_conditional, sort_order) values
@@ -175,7 +175,7 @@ drop policy if exists contractor_documents_self_select on public.contractor_docu
 create policy contractor_documents_self_select on public.contractor_documents
   for select to authenticated using (contractor_id = (select auth.uid()));
 
-revoke all on public.contractor_documents from public, anon;
+revoke all on public.contractor_documents from public, anon, authenticated;
 grant select on public.contractor_documents to authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -650,7 +650,7 @@ begin
   end if;
 
   -- (b) status enum: the 5 values.
-  if (select array_agg(enumlabel order by enumsortorder) from pg_enum
+  if (select array_agg(enumlabel::text order by enumsortorder) from pg_enum
         where enumtypid = 'public.contractor_document_status'::regtype)
      is distinct from array['missing','uploaded','verified','rejected','not_applicable'] then
     raise exception 'assert FAIL: contractor_document_status enum values wrong';
