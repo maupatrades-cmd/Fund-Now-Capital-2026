@@ -16,6 +16,7 @@ import {
   TrendingUp,
   Wallet,
   Send,
+  Network,
 } from "lucide-react";
 import { usePartnerPortalIdentity } from "@/hooks/usePartnerPortalIdentity";
 import { usePortalDeals } from "@/hooks/usePortalDeals";
@@ -43,6 +44,9 @@ function navItems(portal: PortalKind) {
     { to: `${base}/submit-lead`, label: "New lead", icon: PlusCircle, end: false },
     { to: `${base}/leads`, label: portal === "partner" ? "Leads" : "My Leads", icon: ListChecks, end: false },
     { to: `${base}/deals`, label: portal === "partner" ? "Pipeline" : "My Deals", icon: Briefcase, end: false },
+    ...(portal === "partner"
+      ? [{ to: `${base}/network`, label: "My network", icon: Network, end: false }]
+      : []),
     { to: `${base}/client-invitations`, label: "Client invitations", icon: Send, end: false },
     { to: `${base}/calendar`, label: "Book the Owner", icon: CalendarDays, end: false },
     ...(portal === "contractor"
@@ -64,6 +68,7 @@ function partnerPageMeta(pathname: string) {
   if (pathname.endsWith("/submit-lead")) return ["New lead", "Capture a funding opportunity"] as const;
   if (pathname.endsWith("/leads")) return ["Leads", "Track your submitted opportunities"] as const;
   if (pathname.endsWith("/deals")) return ["Pipeline", "Follow deals through the funding process"] as const;
+  if (pathname.endsWith("/network")) return ["My network", "Track your partner sub-agents"] as const;
   if (pathname.endsWith("/client-invitations")) return ["Client invitations", "Send secure access to attributed clients"] as const;
   if (pathname.endsWith("/calendar")) return ["Owner calendar", "Request a privacy-safe appointment"] as const;
   if (pathname.includes("/invoices")) return ["Invoices", "Manage your partner invoices"] as const;
