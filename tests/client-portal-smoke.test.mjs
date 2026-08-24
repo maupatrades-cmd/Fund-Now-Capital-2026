@@ -146,7 +146,10 @@ test("progress vocabulary remains client-safe and offers route is honest about s
     "Your funding journey is complete.",
   ], "progress UI contract");
   includesAll(offers, [
-    'title="Review your outcomes"',
-    "once the Owner publishes an outcome",
+    "useClientFundingOfferWorkspace",
+    "Compare your verified offers",
+    "Only offers published by Fund Now Capital",
+    "Accept offer",
+    "Confirm decline",
   ], "offers route contract");
 });
