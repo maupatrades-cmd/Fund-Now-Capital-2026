@@ -6,6 +6,7 @@ import {
   Briefcase,
   CalendarDays,
   FileText,
+  FileCheck2,
   GraduationCap,
   Home,
   ListChecks,
@@ -44,6 +45,9 @@ function navItems(portal: PortalKind) {
     { to: `${base}/submit-lead`, label: "New lead", icon: PlusCircle, end: false },
     { to: `${base}/leads`, label: portal === "partner" ? "Leads" : "My Leads", icon: ListChecks, end: false },
     { to: `${base}/deals`, label: portal === "partner" ? "Pipeline" : "My Deals", icon: Briefcase, end: false },
+    ...(portal === "contractor"
+      ? [{ to: `${base}/documents`, label: "Documents to chase", icon: FileCheck2, end: false }]
+      : []),
     ...(portal === "partner"
       ? [{ to: `${base}/network`, label: "My network", icon: Network, end: false }]
       : []),
