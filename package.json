@@ -11,6 +11,7 @@
     "test:client-portal-smoke": "node --test tests/client-portal-smoke.test.mjs",
     "test:calendar-booking-rules": "node --test tests/calendar-booking-rules.test.mjs",
     "test:role-onboarding-smoke": "node --test tests/role-onboarding-smoke.test.mjs",
+    "test:partner-subagent-operations": "node --test tests/partner-subagent-operations.test.mjs",
     "test:operational-smoke": "node --test tests/role-onboarding-smoke.test.mjs tests/calendar-booking-rules.test.mjs"
   },
   "dependencies": {

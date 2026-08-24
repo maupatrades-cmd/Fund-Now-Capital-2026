@@ -11,6 +11,7 @@ import AgreementDetailPage from "@/pages/AgreementDetailPage";
 import OwnerGate from "@/components/layout/OwnerGate";
 import PartnerGate from "@/pages/PartnerGate";
 import PartnerHomePage from "@/pages/PartnerHomePage";
+import PartnerNetworkPage from "@/pages/PartnerNetworkPage";
 import PartnerSubmitLeadPage from "@/pages/partner/SubmitLeadPage";
 import PartnerMyLeadsPage from "@/pages/partner/MyLeadsPage";
 import PartnerDealsPage from "@/pages/partner/PartnerDealsPage";
@@ -179,6 +180,7 @@ function AppRoutes() {
         <Route path="submit-lead" element={<PartnerSubmitLeadPage />} />
         <Route path="leads" element={<PartnerMyLeadsPage />} />
         <Route path="deals" element={<PartnerDealsPage />} />
+        <Route path="network" element={<PartnerNetworkPage surface="partner" />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="calendar" element={<PortalBookingPage portal="partner" />} />
         <Route path="statements" element={<PartnerStatementsPage />} />
@@ -260,6 +262,7 @@ function AppRoutes() {
         <Route path="/data-quality" element={<DataQualityPage />} />
         <Route path="/statements" element={<StatementsPage />} />
         <Route path="/team" element={<TeamPage />} />
+        <Route path="/partner-network" element={<PartnerNetworkPage surface="owner" />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings/notifications" element={<NotificationPreferencesPage />} />
         <Route path="/settings/industries" element={<IndustriesPage />} />
