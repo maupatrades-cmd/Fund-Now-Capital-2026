@@ -380,8 +380,10 @@ export function downloadReviewCopy(
   const link = document.createElement("a");
   link.href = url;
   link.download = `${reference}-${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.md`;
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /** A signing token is the 64-hex raw token issued by `send_agreement`. */

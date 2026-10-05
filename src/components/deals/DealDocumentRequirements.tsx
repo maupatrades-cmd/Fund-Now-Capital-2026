@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ClipboardCheck, Clock3, ExternalLink, Plus, Save, Trash2, TriangleAlert } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -47,8 +47,8 @@ export function DealDocumentRequirements({ dealId, clientId }: { dealId: string;
   const queryClient = useQueryClient();
   const funders = useFunders();
   const documents = useClientDocuments(clientId);
-  const [productCode, setProductCode] = useState("");
-  const [funderId, setFunderId] = useState("");
+  const [productDraft, setProductDraft] = useState<string | null>(null);
+  const [funderDraft, setFunderDraft] = useState<string | null>(null);
   const [documentType, setDocumentType] = useState<DocumentType>("bank_statement");
   const [requirement, setRequirement] = useState<"required" | "optional">("required");
   const [reason, setReason] = useState("");
@@ -119,18 +119,9 @@ export function DealDocumentRequirements({ dealId, clientId }: { dealId: string;
     },
   });
 
-  const contextProductCode = context.data?.product_code;
-  const contextFunderId = context.data?.funder_id;
-  const clientProductCode = clientChoice.data?.product_code;
-
-  useEffect(() => {
-    if (contextProductCode) {
-      setProductCode(contextProductCode);
-      setFunderId(contextFunderId ?? "");
-      return;
-    }
-    if (!productCode && clientProductCode) setProductCode(clientProductCode);
-  }, [clientProductCode, contextFunderId, contextProductCode, productCode]);
+  // Server values seed the form; local edits remain authoritative until saved.
+  const productCode = productDraft ?? context.data?.product_code ?? clientChoice.data?.product_code ?? "";
+  const funderId = funderDraft ?? context.data?.funder_id ?? "";
 
   const refresh = async () => {
     await Promise.all([
@@ -164,6 +155,8 @@ export function DealDocumentRequirements({ dealId, clientId }: { dealId: string;
     },
     onSuccess: async () => {
       await refresh();
+      setProductDraft(null);
+      setFunderDraft(null);
       toast.success("Client document checklist updated.");
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Checklist setup failed."),
@@ -269,14 +262,14 @@ export function DealDocumentRequirements({ dealId, clientId }: { dealId: string;
       <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
         <label className="text-xs font-medium text-muted-foreground">
           Funding product
-          <select className={`${inputClass} mt-1`} value={productCode} onChange={(event) => setProductCode(event.target.value)}>
+          <select className={`${inputClass} mt-1`} value={productCode} onChange={(event) => setProductDraft(event.target.value)}>
             <option value="">Select product</option>
             {(products.data ?? []).map((product) => <option key={product.code} value={product.code}>{product.display_name}</option>)}
           </select>
         </label>
         <label className="text-xs font-medium text-muted-foreground">
           Funder context (optional)
-          <select className={`${inputClass} mt-1`} value={funderId} onChange={(event) => setFunderId(event.target.value)}>
+          <select className={`${inputClass} mt-1`} value={funderId} onChange={(event) => setFunderDraft(event.target.value)}>
             <option value="">No funder selected yet</option>
             {(funders.data ?? []).filter((funder) => funder.is_active).map((funder) => <option key={funder.id} value={funder.id}>{funder.name}</option>)}
           </select>

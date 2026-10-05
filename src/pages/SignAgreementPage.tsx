@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -94,6 +94,19 @@ export default function SignAgreementPage() {
   const [declineReason, setDeclineReason] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const docRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setScrolledToEnd(false);
+    const element = docRef.current;
+    if (!element) return;
+    const checkFit = () => {
+      if (element.scrollHeight <= element.clientHeight + 24) setScrolledToEnd(true);
+    };
+    checkFit();
+    const observer = new ResizeObserver(checkFit);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [token, pkg?.document.content_markdown]);
 
   // Memoised on the server-supplied object so the derived flag below has a
   // stable dependency (a fresh `{}` each render would defeat the memo).

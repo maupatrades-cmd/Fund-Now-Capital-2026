@@ -256,7 +256,7 @@ export default function DealDetailPage() {
 
       <DealPackageReadiness dealId={deal.id} clientId={deal.client_id} isPurchaseOrder={deal.is_purchase_order} amountRequested={deal.amount_requested} />
 
-      <DealDocumentRequirements dealId={deal.id} clientId={deal.client_id} />
+      <DealDocumentRequirements key={deal.id} dealId={deal.id} clientId={deal.client_id} />
 
       {/* The deal-specific key guarantees a draft can never survive navigation to another deal. */}
       <DealPackageDispatches key={deal.id} dealId={deal.id} />

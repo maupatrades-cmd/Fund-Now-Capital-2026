@@ -13,7 +13,9 @@
 -- no platform account (an external client signatory), and those must keep
 -- working exactly as before. Only a LINKED party is bound to their account.
 --
--- Enforced in two places, because a read gate alone is decoration:
+-- Enforced centrally by resolve_signature_request for read, consent, open,
+-- decline and signature submission. Additional read/sign checks are retained.
+-- The package and signature implementations:
 --   * get_agreement_signing_package — so the wrong account cannot even READ the
 --     document (it is the counterparty's private contract).
 --   * submit_agreement_signature    — the gate that actually matters. Without
@@ -36,6 +38,8 @@ begin
   select profile_id into v_profile
     from public.agreement_party_snapshots where id = p_party_snapshot_id;
 
+  if not found then raise exception 'Signing party not found'; end if;
+
   -- Unlinked party (external signatory): the token remains the sole credential.
   if v_profile is null then return; end if;
 
@@ -49,10 +53,23 @@ end $$;
 
 revoke all on function public.assert_signing_party_is_caller(uuid) from public, anon, authenticated;
 
--- ---------------------------------------------------------------------------
--- Re-create the package read with the guard. Body is otherwise unchanged from
--- 20260815000000 — see that migration for the design notes.
--- ---------------------------------------------------------------------------
+-- Guard every token-consuming operation, including consent, open and decline.
+create or replace function public.resolve_signature_request(p_token text)
+returns public.signature_requests
+language plpgsql security definer set search_path = '' as $$
+declare v_hash text; v_req public.signature_requests;
+begin
+  if p_token is null or p_token !~ '^[0-9a-f]{64}$' then raise exception 'Invalid signing token'; end if;
+  v_hash := encode(extensions.digest(convert_to(p_token, 'UTF8'), 'sha256'), 'hex');
+  select * into v_req from public.signature_requests where token_hash = v_hash;
+  if v_req.id is null then raise exception 'Signing link not found'; end if;
+  if v_req.revoked_at is not null then raise exception 'This signing link has been revoked'; end if;
+  if v_req.expires_at < now() then raise exception 'This signing link has expired'; end if;
+  perform public.assert_signing_party_is_caller(v_req.party_snapshot_id);
+  return v_req;
+end $$;
+revoke all on function public.resolve_signature_request(text) from public, anon, authenticated;
+
 create or replace function public.get_agreement_signing_package(p_token text)
 returns jsonb
 language plpgsql
@@ -135,8 +152,8 @@ revoke all on function public.get_agreement_signing_package(text) from public, a
 grant execute on function public.get_agreement_signing_package(text) to authenticated, service_role, postgres;
 
 -- ---------------------------------------------------------------------------
--- The gate that matters: signing itself. Body unchanged from
--- 20260812090100 / 20260812200000 apart from the guard on the second line.
+-- Signing preserves the current multi-signer lifecycle and rechecks the token
+-- under the agreement lock to prevent concurrent replay.
 -- ---------------------------------------------------------------------------
 create or replace function public.submit_agreement_signature(
   p_token          text,
@@ -148,18 +165,21 @@ create or replace function public.submit_agreement_signature(
   p_user_agent_hash text default null
 ) returns jsonb
 language plpgsql security definer set search_path = '' as $$
-declare v_req public.signature_requests; v_ai public.agreement_instances; v_ok int; v_hash text;
+declare
+  v_req public.signature_requests; v_ai public.agreement_instances; v_ok int; v_hash text;
+  v_signer_total int; v_signed_total int; v_new_state public.agreement_state;
 begin
   v_req := public.resolve_signature_request(p_token);
-  perform public.assert_signing_party_is_caller(v_req.party_snapshot_id);
-
-  if v_req.consumed_at is not null then raise exception 'This signing link has already been used to sign'; end if;
   perform pg_advisory_xact_lock(hashtext('agreement:' || v_req.agreement_id::text));
+  -- Re-read after serialization so a waiting duplicate cannot sign twice.
+  v_req := public.resolve_signature_request(p_token);
+  if v_req.consumed_at is not null then raise exception 'This signing link has already been used to sign'; end if;
   select * into v_ai from public.agreement_instances where id = v_req.agreement_id;
   if v_ai.state not in ('sent', 'viewed', 'in_progress') then
     raise exception 'Agreement % is not open for signing (state %)', v_ai.reference, v_ai.state;
   end if;
 
+  -- §7.2 gate: the four mandatory acknowledgements must be accepted.
   select count(distinct consent_kind) into v_ok from public.consent_records
    where agreement_id = v_req.agreement_id and party_snapshot_id = v_req.party_snapshot_id
      and accepted and consent_kind in ('signer_identity','reviewed_document','intent_to_bind','electronic_delivery');
@@ -179,16 +199,36 @@ begin
 
   update public.signature_requests set consumed_at = now(), auth_method = 'magic_link' where id = v_req.id;
 
-  update public.agreement_instances
-     set state = 'countersign_pending', signer_signed_at = now(), countersign_pending_at = now()
-   where id = v_req.agreement_id;
-
   insert into public.signature_events (agreement_id, event_type, party_snapshot_id, signature_method, ip_hash, user_agent_hash)
   values (v_req.agreement_id, 'signer_signed', v_req.party_snapshot_id, p_method, p_ip_hash, p_user_agent_hash);
-  insert into public.signature_events (agreement_id, event_type, party_snapshot_id)
-  values (v_req.agreement_id, 'countersign_pending', v_req.party_snapshot_id);
 
-  return jsonb_build_object('was_transitioned', true, 'state', 'countersign_pending', 'agreement_id', v_req.agreement_id);
+  -- Advance to countersign_pending ONLY when every signer party has signed;
+  -- otherwise keep the agreement open (in_progress) for the remaining signers.
+  select count(*) into v_signer_total from public.agreement_party_snapshots
+   where agreement_id = v_req.agreement_id and party_role = 'signer';
+  select count(distinct sa.party_snapshot_id) into v_signed_total
+    from public.signature_artifacts sa
+    join public.agreement_party_snapshots p on p.id = sa.party_snapshot_id
+   where sa.agreement_id = v_req.agreement_id and p.party_role = 'signer';
+
+  if v_signed_total >= v_signer_total then
+    update public.agreement_instances
+       set state = 'countersign_pending', signer_signed_at = now(), countersign_pending_at = now()
+     where id = v_req.agreement_id;
+    insert into public.signature_events (agreement_id, event_type, party_snapshot_id)
+    values (v_req.agreement_id, 'countersign_pending', v_req.party_snapshot_id);
+    v_new_state := 'countersign_pending';
+  else
+    update public.agreement_instances
+       set state = 'in_progress'
+     where id = v_req.agreement_id and state in ('sent','viewed','in_progress');
+    insert into public.signature_events (agreement_id, event_type, party_snapshot_id, detail)
+    values (v_req.agreement_id, 'in_progress', v_req.party_snapshot_id,
+            jsonb_build_object('signed', v_signed_total, 'of', v_signer_total));
+    v_new_state := 'in_progress';
+  end if;
+
+  return jsonb_build_object('was_transitioned', true, 'state', v_new_state, 'agreement_id', v_req.agreement_id);
 end $$;
 
 revoke all on function public.submit_agreement_signature(text, public.signature_method, text, text, text, text, text) from public, anon;
@@ -202,7 +242,7 @@ grant execute on function public.submit_agreement_signature(text, public.signatu
 do $$
 declare
   v_owner uuid; v_other uuid; v_tid uuid; v_ver uuid; v_ai uuid;
-  v_res jsonb; v_token text; v_kind text;
+  v_res jsonb; v_token text; v_kind text; v_tokens jsonb; v_index integer;
 begin
   select id into v_owner from public.profiles where role = 'owner' limit 1;
   select id into v_other from public.profiles where role <> 'owner' limit 1;
@@ -247,6 +287,15 @@ begin
         raise exception 'assert: wrong sign-refusal error: %', sqlerrm; end if;
     end;
 
+    begin
+      perform public.record_agreement_consent(v_token, 'signer_identity', 'v1.0', true);
+      raise exception 'assert: wrong account was allowed to record consent';
+    exception when others then
+      if sqlerrm like 'assert:%' then raise; end if;
+      if sqlerrm not like '%belongs to another account%' then
+        raise exception 'assert: wrong consent-refusal error: %', sqlerrm; end if;
+    end;
+
     -- UNLINKED party: unchanged behaviour (token alone still works).
     v_ai := (public.create_agreement_instance(v_ver, null, null, null, v_owner)).id;
     perform public.add_agreement_party(v_ai, 'signer'::public.agreement_party_role, 'External Signer', 1);
@@ -264,6 +313,24 @@ begin
     v_res := public.submit_agreement_signature(v_token, 'typed'::public.signature_method, null, null, 'External Signer');
     if (v_res->>'state') <> 'countersign_pending' then
       raise exception 'assert: unlinked party could no longer sign (%)', v_res; end if;
+
+    -- Multiple signers must remain in_progress until every party has signed.
+    v_ai := (public.create_agreement_instance(v_ver, null, null, null, v_owner)).id;
+    perform public.add_agreement_party(v_ai, 'signer'::public.agreement_party_role, 'First External Signer', 1);
+    perform public.add_agreement_party(v_ai, 'signer'::public.agreement_party_role, 'Second External Signer', 2);
+    perform public.add_agreement_party(v_ai, 'countersignatory'::public.agreement_party_role, 'FNC', 3,
+                                       null, null, null, null, null, true);
+    v_tokens := public.send_agreement(v_ai, 7)->'tokens';
+    for v_index in 0..1 loop
+      v_token := v_tokens->v_index->>'token';
+      foreach v_kind in array array['signer_identity','reviewed_document','intent_to_bind','electronic_delivery'] loop
+        perform public.record_agreement_consent(v_token, v_kind, 'v1.0', true);
+      end loop;
+      v_res := public.submit_agreement_signature(v_token, 'typed'::public.signature_method, null, null, 'External Signer');
+      if v_res->>'state' <> case when v_index = 0 then 'in_progress' else 'countersign_pending' end then
+        raise exception 'assert: multi-signer state regressed at signer %: %', v_index, v_res;
+      end if;
+    end loop;
 
     raise notice 'Signing identity binding: assertions passed (linked party bound to its account; unlinked external signatory unchanged).';
     raise exception 'ROLLBACK_TEST_DATA';
