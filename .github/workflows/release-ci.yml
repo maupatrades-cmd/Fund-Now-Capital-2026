@@ -57,3 +57,6 @@ jobs:
 
       - name: Verify CI safety contract
         run: npm run test:release-ci
+
+      - name: Execute isolated PostgreSQL payroll regression
+        run: npm run test:payroll-sql

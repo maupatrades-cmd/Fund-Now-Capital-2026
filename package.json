@@ -25,7 +25,8 @@
     "test:role-document-tasks": "node --test tests/role-document-task-workspace.test.mjs",
     "test:money-command-center": "node --test tests/money-command-center.test.mjs",
     "test:release-ci": "node --test tests/release-ci-gate.test.mjs",
-    "test:r100-reward-payroll": "node --test tests/r100-reward-payroll.test.mjs"
+    "test:r100-reward-payroll": "node --test tests/r100-reward-payroll.test.mjs",
+    "test:payroll-sql": "node --test tests/sql/*.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -51,6 +52,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

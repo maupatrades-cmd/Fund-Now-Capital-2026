@@ -29,7 +29,7 @@ test("payout history is append-only and reversals offset rather than delete", ()
   assert.match(migration, /before update or delete on public\.qualified_reward_payout_events/);
   assert.match(migration, /idempotency_key text not null unique/);
   assert.match(migration, /event_type = 'carried_forward'/);
-  assert.match(migration, /order by scheduled\.scheduled_at desc limit 1/);
+  assert.match(migration, /order by event\.event_order desc limit 1/);
 });
 
 test("workspace enforces owner or direct-beneficiary privacy", () => {

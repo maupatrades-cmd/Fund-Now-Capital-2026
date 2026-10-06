@@ -46,7 +46,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const rendered = renderRegister(register);
   if (process.argv.includes("--check")) {
     const current = await readFile(outputPath, "utf8").catch(() => "");
-    if (current !== rendered) {
+    if (current.replace(/\r\n/g, "\n") !== rendered) {
       console.error("FNC outstanding-build register is stale. Run: npm run build-register");
       process.exitCode = 1;
     } else console.log("PASS: generated build register matches its JSON source.");

@@ -121,7 +121,7 @@ This register answers what remains without treating a committed file, merged PR 
 ### AGREEMENT-EXECUTION
 
 - Dependencies: LEGAL-TEMPLATE-CONTENT, ROLE-ONBOARDING
-- Repository evidence: `src/pages/AgreementSigningPage.tsx`, `src/pages/AgreementDetailPage.tsx`, `src/hooks/useAgreementSigning.ts`, `supabase/functions/generate-legal-document-pdf/index.ts`
+- Repository evidence: `src/pages/SignAgreementPage.tsx`, `src/pages/AgreementDetailPage.tsx`, `src/hooks/useAgreementSigning.ts`, `supabase/functions/generate-legal-document-pdf/index.ts`
 
 ### PAPERWORK-TASK-AUTOMATION
 

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSession } from "@/lib/useSession";
 import { supabase } from "@/lib/supabase";
 
 export type QualifiedRewardRow = {
@@ -23,8 +24,10 @@ export type QualifiedRewardRow = {
 const KEY = ["qualified-reward-payroll"] as const;
 
 export function useQualifiedRewardPayroll() {
+  const uid = useSession()?.user.id;
   return useQuery({
-    queryKey: KEY,
+    queryKey: [...KEY, uid],
+    enabled: Boolean(uid),
     queryFn: async (): Promise<QualifiedRewardRow[]> => {
       const { data, error } = await supabase.rpc("qualified_reward_workspace");
       if (error) throw error;
@@ -56,16 +59,18 @@ export function useRecordQualifiedRewardAction() {
       rewardLockId,
       eventType,
       reason,
+      idempotencyKey,
     }: {
       rewardLockId: string;
       eventType: "held" | "released" | "carried_forward" | "reversed";
       reason: string;
+      idempotencyKey: string;
     }) => {
       const { data, error } = await supabase.rpc("owner_record_qualified_reward_action", {
         p_reward_lock_id: rewardLockId,
         p_event_type: eventType,
         p_reason: reason,
-        p_idempotency_key: `${eventType}:${rewardLockId}:${crypto.randomUUID()}`,
+        p_idempotency_key: idempotencyKey,
         p_evidence: { source: "owner_reward_workspace" },
       });
       if (error) throw error;

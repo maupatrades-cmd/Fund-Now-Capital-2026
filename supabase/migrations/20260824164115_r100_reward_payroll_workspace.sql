@@ -49,7 +49,8 @@ create table public.qualified_reward_payout_events (
   payment_reference text,
   proof_storage_path text,
   actor_id uuid not null references public.profiles(id) on delete restrict,
-  occurred_at timestamptz not null default now(),
+  event_order bigint generated always as identity unique,
+  occurred_at timestamptz not null default clock_timestamp(),
   idempotency_key text not null unique,
   evidence jsonb not null default '{}'::jsonb check (jsonb_typeof(evidence) = 'object'),
   check ((event_type = 'reversed' and amount_delta = -100.00) or
@@ -68,7 +69,7 @@ create index qualified_reward_batches_cycle_idx
 create index qualified_reward_items_batch_idx
   on public.qualified_reward_payout_items(batch_id, scheduled_at);
 create index qualified_reward_events_lock_idx
-  on public.qualified_reward_payout_events(reward_lock_id, occurred_at desc, id desc);
+  on public.qualified_reward_payout_events(reward_lock_id, event_order desc);
 
 alter table public.qualified_reward_payout_batches enable row level security;
 alter table public.qualified_reward_payout_items enable row level security;
@@ -99,13 +100,7 @@ create policy qualified_reward_items_beneficiary_read
 create policy qualified_reward_events_owner_read
   on public.qualified_reward_payout_events for select to authenticated
   using (public.is_owner());
-create policy qualified_reward_events_beneficiary_read
-  on public.qualified_reward_payout_events for select to authenticated
-  using (exists (
-    select 1 from public.complete_document_reward_locks reward
-    where reward.id = reward_lock_id
-      and reward.beneficiary_profile_id = (select auth.uid())
-  ));
+-- Beneficiaries read the redacted workspace only; event reasons/evidence are owner-private.
 
 create or replace function public.qualified_reward_append_only()
 returns trigger language plpgsql set search_path = '' as $$
@@ -133,10 +128,12 @@ declare
   v_batch public.qualified_reward_payout_batches;
   v_count integer;
 begin
+  -- One lock across schedule/action/payment prevents cross-batch allocation races.
   if not public.is_owner() then
     raise exception 'Only the owner can schedule R100 reward payouts' using errcode = '42501';
   end if;
-  if p_selected_payday not in (25, 30) then
+  perform pg_advisory_xact_lock(hashtext('qualified_reward_payroll'));
+  if p_cycle_month is null or p_selected_payday is null or p_selected_payday not in (25, 30) then
     raise exception 'Payout day must be the 25th or 30th';
   end if;
   begin
@@ -152,9 +149,12 @@ begin
   ) values (
     v_cycle, p_selected_payday, v_planned, nullif(btrim(p_owner_note), ''), (select auth.uid())
   )
-  on conflict (cycle_month, selected_payday) do update
-    set owner_note = coalesce(excluded.owner_note, public.qualified_reward_payout_batches.owner_note)
-  returning * into v_batch;
+  on conflict (cycle_month, selected_payday) do nothing;
+  select * into v_batch from public.qualified_reward_payout_batches
+  where cycle_month = v_cycle and selected_payday = p_selected_payday for update;
+  if v_batch.status <> 'scheduled' then
+    raise exception 'Only a scheduled batch can accept rewards';
+  end if;
 
   insert into public.qualified_reward_payout_items(
     batch_id, reward_lock_id, amount, scheduled_by
@@ -172,10 +172,12 @@ begin
       select 1 from public.qualified_reward_payout_events carry
       where carry.reward_lock_id = reward.id
         and carry.event_type = 'carried_forward'
+        and exists (select 1 from public.qualified_reward_payout_batches prior
+          where prior.id = carry.batch_id and prior.cycle_month < v_cycle)
         and not exists (
           select 1 from public.qualified_reward_payout_events later
           where later.reward_lock_id = reward.id
-            and (later.occurred_at, later.id) > (carry.occurred_at, carry.id)
+            and (later.event_order) > (carry.event_order)
         )
     )
     and not exists (
@@ -214,11 +216,15 @@ language plpgsql security definer set search_path = '' as $$
 declare
   v_item public.qualified_reward_payout_items;
   v_event_id uuid;
+  v_prior public.qualified_reward_payout_events;
+  v_latest public.qualified_reward_payout_events;
 begin
+  -- One lock across schedule/action/payment prevents cross-batch allocation races.
   if not public.is_owner() then
     raise exception 'Only the owner can manage R100 reward payouts' using errcode = '42501';
   end if;
-  if p_event_type not in ('held', 'released', 'carried_forward', 'reversed') then
+  perform pg_advisory_xact_lock(hashtext('qualified_reward_payroll'));
+  if p_event_type is null or p_event_type not in ('held', 'released', 'carried_forward', 'reversed') then
     raise exception 'Unsupported reward action';
   end if;
   if nullif(btrim(p_idempotency_key), '') is null then
@@ -227,9 +233,27 @@ begin
   if jsonb_typeof(coalesce(p_evidence, '{}'::jsonb)) <> 'object' then
     raise exception 'Evidence must be a JSON object';
   end if;
+  select * into v_prior from public.qualified_reward_payout_events
+    where idempotency_key = btrim(p_idempotency_key);
+  if found then
+    if v_prior.reward_lock_id is distinct from p_reward_lock_id
+       or v_prior.event_type is distinct from p_event_type
+       or v_prior.reason is distinct from nullif(btrim(p_reason), '')
+       or v_prior.evidence is distinct from coalesce(p_evidence, '{}'::jsonb) then
+      raise exception 'Idempotency key already used for another request';
+    end if;
+    return v_prior.id;
+  end if;
+  select * into v_latest from public.qualified_reward_payout_events
+    where reward_lock_id = p_reward_lock_id order by event_order desc limit 1;
+  if v_latest.event_type = 'reversed'
+     or (v_latest.event_type = 'paid' and p_event_type <> 'reversed')
+     or (p_event_type = 'released' and v_latest.event_type <> 'held')
+     or (p_event_type in ('held', 'carried_forward') and v_latest.event_type not in ('scheduled', 'held', 'released')) then
+    raise exception 'Reward action is not valid for its current state';
+  end if;
   select * into v_item from public.qualified_reward_payout_items
-   where reward_lock_id = p_reward_lock_id
-   order by scheduled_at desc limit 1;
+   where reward_lock_id = p_reward_lock_id and batch_id = v_latest.batch_id;
   if not found then raise exception 'Reward has not been scheduled'; end if;
   if p_event_type = 'reversed' and exists (
     select 1 from public.qualified_reward_payout_events
@@ -244,7 +268,7 @@ begin
     case when p_event_type = 'reversed' then -100.00 else 0.00 end,
     nullif(btrim(p_reason), ''), (select auth.uid()), btrim(p_idempotency_key),
     coalesce(p_evidence, '{}'::jsonb)
-  ) on conflict (idempotency_key) do update set idempotency_key = excluded.idempotency_key
+  )
   returning id into v_event_id;
   return v_event_id;
 end;
@@ -262,16 +286,24 @@ declare
   v_paid integer;
   v_remaining integer;
 begin
+  -- One lock across schedule/action/payment prevents cross-batch allocation races.
   if not public.is_owner() then
     raise exception 'Only the owner can record R100 reward payment' using errcode = '42501';
   end if;
+  perform pg_advisory_xact_lock(hashtext('qualified_reward_payroll'));
   if nullif(btrim(p_payment_reference), '') is null
      or nullif(btrim(p_proof_storage_path), '') is null then
     raise exception 'Payment reference and proof of payment are required';
   end if;
+  if not exists (select 1 from storage.objects
+    where bucket_id = 'qualified-reward-proofs' and name = btrim(p_proof_storage_path)
+      and name like 'rewards/' || p_batch_id::text || '/%') then
+    raise exception 'Upload proof of payment for this batch first';
+  end if;
   select * into v_batch from public.qualified_reward_payout_batches
    where id = p_batch_id for update;
   if not found then raise exception 'Reward payout batch not found'; end if;
+  if v_batch.status = 'cancelled' then raise exception 'Cancelled batch cannot be paid'; end if;
   if v_batch.status = 'paid' then
     return jsonb_build_object('batch_id', v_batch.id, 'already_paid', true);
   end if;
@@ -286,20 +318,13 @@ begin
          jsonb_build_object('batch_id', v_batch.id, 'paid_at', now())
   from public.qualified_reward_payout_items item
   where item.batch_id = v_batch.id
-    and not exists (
-      select 1 from public.qualified_reward_payout_events held
-      where held.reward_lock_id = item.reward_lock_id
-        and held.event_type = 'held'
-        and not exists (
-          select 1 from public.qualified_reward_payout_events released
-          where released.reward_lock_id = item.reward_lock_id
-            and released.event_type = 'released'
-            and released.occurred_at > held.occurred_at
-        )
-    )
-    and not exists (
-      select 1 from public.qualified_reward_payout_events reversed
-      where reversed.reward_lock_id = item.reward_lock_id and reversed.event_type = 'reversed'
+    and exists (
+      select 1 from public.qualified_reward_payout_events latest
+      where latest.reward_lock_id = item.reward_lock_id
+        and latest.batch_id = v_batch.id
+        and latest.event_type in ('scheduled', 'released')
+        and latest.event_order = (select max(e.event_order)
+          from public.qualified_reward_payout_events e where e.reward_lock_id = item.reward_lock_id)
     )
   on conflict (idempotency_key) do nothing;
   get diagnostics v_paid = row_count;
@@ -310,7 +335,8 @@ begin
     and not exists (
       select 1 from public.qualified_reward_payout_events terminal
       where terminal.reward_lock_id = item.reward_lock_id
-        and terminal.event_type in ('paid', 'reversed')
+        and (terminal.event_type in ('paid', 'reversed')
+          or (terminal.event_type = 'carried_forward' and terminal.batch_id = v_batch.id))
     );
 
   update public.qualified_reward_payout_batches set
@@ -348,14 +374,15 @@ begin
          reward.amount, reward.locked_at, reward.cutoff_date, batch.planned_for,
          batch.id,
          coalesce(latest.event_type, case when item.id is null then 'locked' else 'scheduled' end),
-         latest.payment_reference, latest.proof_storage_path, latest.occurred_at
+         latest.payment_reference, case when public.is_owner() then latest.proof_storage_path else null::text end, latest.occurred_at
   from public.complete_document_reward_locks reward
   join public.profiles profile on profile.id = reward.beneficiary_profile_id
   left join public.leads lead on lead.id = reward.lead_id
   left join lateral (
     select scheduled.* from public.qualified_reward_payout_items scheduled
     where scheduled.reward_lock_id = reward.id
-    order by scheduled.scheduled_at desc limit 1
+    order by (select max(e.event_order) from public.qualified_reward_payout_events e
+      where e.reward_lock_id = reward.id and e.batch_id = scheduled.batch_id) desc limit 1
   ) item on true
   left join public.qualified_reward_payout_batches batch on batch.id = item.batch_id
   left join lateral (
@@ -363,7 +390,7 @@ begin
            event.occurred_at
     from public.qualified_reward_payout_events event
     where event.reward_lock_id = reward.id
-    order by event.occurred_at desc, event.id desc limit 1
+    order by event.event_order desc limit 1
   ) latest on true
   where public.is_owner() or reward.beneficiary_profile_id = v_uid
   order by reward.locked_at desc;
@@ -391,5 +418,14 @@ begin
     raise exception 'Anonymous R100 payroll access is forbidden';
   end if;
 end $$;
+
+-- Private, immutable payment evidence. No beneficiary storage policy.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('qualified-reward-proofs', 'qualified-reward-proofs', false, 10485760,
+  array['application/pdf', 'image/png', 'image/jpeg', 'image/webp']);
+create policy qualified_reward_proofs_owner_insert on storage.objects
+for insert to authenticated with check (bucket_id = 'qualified-reward-proofs' and public.is_owner());
+create policy qualified_reward_proofs_owner_read on storage.objects
+for select to authenticated using (bucket_id = 'qualified-reward-proofs' and public.is_owner());
 
 notify pgrst, 'reload schema';
