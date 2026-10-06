@@ -1,0 +1,59 @@
+name: Release CI Gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Build and repository contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Compile production build
+        run: npm run build
+
+      - name: Lint source
+        run: npm run lint
+
+      - name: Verify repository RPC and Edge Function contracts
+        run: npm run test:repository-contracts
+
+      - name: Verify canonical build register
+        run: npm run test:build-register
+
+      - name: Verify release activation controller
+        run: npm run test:release-activation
+
+      - name: Run zero-write cross-role contract suites
+        run: npm run test:cross-role-e2e
+
+      - name: Verify money command centre contracts
+        run: npm run test:money-command-center
+
+      - name: Verify CI safety contract
+        run: npm run test:release-ci
