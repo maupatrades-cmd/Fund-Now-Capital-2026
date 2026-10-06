@@ -327,7 +327,7 @@ begin
         perform public.record_agreement_consent(v_token, v_kind, 'v1.0', true);
       end loop;
       v_res := public.submit_agreement_signature(v_token, 'typed'::public.signature_method, null, null, 'External Signer');
-      if v_res->>'state' <> case when v_index = 0 then 'in_progress' else 'countersign_pending' end then
+      if (v_res->>'state') <> (case when v_index = 0 then 'in_progress' else 'countersign_pending' end) then
         raise exception 'assert: multi-signer state regressed at signer %: %', v_index, v_res;
       end if;
     end loop;
