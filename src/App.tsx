@@ -82,6 +82,9 @@ import TermsAdminPage from "@/pages/TermsAdminPage";
 import LegalStudioPage from "@/pages/LegalStudioPage";
 import OwnerPayeesPage from "@/pages/OwnerPayeesPage";
 import MoneyCommandCenterPage from "@/pages/MoneyCommandCenterPage";
+import QualifiedRewardsPage from "@/pages/QualifiedRewardsPage";
+import PortalShell from "@/components/portal/PortalShell";
+import { LeadReferrerShell } from "@/components/lead-referrer/LeadReferrerShell";
 import NotificationDeliveryPage from "@/pages/NotificationDeliveryPage";
 import { ConfettiProvider } from "@/lib/celebration/ConfettiProvider";
 import { useProfileRole } from "@/hooks/useProfileRole";
@@ -195,6 +198,7 @@ function AppRoutes() {
         <Route path="network" element={<PartnerNetworkPage surface="partner" />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="calendar" element={<PortalBookingPage portal="partner" />} />
+        <Route path="rewards" element={<PortalShell portal="partner"><QualifiedRewardsPage /></PortalShell>} />
         <Route path="statements" element={<PartnerStatementsPage />} />
         <Route path="invoices" element={<PartnerInvoicesPage />} />
         <Route path="invoices/:invoiceId" element={<PartnerInvoiceDetailPage />} />
@@ -225,6 +229,7 @@ function AppRoutes() {
         <Route path="tasks" element={<LeadReferrerTasksPage />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="calendar" element={<LeadReferrerBookingPage />} />
+        <Route path="rewards" element={<LeadReferrerShell><QualifiedRewardsPage /></LeadReferrerShell>} />
         <Route path="*" element={<Navigate to="/lead-referrer" replace />} />
       </Route>
 
@@ -254,6 +259,7 @@ function AppRoutes() {
         <Route path="/partner-earnings" element={<PartnerEarningsPage />} />
         <Route path="/payouts" element={<PayoutsPage />} />
         <Route path="/money" element={<MoneyCommandCenterPage />} />
+        <Route path="/rewards" element={<QualifiedRewardsPage />} />
         <Route path="/leads" element={<LeadsPage />} />
         <Route path="/leads/new" element={<LeadFormPage />} />
         <Route path="/leads/:id" element={<LeadDetailPage />} />
