@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Check, ClipboardList, Save, ShieldCheck } from "
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import ClientPortalShell from "@/components/client-portal/ClientPortalShell";
+import { useClientApplicationProgress } from "@/hooks/useClientApplicationProgress";
 import { useClientPortalIdentity } from "@/hooks/useClientPortalIdentity";
 import { supabase } from "@/lib/supabase";
 
@@ -49,11 +50,20 @@ function formatMoney(value: string) {
 
 export default function ClientApplicationPage() {
   const identity = useClientPortalIdentity();
+  const [params] = useSearchParams();
+  return <ClientApplicationForm key={`${identity.data?.clientId ?? "loading"}:${params.get("deal") ?? "new"}:${params.get("product") ?? "working_capital"}`} />;
+}
+
+function ClientApplicationForm() {
+  const identity = useClientPortalIdentity();
   const queryClient = useQueryClient();
+  const applications = useClientApplicationProgress();
   const [searchParams, setSearchParams] = useSearchParams();
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<FormValues>(initialValues);
   const [dirty, setDirty] = useState(false);
+  const selectedDealId = searchParams.get("deal") || null;
+  const validDeal = !selectedDealId || applications.data?.some((item) => item.dealId === selectedDealId);
   const requestedProduct = searchParams.get("product") ?? "working_capital";
 
   const products = useQuery({
@@ -70,12 +80,14 @@ export default function ClientApplicationPage() {
     ? requestedProduct : products.data?.[0]?.code ?? requestedProduct;
 
   const draft = useQuery({
-    queryKey: ["client-application-draft", identity.data?.clientId, selectedProduct],
-    enabled: Boolean(identity.data?.clientId && selectedProduct),
+    queryKey: ["client-application-draft", identity.data?.clientId, selectedProduct, selectedDealId],
+    enabled: Boolean(identity.data?.clientId && selectedProduct && validDeal),
     queryFn: async (): Promise<Draft | null> => {
-      const { data: response, error } = await supabase.from("client_form_responses")
+      let query = supabase.from("client_form_responses")
         .select("id,requested_amount,status").eq("client_id", identity.data!.clientId)
-        .eq("product_code", selectedProduct).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+        .eq("product_code", selectedProduct).neq("status", "superseded");
+      query = selectedDealId ? query.eq("deal_id", selectedDealId) : query.is("deal_id", null);
+      const { data: response, error } = await query.order("updated_at", { ascending: false }).limit(1).maybeSingle();
       if (error) throw error;
       if (!response) return null;
       const { data: answers, error: answerError } = await supabase.from("client_form_answers")
@@ -86,7 +98,7 @@ export default function ClientApplicationPage() {
   });
 
   useEffect(() => {
-    if (!identity.data || draft.isLoading) return;
+    if (!identity.data || draft.isLoading || dirty) return;
     const next: FormValues = {
       ...initialValues,
       registered_name: identity.data.businessName ?? "",
@@ -103,10 +115,13 @@ export default function ClientApplicationPage() {
     }
     setValues(next);
     setDirty(false);
-  }, [draft.data, draft.isLoading, identity.data]);
+  }, [draft.data, draft.isLoading, identity.data, dirty]);
 
   const persist = async (submit: boolean) => {
     if (!identity.data?.clientId) throw new Error("Your client account is not linked yet.");
+    if (applications.isLoading || applications.error || !validDeal || draft.isLoading || draft.error) {
+      throw new Error("Wait for your application to load, or select an available application.");
+    }
     const requestedAmount = Number(values.requested_amount);
     const hasAmount = values.requested_amount.trim() !== "" && Number.isFinite(requestedAmount) && requestedAmount > 0;
     if (submit && !hasAmount) throw new Error("Enter a valid funding amount.");
@@ -126,7 +141,7 @@ export default function ClientApplicationPage() {
       if (error) throw error;
     } else {
       const { data, error } = await supabase.from("client_form_responses").insert({
-        client_id: identity.data.clientId, product_code: selectedProduct,
+        client_id: identity.data.clientId, deal_id: selectedDealId, product_code: selectedProduct,
         requested_amount: hasAmount ? requestedAmount : null, status: "draft",
       }).select("id").single();
       if (error) throw error;
@@ -156,7 +171,7 @@ export default function ClientApplicationPage() {
     onSuccess: async ({ submitted }) => {
       toast.success(submitted ? "Application submitted securely." : "Draft saved.");
       setDirty(false);
-      await queryClient.invalidateQueries({ queryKey: ["client-application-draft", identity.data?.clientId, selectedProduct] });
+      await queryClient.invalidateQueries({ queryKey: ["client-application-draft", identity.data?.clientId, selectedProduct, selectedDealId] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "The application could not be saved."),
   });
@@ -170,7 +185,7 @@ export default function ClientApplicationPage() {
       toast.info("Save your current draft before changing the funding type.");
       return;
     }
-    setSearchParams({ product: nextProduct });
+    setSearchParams((current) => { const next = new URLSearchParams(current); next.set("product", nextProduct); return next; });
   };
   const product = products.data?.find((item) => item.code === selectedProduct);
   const submitted = draft.data?.status === "submitted";
@@ -184,11 +199,29 @@ export default function ClientApplicationPage() {
             <h1 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">Tell us what your business needs</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">Save at any point. Your answers stay private and build the paperwork checklist for your selected funding route.</p>
           </div>
-          <button type="button" disabled={save.isPending || submitted} onClick={() => save.mutate(false)}
+          <button type="button" disabled={save.isPending || submitted || draft.isLoading || Boolean(draft.error) || applications.isLoading || Boolean(applications.error) || !validDeal} onClick={() => save.mutate(false)}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-white/5 px-4 text-sm font-bold text-white/75 disabled:opacity-45">
             <Save className="h-4 w-4" aria-hidden="true" /> Save draft
           </button>
         </header>
+
+        <label className="mb-6 block text-sm font-semibold text-white/75">
+          Application for
+          <select className={inputClass} value={selectedDealId ?? ""} disabled={save.isPending || applications.isLoading}
+            onChange={(event) => {
+              if (dirty) { toast.info("Save your current draft before changing applications."); return; }
+              setSearchParams((current) => {
+                const next = new URLSearchParams(current);
+                if (event.target.value) next.set("deal", event.target.value); else next.delete("deal");
+                return next;
+              });
+            }}>
+            <option value="">New enquiry / existing unlinked draft</option>
+            {!validDeal && selectedDealId ? <option value={selectedDealId}>Application unavailable</option> : null}
+            {(applications.data ?? []).map((item) => <option key={item.dealId} value={item.dealId}>{item.dealReference} — {item.productLabel}</option>)}
+          </select>
+          {applications.error || !validDeal ? <p role="alert" className="mt-2 text-red-200">We could not verify this application. Select an available application or refresh.</p> : null}
+        </label>
 
         <ol className="mb-6 grid grid-cols-4 gap-2" aria-label="Application progress">
           {sections.map((section, index) => (
@@ -205,7 +238,7 @@ export default function ClientApplicationPage() {
           {identity.isLoading || draft.isLoading || products.isLoading ? <p className="py-16 text-center text-sm text-white/45">Loading your secure application...</p> : null}
           {identity.error || draft.error || products.error ? <p className="rounded-2xl border border-red-300/20 bg-red-400/10 p-4 text-sm text-red-100">We could not load the application. Please refresh or contact Fund Now Capital support.</p> : null}
           {!identity.isLoading && !draft.isLoading && !products.isLoading && !identity.error && !draft.error && !products.error ? (
-            <fieldset disabled={submitted || save.isPending} className="disabled:opacity-70">
+            <fieldset disabled={submitted || save.isPending || applications.isLoading || Boolean(applications.error) || !validDeal} className="disabled:opacity-70">
               {step === 0 ? <div>
                 <h2 className="text-2xl font-extrabold">Business details</h2>
                 <p className="mt-2 text-sm text-white/45">Confirm the registered information we already have, then fill any gaps.</p>
@@ -260,7 +293,7 @@ export default function ClientApplicationPage() {
           <div className="mt-8 flex items-center justify-between border-t border-white/8 pt-5">
             <button type="button" disabled={step === 0} onClick={() => setStep((current) => Math.max(0, current - 1))} className="inline-flex min-h-11 items-center gap-2 rounded-2xl px-4 text-sm font-bold text-white/55 disabled:opacity-25"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back</button>
             {step < 3 ? <button type="button" onClick={() => setStep((current) => Math.min(3, current + 1))} className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-white/10 px-5 text-sm font-extrabold text-white">Continue <ArrowRight className="h-4 w-4" aria-hidden="true" /></button>
-              : <button type="button" disabled={submitted || save.isPending} onClick={() => save.mutate(true)} className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-gradient-to-r from-[#6ec144] to-[#2ca8a8] px-5 text-sm font-extrabold text-[#06131d] disabled:opacity-45"><ClipboardList className="h-4 w-4" aria-hidden="true" /> Submit application</button>}
+              : <button type="button" disabled={submitted || save.isPending || applications.isLoading || Boolean(applications.error) || !validDeal} onClick={() => save.mutate(true)} className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-gradient-to-r from-[#6ec144] to-[#2ca8a8] px-5 text-sm font-extrabold text-[#06131d] disabled:opacity-45"><ClipboardList className="h-4 w-4" aria-hidden="true" /> Submit application</button>}
           </div>
         </section>
       </div>

@@ -96,6 +96,18 @@ export function DealDocumentRequirements({ dealId, clientId }: { dealId: string;
     },
   });
 
+  const unlinkedChoices = useQuery({
+    queryKey: ["client-unlinked-product-choices", clientId],
+    queryFn: async (): Promise<Array<ClientProductChoice & { id: string }>> => {
+      const { data, error } = await supabase.from("client_form_responses")
+        .select("id,product_code,status").eq("client_id", clientId)
+        .is("deal_id", null).neq("status", "superseded")
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const checklist = useQuery({
     queryKey: ["deal-document-checklist", dealId],
     enabled: Boolean(context.data),
@@ -255,7 +267,19 @@ export function DealDocumentRequirements({ dealId, clientId }: { dealId: string;
         </div>
       ) : null}
 
-      {products.error || funders.error || context.error || clientChoice.error ? (
+      {(unlinkedChoices.data?.length ?? 0) > 0 ? (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <p className="font-semibold">Client enquiries not linked to a deal</p>
+          <p>Confirm which enquiry belongs to this deal before selecting its funding route below.</p>
+          <ul className="mt-2 list-inside list-disc">
+            {unlinkedChoices.data!.map((choice) => <li key={choice.id}>
+              {products.data?.find((product) => product.code === choice.product_code)?.display_name ?? choice.product_code.replaceAll("_", " ")} ({choice.status})
+            </li>)}
+          </ul>
+        </div>
+      ) : null}
+
+      {products.error || funders.error || context.error || clientChoice.error || unlinkedChoices.error ? (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
           Some checklist setup data could not be loaded. Refresh before making changes.
         </div>
