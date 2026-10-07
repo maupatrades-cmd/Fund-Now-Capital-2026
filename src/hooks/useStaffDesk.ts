@@ -392,3 +392,17 @@ export function useRevokeCalendarGrant() {
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["owner-calendar-grants"] }); },
   });
 }
+
+// Approved status wording per file (never funder names, rates or tiers). Staff see this
+// instead of any funder-side stage.
+export function useStatusWordings(leadIds: string[]) {
+  const key = [...leadIds].sort().join(",");
+  return useQuery({
+    queryKey: ["staff-status-wordings", key],
+    enabled: leadIds.length > 0,
+    queryFn: async (): Promise<Record<string, string>> => {
+      const rows = await rpc<{ lead_id: string; wording: string | null }[]>("staff_status_wordings", { p_lead_ids: leadIds.slice(0, 100) });
+      return Object.fromEntries((rows ?? []).map((r) => [r.lead_id, r.wording ?? ""]));
+    },
+  });
+}
