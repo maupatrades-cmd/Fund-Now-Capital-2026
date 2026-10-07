@@ -86,6 +86,8 @@ test('switchboard operations (calls, handover, tasks, checklist, diary) are enfo
     }
 
 
+    await db.exec('alter table public.deals add column client_id uuid; alter table public.documents add column client_id uuid;');
+    await db.exec(await mig('20261007203835_staff_checklist_receipt_alignment.sql'));
     await as(U.owner);
     await q("select public.owner_set_staff_access($1,true,'FNC-EMP-SC-01')", [U.coordinator]);
     await q("select public.owner_set_staff_access($1,true,'FNC-EMP-SA-01')", [U.switchboard]);
@@ -171,6 +173,29 @@ test('switchboard operations (calls, handover, tasks, checklist, diary) are enfo
     const list = await q('select * from public.staff_document_checklist($1)', [lead]);
     assert.deepEqual(list.map((r) => [r.document_type, r.received]), [['bank_statement', false], ['cipc_cert', true], ['id_copy', false]]);
     assert.deepEqual(Object.keys(list[0]).sort(), ['document_type', 'flagged_suspicious', 'last_received_at', 'received', 'received_count', 'requirement']);
+    await as(null);
+    const receipt = (await one('select id from public.intake_document_receipts where lead_id=$1', [lead])).id;
+    await as(U.switchboard);
+    await q("select public.staff_flag_document_suspicious($1,'Suspected altered document')", [receipt]);
+    const flagged = (await q('select * from public.staff_document_checklist($1)', [lead])).find(r => r.document_type === 'cipc_cert');
+    assert.equal(flagged.received, false);
+    assert.equal(flagged.received_count, 0);
+    assert.equal(flagged.flagged_suspicious, true);
+    await rejects(() => q('select * from public.intake_document_receipt_summary($1)', [lead]), /permission denied/, '42501');
+    await as(null);
+    assert.ok((await one('select public.intake_required_docs_missing($1) as missing', [lead])).missing.includes('cipc_cert'));
+    const client = (await one("insert into public.clients(business_name) values ('Checklist client') returning id")).id;
+    await q('insert into public.deals(lead_id,client_id) values ($1,$2)', [lead, client]);
+    await q("insert into public.documents(client_id,document_type) values ($1,'bank_statement')", [client]);
+    // Another client's document must not satisfy this intake.
+    await q("insert into public.documents(client_id,document_type) values ($1,'cipc_cert')", [id(999)]);
+    assert.deepEqual((await one('select public.intake_required_docs_missing($1) as missing', [lead])).missing, ['cipc_cert']);
+    await as(U.switchboard);
+    assert.equal((await q('select * from public.staff_document_checklist($1)', [lead])).find(r => r.document_type === 'bank_statement').received, true);
+    await as(U.owner);
+    await q("select public.owner_clear_document_flag($1,'Original checked by Owner')", [receipt]);
+    await as(null);
+    assert.deepEqual((await one('select public.intake_required_docs_missing($1) as missing', [lead])).missing, []);
     await as(U.partner1);
     await rejects(() => q('select * from public.staff_document_checklist($1)', [lead]), /permission/, '42501');
 
