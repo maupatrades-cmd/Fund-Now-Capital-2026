@@ -40,8 +40,27 @@ test('client form binds inserts, draft lookup, cache and navigation to selected 
  assert.match(page,/"client-application-draft", identity\.data\?\.clientId, selectedProduct, selectedDealId/);
  assert.match(page,/new URLSearchParams\(current\)/);
  assert.match(page,/\.neq\("status", "superseded"\)/);
- assert.match(page,/applications\.data\?\.some\(\(item\) => item\.dealId === selectedDealId\)/);
+ assert.match(page,/applicationDealBlocked\(selectedDealId/);
+ assert.match(page,/await applications\.refetch\(\)/);
  const owner=await readFile(new URL('../../src/components/deals/DealDocumentRequirements.tsx',import.meta.url),'utf8');
  assert.match(owner,/\.eq\("deal_id", dealId\)/);
  assert.doesNotMatch(owner,/productDraft \?\?.*unlinkedChoices/);
+});
+
+
+test('application selection resumes the correct product and requires ambiguous choices', async () => {
+ const { resolveApplicationChoice, applicationDealBlocked } = await import('../../src/lib/clientApplicationChoice.ts');
+ const invoice = { id: 'invoice', product_code: 'invoice_discounting', status: 'draft' };
+ const capital = { id: 'capital', product_code: 'working_capital', status: 'submitted' };
+ assert.equal(resolveApplicationChoice([invoice],null,null,false).response.id,'invoice');
+ assert.equal(resolveApplicationChoice([invoice,capital],null,null,false).needsChoice,true);
+ assert.equal(resolveApplicationChoice([invoice,capital],'capital',null,false).response.id,'capital');
+ assert.equal(resolveApplicationChoice([invoice],null,'working_capital',false).needsChoice,true);
+ assert.equal(resolveApplicationChoice([invoice],null,'working_capital',true).needsChoice,false);
+ assert.equal(resolveApplicationChoice([invoice],'foreign',null,false).needsChoice,true);
+ assert.equal(resolveApplicationChoice([invoice,{...invoice,id:'invoice2'}],null,'invoice_discounting',false).needsChoice,true);
+ assert.equal(applicationDealBlocked(null,undefined,true,true),false);
+ assert.equal(applicationDealBlocked('done',[{dealId:'done',isComplete:true}],false,false),true);
+ assert.equal(applicationDealBlocked('open',[{dealId:'open',isComplete:false}],false,false),false);
+ assert.equal(applicationDealBlocked('open',undefined,false,true),true);
 });
