@@ -167,6 +167,7 @@ create or replace function public.submit_agreement_signature(
 language plpgsql security definer set search_path = '' as $$
 declare
   v_req public.signature_requests; v_ai public.agreement_instances; v_ok int; v_hash text;
+  v_path text; v_name text; v_uid uuid := (select auth.uid());
   v_signer_total int; v_signed_total int; v_new_state public.agreement_state;
 begin
   v_req := public.resolve_signature_request(p_token);
@@ -187,15 +188,41 @@ begin
     raise exception 'All required acknowledgements must be accepted before signing (§7.2)';
   end if;
 
+  -- Do not trust the browser's method/name/path checks. In particular a valid
+  -- token must never attach somebody else's signature object to this agreement.
+  if p_method is null or p_method::text not in ('typed', 'drawn', 'uploaded') then
+    raise exception 'Unsupported signer method';
+  end if;
+  v_name := nullif(btrim(coalesce(p_adopted_text, '')), '');
+  if v_name is null then raise exception 'An adopted signer name is required'; end if;
+  v_path := nullif(btrim(coalesce(p_storage_path, '')), '');
   v_hash := lower(nullif(btrim(coalesce(p_artifact_sha256,'')),''));
   if v_hash is not null and v_hash !~ '^[0-9a-f]{64}$' then
     raise exception 'artifact_sha256 must be a lowercase 64-hex digest';
   end if;
+  if p_method::text = 'typed' then
+    if v_path is not null or v_hash is not null then
+      raise exception 'Typed signatures must not attach an image';
+    end if;
+  else
+    if v_path is null or v_hash is null then
+      raise exception 'A signature image and its fingerprint are required';
+    end if;
+    if v_uid is null or split_part(v_path, '/', 1) <> 'signature'
+       or split_part(v_path, '/', 2) <> v_uid::text
+       or split_part(v_path, '/', 3) <> v_req.agreement_id::text
+       or v_path !~ '^signature/[0-9a-f-]{36}/[0-9a-f-]{36}/[0-9a-f-]{36}\.(png|jpg|jpeg)$' then
+      raise exception 'Signature image does not belong to this signer and agreement';
+    end if;
+    if not exists (select 1 from storage.objects
+                    where bucket_id = 'legal-signature-artifacts' and name = v_path) then
+      raise exception 'Uploaded signature image was not found';
+    end if;
+  end if;
 
   insert into public.signature_artifacts
     (agreement_id, party_snapshot_id, method, artifact_sha256, storage_path, adopted_text)
-  values (v_req.agreement_id, v_req.party_snapshot_id, p_method, v_hash,
-          nullif(btrim(coalesce(p_storage_path,'')),''), nullif(btrim(coalesce(p_adopted_text,'')),''));
+  values (v_req.agreement_id, v_req.party_snapshot_id, p_method, v_hash, v_path, v_name);
 
   update public.signature_requests set consumed_at = now(), auth_method = 'magic_link' where id = v_req.id;
 
