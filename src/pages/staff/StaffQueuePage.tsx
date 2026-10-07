@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
+import { FileDecisionLine, SendToFounderForm } from "@/components/staff/FounderDecision";
 import { card, errorText, selectClass } from "@/components/staff/StaffShell";
 import { useIntakeQueue, useStaffRole, useStatusWordings } from "@/hooks/useStaffDesk";
 
@@ -43,6 +44,8 @@ export default function StaffQueuePage() {
                 {r.contact_name} · {r.channel.replace("_", " ")}{r.team_name ? ` · ${r.team_name}` : ""}{r.organisation_name ? ` · ${r.organisation_name}` : ""}{r.agent_name ? ` · ${r.agent_name}` : ""}
               </p>
               {wordings.data?.[r.lead_id] ? <p className="text-xs text-brand-navy">Told to agents and clients: {wordings.data[r.lead_id]}</p> : null}
+              {["with_founder", "documents_incomplete", "verified", "complete"].includes(r.workflow_status) ? <FileDecisionLine leadId={r.lead_id} /> : null}
+              {r.workflow_status === "complete" && !r.archived_at ? <SendToFounderForm leadId={r.lead_id} /> : null}
               {r.missing_documents.length ? <p className="text-xs text-amber-800">Missing: {r.missing_documents.join(", ").replaceAll("_", " ")}</p> : null}
             </li>
           ))}

@@ -406,3 +406,59 @@ export function useStatusWordings(leadIds: string[]) {
     },
   });
 }
+
+// ---- Founder decisions (SC3) ----------------------------------------------
+export type DealSummaryInput = {
+  leadId: string; amountPurpose: string; turnoverTrading: string; documentsNote: string; redFlags: string;
+};
+export type FounderDecision = "approve_to_submit" | "send_back_with_query" | "decline" | "call_me";
+export const DECLINE_CATEGORIES = [
+  ["affordability", "Affordability"], ["documentation", "Documentation"], ["credit_profile", "Credit profile"],
+  ["sector_policy", "Sector policy"], ["other", "Other"],
+] as const;
+
+// Coordinator (or Owner) sends a Complete file to the Founder with the Deal Summary.
+export function useSendToFounder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: DealSummaryInput) =>
+      rpc<string>("staff_send_founder_decision", {
+        p_lead_id: i.leadId, p_amount_purpose: i.amountPurpose, p_turnover_trading: i.turnoverTrading,
+        p_documents_note: i.documentsNote || null, p_red_flags: i.redFlags || null,
+      }),
+    onSuccess: () => { invalidateTasks(qc); void qc.invalidateQueries({ queryKey: ["staff-intake-queue"] }); void qc.invalidateQueries({ queryKey: ["staff-file-decision"] }); },
+  });
+}
+
+export type DealSummary = {
+  business_name: string; funding_type_label: string; requested_amount: number | null; amount_purpose: string;
+  turnover_trading: string; documents_note: string | null; red_flags: string | null;
+  agent_name: string | null; team_name: string | null; written_at: string;
+};
+export function useDealSummary(taskId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["staff-deal-summary", taskId],
+    enabled,
+    queryFn: async () => (await rpc<DealSummary[]>("owner_deal_summary", { p_task_id: taskId }))?.[0] ?? null,
+  });
+}
+
+export function useDecideFounderTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { taskId: string; decision: FounderDecision; note: string; declineCategory?: string }) =>
+      rpc<void>("owner_decide_founder_task", {
+        p_task_id: i.taskId, p_decision: i.decision, p_note: i.note || null, p_decline_category: i.declineCategory ?? null,
+      }),
+    onSuccess: () => { invalidateTasks(qc); void qc.invalidateQueries({ queryKey: ["staff-intake-queue"] }); void qc.invalidateQueries({ queryKey: ["staff-file-decision"] }); },
+  });
+}
+
+export type FileDecision = { decision: FounderDecision; decline_category: string | null; note: string | null; decided_at: string };
+export function useFileDecision(leadId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["staff-file-decision", leadId],
+    enabled,
+    queryFn: async () => (await rpc<FileDecision[]>("staff_file_decision", { p_lead_id: leadId }))?.[0] ?? null,
+  });
+}
