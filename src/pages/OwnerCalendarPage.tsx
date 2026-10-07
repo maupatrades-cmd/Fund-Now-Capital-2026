@@ -413,6 +413,7 @@ export default function OwnerCalendarPage() {
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-teal">Owner command centre</p>
             <h1 className="mt-2 text-2xl font-bold sm:text-3xl">Calendar & bookings</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">Plan private work, publish availability, convert meetings into tasks and approve role-requested client appointments from one place.</p>
+            <a href="/calendar/access" className="mt-3 inline-block text-xs font-semibold text-brand-teal underline">Staff calendar access</a>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex">
             <div className="rounded-2xl bg-white/10 px-4 py-3"><p className="text-[10px] uppercase tracking-wide text-white/50">Requests</p><p className="mt-1 text-xl font-bold">{calendar.data?.bookings.filter((item) => item.status === "requested").length ?? 0}</p></div>

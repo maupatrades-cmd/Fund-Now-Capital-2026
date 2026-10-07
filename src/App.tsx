@@ -11,6 +11,14 @@ import NewAgreementPage from "@/pages/NewAgreementPage";
 import AgreementDetailPage from "@/pages/AgreementDetailPage";
 import OwnerGate from "@/components/layout/OwnerGate";
 import PartnerGate from "@/pages/PartnerGate";
+import StaffGate from "@/pages/staff/StaffGate";
+import CalendarAccessPage from "@/pages/CalendarAccessPage";
+import StaffCallLogPage from "@/pages/staff/StaffCallLogPage";
+import StaffNewLeadPage from "@/pages/staff/StaffNewLeadPage";
+import StaffDocumentTrackerPage from "@/pages/staff/StaffDocumentTrackerPage";
+import StaffDiaryPage from "@/pages/staff/StaffDiaryPage";
+import StaffTasksPage from "@/pages/staff/StaffTasksPage";
+import StaffQueuePage from "@/pages/staff/StaffQueuePage";
 import PartnerHomePage from "@/pages/PartnerHomePage";
 import PartnerNetworkPage from "@/pages/PartnerNetworkPage";
 import PartnerSubmitLeadPage from "@/pages/partner/SubmitLeadPage";
@@ -221,6 +229,15 @@ function AppRoutes() {
         <Route path="legal-documents" element={<ClientLegalDocumentsPage />} />
         <Route path="*" element={<Navigate to="/client" replace />} />
       </Route>
+      <Route path="/staff" element={<StaffGate />}>
+        <Route index element={<StaffCallLogPage />} />
+        <Route path="new-lead" element={<StaffNewLeadPage />} />
+        <Route path="documents" element={<StaffDocumentTrackerPage />} />
+        <Route path="diary" element={<StaffDiaryPage />} />
+        <Route path="tasks" element={<StaffTasksPage />} />
+        <Route path="queue" element={<StaffQueuePage />} />
+        <Route path="*" element={<Navigate to="/staff" replace />} />
+      </Route>
       <Route path="/lead-referrer" element={<LeadReferrerGate />}>
         <Route index element={<LeadReferrerHomePage />} />
         <Route path="submit-lead" element={<LeadReferrerSubmitLeadPage />} />
@@ -247,6 +264,7 @@ function AppRoutes() {
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/calendar" element={<OwnerCalendarPage />} />
+        <Route path="/calendar/access" element={<CalendarAccessPage />} />
         <Route path="/deals/:id" element={<DealDetailPage />} />
         <Route path="/deals/archived" element={<ArchivedDealsPage />} />
         <Route path="/deals/:id/package" element={<DealPackagePage />} />

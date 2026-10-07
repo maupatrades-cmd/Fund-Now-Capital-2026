@@ -48,6 +48,8 @@ const ROLE_LABEL: Record<string, string> = {
   contractor: "Contractor",
   lead_referrer: "Lead Referrer",
   sub_agent: "Sub-agent",
+  switchboard: "Switchboard Assistant",
+  coordinator: "Sales Coordinator",
 };
 
 function json(body: unknown, status = 200): Response {
@@ -254,8 +256,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // full_name + phone are required only when CREATING a new user (below). A
   // resend to an existing member needs just email + role + method.
   if (!isEmail(email)) return json({ error: "A valid email is required" }, 400);
-  if (role !== "partner" && role !== "contractor" && role !== "lead_referrer") {
-    return json({ error: "Role must be Partner, Contractor, Lead Referrer or Sub-agent" }, 400);
+  // switchboard / coordinator are staff roles: the profile is created with no
+  // operational authority until the owner enables it (staff_access).
+  if (
+    role !== "partner" && role !== "contractor" && role !== "lead_referrer" &&
+    role !== "switchboard" && role !== "coordinator"
+  ) {
+    return json({ error: "Role must be Partner, Contractor, Lead Referrer, Sub-agent, Switchboard Assistant or Sales Coordinator" }, 400);
   }
   if (requestedRole === "sub_agent" && !parentPartnerId) {
     return json({ error: "A parent partner is required for a sub-agent" }, 400);
