@@ -31,8 +31,7 @@ const FNC = {
   tagline: "Many funders. More Approvals",
   address: "Cedarwood House, 128 Ballyclare Drive, Bryanston, Sandton, 2191",
   cipc: "2026/066284/07",
-  tel: "010 102 0534",
-  mobile: "076 803 8987",
+  tel: "071 208 5218",
   email: "thapelol@fundnowcapital.africa",
   web: "www.fundnowcapital.africa",
   ownerName: "Thapelo Lekgoro",
@@ -156,7 +155,7 @@ async function renderPdf(inv: InvoiceRow, funder: FunderRow): Promise<Uint8Array
   text(FNC.name, TX, y + 4, { size: 16, font: "bold", color: NAVY });
   text(FNC.tagline, TX, y + 18, { size: 9, font: "ital", color: TEAL });
   text(FNC.address, TX, y + 32, { size: 8, color: INK });
-  text(`CIPC: ${FNC.cipc}  |  Tel: ${FNC.tel}  |  Mobile: ${FNC.mobile}`, TX, y + 44, { size: 8, color: INK });
+  text(`CIPC: ${FNC.cipc}  |  Tel: ${FNC.tel}`, TX, y + 44, { size: 8, color: INK });
   text(`Email: ${FNC.email}  |  Web: ${FNC.web}`, TX, y + 56, { size: 8, color: INK });
 
   text("TAX INVOICE", W - M, y + 6, { size: 22, font: "bold", color: NAVY, align: "right" });
@@ -274,7 +273,7 @@ async function renderPdf(inv: InvoiceRow, funder: FunderRow): Promise<Uint8Array
   // ---- disclaimer ----
   const disc = splitText(
     `Note: ${FNC.vatDisclaimer} The ${formatR(inv.total_amount)} amount is the gross commission per the Lead Provider ` +
-      `Agreement. For queries please contact ${FNC.ownerName} on ${FNC.mobile} or ${FNC.email}.`,
+      `Agreement. For queries please contact ${FNC.ownerName} on ${FNC.tel} or ${FNC.email}.`,
     "reg",
     7.5,
     boxW,

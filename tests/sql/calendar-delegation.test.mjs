@@ -8,7 +8,9 @@ import test from 'node:test';
 // database enforces authority; it does NOT prove the live schema, Supabase
 // Storage policies, or multi-session concurrency (see the Batch 1 handover).
 const { PGlite } = await import(process.env.FNC_PGLITE_MODULE || '@electric-sql/pglite');
-const { btree_gist } = await import('@electric-sql/pglite/contrib/btree_gist');
+const { btree_gist } = await import(process.env.FNC_PGLITE_MODULE
+  ? new URL('./contrib/btree_gist.js', process.env.FNC_PGLITE_MODULE).href
+  : '@electric-sql/pglite/contrib/btree_gist');
 
 const id = (n) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const U = {

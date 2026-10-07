@@ -479,8 +479,11 @@ begin
     insert into public.deals (client_id, lead_id, reference, stage, is_purchase_order, referral_partner_id)
       values (v_client, v_lead, 'B1FF_PATH_B', 'funded', false, v_doctor) returning id into v_deal;
     insert into public.commission_records
-      (deal_id, referral_partner_id, gross_commission, is_purchase_order, status, contractor_share, earned_at)
-      values (v_deal, v_doctor, 100000, false, 'earned', 0, now()) returning * into v_cr;
+      (deal_id, referral_partner_id, gross_commission, is_purchase_order, status, contractor_share, earned_at,
+       tier_pct, company_retention, partner_pool, partner_share, owner_share)
+      select v_deal, v_doctor, 100000, false, 'earned', 0, now(),
+             b.tier_pct, b.company_retention, b.partner_pool, b.partner_share, b.owner_share
+        from public.calculate_commission(100000, false) b returning * into v_cr;
     if v_cr.partner_share <= 0 or v_cr.owner_share <= 0 then
       raise exception 'assert FAIL: fixture requires positive commission shares'; end if;
     update public.profiles set sourced_via_partner_id = v_doctor where id = v_lr;  -- Path B
@@ -501,8 +504,11 @@ begin
       values (v_client, v_lead_a, 'B1FF_PATH_A', 'funded', false, null) returning id into v_deal_a;
     -- Direct-FNC commission: no partner → owner keeps the full 60% pool (rule G4).
     insert into public.commission_records
-      (deal_id, referral_partner_id, gross_commission, is_purchase_order, status, contractor_share, earned_at)
-      values (v_deal_a, null, 100000, false, 'earned', 0, now()) returning * into v_cr;
+      (deal_id, referral_partner_id, gross_commission, is_purchase_order, status, contractor_share, earned_at,
+       tier_pct, company_retention, partner_pool, partner_share, owner_share)
+      select v_deal_a, null, 100000, false, 'earned', 0, now(),
+             0, b.company_retention, b.partner_pool, 0, b.partner_pool
+        from public.calculate_commission(100000, false) b returning * into v_cr;
     if v_cr.owner_share <> 60000.00 then
       raise exception 'assert FAIL: Direct-FNC owner_share % (exp 60000)', v_cr.owner_share; end if;
     if v_cr.partner_share <> 0.00 then

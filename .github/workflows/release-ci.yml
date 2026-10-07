@@ -35,6 +35,10 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Compile production build
+        env:
+          # Public placeholders keep the CRM in the bundle without live credentials.
+          VITE_SUPABASE_URL: https://build-validation.supabase.co
+          VITE_SUPABASE_ANON_KEY: build-validation-only-not-a-deployment-key
         run: npm run build
 
       - name: Lint source
