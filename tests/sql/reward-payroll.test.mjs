@@ -43,12 +43,13 @@ test('payroll executes retries, carry-forward, payment guards and beneficiary pr
  assert.equal(november.scheduled_count,1);
  await assert.rejects(pay(october.batch_id),/Upload proof/);
  await proof(october.batch_id);
- assert.equal((await pay(october.batch_id)).paid_count,0);
+ await assert.rejects(pay(october.batch_id), /no payable rewards/);
+ assert.equal(await scalar("select status as value from qualified_reward_payout_batches where id=$1", [october.batch_id]), "scheduled");
  assert.equal(await scalar("select count(*)::int as value from qualified_reward_payout_events where event_type='paid'"),0);
- await assert.rejects(schedule('2026-10-01'),/Only a scheduled batch/);
+ assert.equal((await schedule('2026-10-01')).scheduled_count,0);
  await proof(november.batch_id);
  await action('held','hold-2');
- assert.equal((await pay(november.batch_id)).paid_count,0);
+ await assert.rejects(pay(november.batch_id), /no payable rewards/);
  await action('released','release-2');
  assert.equal((await pay(november.batch_id)).paid_count,1);
  assert.equal((await pay(november.batch_id)).already_paid,true);
@@ -67,7 +68,10 @@ test('payroll executes retries, carry-forward, payment guards and beneficiary pr
  const reversed = await action('reversed','reverse-1');
  assert.equal(await action('reversed','reverse-1'),reversed);
  await assert.rejects(action('held','hold-reversed'),/current state/);
- assert.equal((await schedule('2026-12-01')).scheduled_count,0);
+ const empty = await schedule('2026-12-01');
+ assert.equal(empty.scheduled_count,0);
+ await proof(empty.batch_id);
+ await assert.rejects(pay(empty.batch_id), /no payable rewards/);
  assert.equal(await scalar("select max(id::text)::uuid as value from (values ('00000000-0000-0000-0000-000000000001'::uuid)) fixture(id)"),owner);
  } finally { await db.close(); }
 });

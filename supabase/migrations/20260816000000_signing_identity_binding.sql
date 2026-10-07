@@ -9,6 +9,7 @@
 -- it is the one thing that implementation did better, so it is kept here while
 -- the rest of that duplicate surface is retired in favour of the merged one.
 --
+-- Service-role EXECUTE is not an identity bypass: a real auth.uid() is required.
 -- The rule is deliberately conditional: `profile_id` is NULL for a party who has
 -- no platform account (an external client signatory), and those must keep
 -- working exactly as before. Only a LINKED party is bound to their account.
@@ -195,6 +196,14 @@ begin
   end if;
   v_name := nullif(btrim(coalesce(p_adopted_text, '')), '');
   if v_name is null then raise exception 'An adopted signer name is required'; end if;
+  if not exists (
+    select 1 from public.agreement_party_snapshots p
+    where p.id = v_req.party_snapshot_id
+      and lower(regexp_replace(btrim(p.legal_name), '\s+', ' ', 'g')) =
+          lower(regexp_replace(v_name, '\s+', ' ', 'g'))
+  ) then
+    raise exception 'Adopted signer name must match the name on the agreement';
+  end if;
   v_path := nullif(btrim(coalesce(p_storage_path, '')), '');
   v_hash := lower(nullif(btrim(coalesce(p_artifact_sha256,'')),''));
   if v_hash is not null and v_hash !~ '^[0-9a-f]{64}$' then
@@ -337,7 +346,7 @@ begin
     foreach v_kind in array array['signer_identity','reviewed_document','intent_to_bind','electronic_delivery'] loop
       perform public.record_agreement_consent(v_token, v_kind, 'v1.0', true);
     end loop;
-    v_res := public.submit_agreement_signature(v_token, 'typed'::public.signature_method, null, null, 'External Signer');
+    v_res := public.submit_agreement_signature(v_token, 'typed'::public.signature_method, null, null, public.get_agreement_signing_package(v_token)#>>'{party,legal_name}');
     if (v_res->>'state') <> 'countersign_pending' then
       raise exception 'assert: unlinked party could no longer sign (%)', v_res; end if;
 
@@ -353,7 +362,7 @@ begin
       foreach v_kind in array array['signer_identity','reviewed_document','intent_to_bind','electronic_delivery'] loop
         perform public.record_agreement_consent(v_token, v_kind, 'v1.0', true);
       end loop;
-      v_res := public.submit_agreement_signature(v_token, 'typed'::public.signature_method, null, null, 'External Signer');
+      v_res := public.submit_agreement_signature(v_token, 'typed'::public.signature_method, null, null, public.get_agreement_signing_package(v_token)#>>'{party,legal_name}');
       if (v_res->>'state') <> (case when v_index = 0 then 'in_progress' else 'countersign_pending' end) then
         raise exception 'assert: multi-signer state regressed at signer %: %', v_index, v_res;
       end if;

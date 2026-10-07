@@ -328,6 +328,12 @@ begin
     )
   on conflict (idempotency_key) do nothing;
   get diagnostics v_paid = row_count;
+  if v_paid = 0 and not exists (
+    select 1 from public.qualified_reward_payout_events
+    where batch_id = v_batch.id and event_type = 'paid'
+  ) then
+    raise exception 'Batch has no payable rewards';
+  end if;
 
   select count(*) into v_remaining
   from public.qualified_reward_payout_items item

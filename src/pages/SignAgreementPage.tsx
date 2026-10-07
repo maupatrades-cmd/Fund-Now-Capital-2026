@@ -133,6 +133,7 @@ export default function SignAgreementPage() {
   };
 
   const handleSign = async () => {
+    if (!canSubmit) return;
     setActionError(null);
     try {
       let image: Blob | null = null;
@@ -213,6 +214,7 @@ export default function SignAgreementPage() {
     allConsentsRecorded &&
     scrolledToEnd &&
     adoptedName.trim().length > 1 &&
+    !nameMismatch &&
     methodReady &&
     !sign.isPending;
 

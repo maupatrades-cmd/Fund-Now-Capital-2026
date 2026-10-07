@@ -49,3 +49,13 @@ test("owner, partner, contractor and lead-referrer surfaces are routed", () => {
   assert.match(page, /Pending payout/);
   assert.match(page, /Record batch paid/);
 });
+
+
+test("reward action availability follows the RPC state machine", async () => {
+ const { canRecordRewardAction } = await import('../src/lib/rewardActions.ts');
+ const allowed = { locked: [], scheduled: ['held','carried_forward','reversed'], held: ['held','released','carried_forward','reversed'], released: ['held','carried_forward','reversed'], carried_forward: ['reversed'], paid: ['reversed'], reversed: [] };
+ for (const [status, actions] of Object.entries(allowed)) {
+   for (const action of ['held','released','carried_forward','reversed']) assert.equal(canRecordRewardAction(status, action), actions.includes(action), `${status}: ${action}`);
+ }
+ assert.equal(canRecordRewardAction('unknown','reversed'),false);
+});

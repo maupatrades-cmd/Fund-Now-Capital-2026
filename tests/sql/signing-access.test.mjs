@@ -28,7 +28,7 @@ test('signing RPCs enforce authenticated identity, consent, token lifecycle and 
       create table consent_records(id uuid primary key default gen_random_uuid(), agreement_id uuid, party_snapshot_id uuid, consent_kind text, notice_version text, accepted boolean, ip_hash text, user_agent_hash text, unique(agreement_id,party_snapshot_id,consent_kind));
       create table signature_artifacts(id uuid primary key default gen_random_uuid(), agreement_id uuid, party_snapshot_id uuid, method signature_method, artifact_sha256 text, storage_path text, adopted_text text);
       create table signature_events(id uuid primary key default gen_random_uuid(), agreement_id uuid, event_type text, party_snapshot_id uuid, signature_method signature_method, ip_hash text, user_agent_hash text, detail jsonb, consent_text_version text);
-      grant usage on schema public, auth to authenticated, anon;
+      grant usage on schema public, auth to authenticated, anon, service_role;
     `);
     const original = await source('20260812090100_esign_evidence_backend_rpcs.sql');
     for (const name of ['open_signature_request', 'record_agreement_consent']) {
@@ -74,6 +74,10 @@ test('signing RPCs enforce authenticated identity, consent, token lifecycle and 
     await assert.rejects(db.query('select resolve_signature_request($1)', [first.token]), /permission denied/);
     await uid('');
     await assert.rejects(read(first.token), /Sign in/);
+    await db.exec('set role service_role');
+    await assert.rejects(read(first.token), /Sign in/);
+    await assert.rejects(sign(first.token), /Sign in/);
+    await db.exec('set role authenticated');
     await uid(signer);
     assert.equal((await read(first.token)).can_sign, true);
     const packet = await scalar('select open_signature_request_packet($1) as value', [first.token]);
@@ -95,12 +99,13 @@ test('signing RPCs enforce authenticated identity, consent, token lifecycle and 
     const second = await fixture(other, first.agreement);
     await accept(first.token);
     await assert.rejects(db.query("select submit_agreement_signature($1,'typed',null,null,'   ')", [first.token]), /name is required/);
-    await assert.rejects(db.query("select submit_agreement_signature($1,'system_applied',null,null,'Name')", [first.token]), /Unsupported signer method/);
-    await assert.rejects(db.query("select submit_agreement_signature($1,'uploaded',null,null,'Name')", [first.token]), /image and its fingerprint/);
+    await assert.rejects(db.query("select submit_agreement_signature($1,'system_applied',null,null,'Synthetic signer')", [first.token]), /Unsupported signer method/);
+    await assert.rejects(db.query("select submit_agreement_signature($1,'uploaded',null,null,'Synthetic signer')", [first.token]), /image and its fingerprint/);
+    await assert.rejects(db.query("select submit_agreement_signature($1,'typed',null,null,'Someone else')", [first.token]), /must match/);
     const invalidPath = `signature/${other}/${first.agreement}/00000000-0000-0000-0000-000000000099.png`;
-    await assert.rejects(db.query("select submit_agreement_signature($1,'uploaded',$2,$3,'Name')", [first.token,'a'.repeat(64),invalidPath]), /does not belong/);
+    await assert.rejects(db.query("select submit_agreement_signature($1,'uploaded',$2,$3,'Synthetic signer')", [first.token,'a'.repeat(64),invalidPath]), /does not belong/);
     const validPath = `signature/${signer}/${first.agreement}/00000000-0000-0000-0000-000000000099.png`;
-    await assert.rejects(db.query("select submit_agreement_signature($1,'uploaded',$2,$3,'Name')", [first.token,'a'.repeat(64),validPath]), /image was not found/);
+    await assert.rejects(db.query("select submit_agreement_signature($1,'uploaded',$2,$3,'Synthetic signer')", [first.token,'a'.repeat(64),validPath]), /image was not found/);
     assert.equal((await sign(first.token)).state, 'in_progress');
     await assert.rejects(sign(first.token), /already been used/);
     assert.equal((await read(first.token)).can_sign, false);
@@ -125,7 +130,7 @@ test('signing RPCs enforce authenticated identity, consent, token lifecycle and 
     // Match the browser helper's timestamp/random fallback as well as UUID names.
     const imagePath = `signature/${other}/${imageSigner.agreement}/1791378000000-abc123xyz.png`;
     await privileged(() => db.query("insert into storage.objects values ('legal-signature-artifacts',$1)", [imagePath]));
-    const imageResult = await scalar("select submit_agreement_signature($1,'drawn',$2,$3,'Name') as value", [imageSigner.token,'b'.repeat(64),imagePath]);
+    const imageResult = await scalar("select submit_agreement_signature($1,'drawn',$2,$3,'Synthetic signer') as value", [imageSigner.token,'b'.repeat(64),imagePath]);
     assert.equal(imageResult.state, 'countersign_pending');
   } finally { await db.close(); }
 });

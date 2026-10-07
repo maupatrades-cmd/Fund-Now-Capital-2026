@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useClientDocuments } from "@/hooks/useClientDocuments";
 import { useFunders } from "@/hooks/useFunders";
-import { DOCUMENT_CATEGORIES, docTypeLabel, typesInCategory, type DocumentType } from "@/lib/documents";
+import { DOCUMENT_CATEGORIES, checklistVerificationStatus, docTypeLabel, typesInCategory, type DocumentType } from "@/lib/documents";
 import { supabase } from "@/lib/supabase";
 
 type FundingProduct = {
@@ -80,12 +80,14 @@ export function DealDocumentRequirements({ dealId, clientId }: { dealId: string;
   });
 
   const clientChoice = useQuery({
-    queryKey: ["client-product-choice", clientId],
+    queryKey: ["client-product-choice", clientId, dealId],
     queryFn: async (): Promise<ClientProductChoice | null> => {
       const { data, error } = await supabase
         .from("client_form_responses")
         .select("product_code,status")
         .eq("client_id", clientId)
+        .eq("deal_id", dealId)
+        .neq("status", "superseded")
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -311,7 +313,7 @@ export function DealDocumentRequirements({ dealId, clientId }: { dealId: string;
       <div className="mt-5 space-y-2">
         {(checklist.data ?? []).map((item) => {
           const document = documentByType.get(item.document_type);
-          const status = verificationLabel(document?.verification_status);
+          const status = verificationLabel(checklistVerificationStatus(document));
           const StatusIcon = status.icon;
           const ownerOverride = overrideByType.get(item.document_type);
           return (

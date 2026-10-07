@@ -58,5 +58,11 @@ jobs:
       - name: Verify CI safety contract
         run: npm run test:release-ci
 
+      - name: Verify reward payroll contracts
+        run: npm run test:r100-reward-payroll
+
+      - name: Verify document checklist states
+        run: node --test tests/document-checklist-states.test.mjs
+
       - name: Execute isolated PostgreSQL payroll regression
         run: npm run test:payroll-sql

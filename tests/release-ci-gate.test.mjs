@@ -17,6 +17,9 @@ test("release CI runs every required read-only repository gate", async () => {
     "npm run test:cross-role-e2e",
     "npm run test:money-command-center",
     "npm run test:release-ci",
+    "npm run test:r100-reward-payroll",
+    "npm run test:payroll-sql",
+    "node --test tests/document-checklist-states.test.mjs",
   ]) {
     assert.ok(workflow.includes(`run: ${command}`), `missing CI gate: ${command}`);
   }
