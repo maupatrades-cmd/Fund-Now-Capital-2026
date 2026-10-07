@@ -46,7 +46,7 @@ test('delegated calendars, conflict protection, confirmations and check-ins are 
       'create table public.funding_product_catalog(code text primary key, display_name text not null, is_active boolean not null default true);',
       'create table public.document_requirement_rules(id uuid primary key default gen_random_uuid(), rule_scope text, product_code text, document_type public.document_type, requirement text, is_active boolean default true);',
       "create table public.leads(id uuid primary key default gen_random_uuid(), business_name text not null, contact_name text not null, contact_cell text, contact_email text, cipc_number text, funding_amount numeric(14,2), funding_purpose jsonb not null default '[]', entered_by uuid, created_at timestamptz not null default now());",
-      'create table public.clients(id uuid primary key default gen_random_uuid(), business_name text, registration_number text);',
+      'create table public.clients(id uuid primary key default gen_random_uuid(), business_name text, cipc_number text);',
       'create table public.deals(id uuid primary key default gen_random_uuid(), lead_id uuid, stage text not null default \'new_lead\');',
       'create table public.documents(id uuid primary key default gen_random_uuid(), lead_id uuid, document_type public.document_type, is_current_version boolean default true);',
       'alter table public.profiles enable row level security;',
