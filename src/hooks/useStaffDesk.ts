@@ -462,3 +462,30 @@ export function useFileDecision(leadId: string, enabled: boolean) {
     queryFn: async () => (await rpc<FileDecision[]>("staff_file_decision", { p_lead_id: leadId }))?.[0] ?? null,
   });
 }
+
+// ---- Requests for Founder time outside opened slots (SC4) ------------------
+export type TimeRequest = {
+  id: string; category: string; starts_at: string; ends_at: string; reason: string; status: "pending" | "accepted" | "declined";
+  owner_note: string | null; requester_name: string; created_at: string; decided_at: string | null;
+};
+export function useTimeRequests(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-time-requests"], enabled, queryFn: () => rpc<TimeRequest[]>("staff_time_requests", { p_status: null }) });
+}
+export function useRequestFounderTime() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { calendarOwner: string; category: string; startsAt: string; endsAt: string; reason: string }) =>
+      rpc<string>("staff_request_founder_time", {
+        p_calendar_owner: i.calendarOwner, p_category: i.category, p_starts_at: i.startsAt, p_ends_at: i.endsAt, p_reason: i.reason, p_lead_id: null,
+      }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-time-requests"] }); },
+  });
+}
+export function useDecideTimeRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { requestId: string; accept: boolean; note: string }) =>
+      rpc<string | null>("owner_decide_time_request", { p_request_id: i.requestId, p_accept: i.accept, p_note: i.note || null }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-time-requests"] }); invalidateCalendar(qc); },
+  });
+}

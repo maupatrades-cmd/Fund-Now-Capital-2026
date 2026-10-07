@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { card, errorText } from "@/components/staff/StaffShell";
 import StaffCalendarPanel from "@/components/staff/StaffCalendarPanel";
+import TimeRequestsPanel from "@/components/staff/TimeRequestsPanel";
 import StaffCheckinsPanel from "@/components/staff/StaffCheckinsPanel";
 import { useStaffDiary } from "@/hooks/useStaffDesk";
 
@@ -54,6 +55,7 @@ export default function StaffDiaryPage() {
       ) : null}
       <StaffCheckinsPanel />
       <StaffCalendarPanel />
+      <TimeRequestsPanel />
     </>
   );
 }
