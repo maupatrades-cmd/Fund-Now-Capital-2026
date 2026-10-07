@@ -62,7 +62,7 @@ test('commission is entered, reconciled, approved, adjusted and paid only by the
     await rejects(() => q('select public.owner_approve_commission_entries($1)', [deal]), /do not reconcile/);
     await rejects(() => save({ entry: b, kind: 'external_payee', profile: null, name: 'Walk-in payee', amount: 400 }), /reason of at least 10/);
     await save({ entry: b, kind: 'external_payee', profile: null, name: 'Walk-in payee', amount: 400, reason: 'Owner corrected the payee amount' });
-    await rejects(() => save({ kind: 'agent', profile: U.partner, deal: deal2 }), /active partner or lead-referrer/);
+    await rejects(() => save({ kind: 'agent', profile: U.coordinator, deal: deal2 }), /active partner or lead-referrer/);
     const flag = (await one("select public.owner_flag_commission_entry($1,'agreement_conflict','Differs from the written band; owner to review') as id", [a])).id;
     await rejects(() => q('select public.owner_approve_commission_entries($1)', [deal]), /open commission flags/);
     await q("select public.owner_resolve_commission_flag($1,'Owner reviewed the agreement and accepts')", [flag]);
