@@ -64,3 +64,18 @@ test('application selection resumes the correct product and requires ambiguous c
  assert.equal(applicationDealBlocked('open',[{dealId:'open',isComplete:false}],false,false),false);
  assert.equal(applicationDealBlocked('open',undefined,false,true),true);
 });
+
+
+test('explicit repeat requests never reuse old responses and leave new mode after saving', async () => {
+ const { resolveApplicationChoice } = await import('../../src/lib/clientApplicationChoice.ts');
+ const old = { id:'old',product_code:'working_capital',status:'submitted' };
+ for (const rows of [[old],[old,{...old,id:'second',status:'draft'}]]) {
+   assert.deepEqual(resolveApplicationChoice(rows,null,'working_capital',true),{ response:undefined, needsChoice:false });
+ }
+ assert.equal(resolveApplicationChoice([old],'old','working_capital',false).response.id,'old');
+ const page=await readFile(new URL('../../src/pages/client/ClientApplicationPage.tsx',import.meta.url),'utf8');
+ assert.match(page,/if \(startNew\) return null/);
+ assert.match(page,/next\.set\("response", responseId!\); next\.delete\("new"\)/);
+ assert.match(page,/changeProduct\(event\.target\.value, true\)/);
+ assert.doesNotMatch(page,/filter\(item => !responseChoices/);
+});

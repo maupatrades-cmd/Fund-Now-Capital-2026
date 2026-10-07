@@ -1,5 +1,6 @@
 export type ApplicationChoice = { id: string; product_code: string; status: string };
 export function resolveApplicationChoice(rows: ApplicationChoice[], responseId: string | null, product: string | null, startNew: boolean) {
+  if (startNew) return { response: undefined, needsChoice: false };
   const active = rows.filter(row => row.status !== "superseded");
   if (responseId) return { response: active.find(row => row.id === responseId), needsChoice: !active.some(row => row.id === responseId) };
   const candidates = product ? active.filter(row => row.product_code === product) : active;

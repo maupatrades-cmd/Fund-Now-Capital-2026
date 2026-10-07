@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Check, ClipboardList, Save, ShieldCheck } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
@@ -63,6 +63,7 @@ function ClientApplicationForm() {
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<FormValues>(initialValues);
   const [dirty, setDirty] = useState(false);
+  const createdResponse = useRef<string | undefined>(undefined);
   const selectedDealId = searchParams.get("deal") || null;
   const dealBlocked = applicationDealBlocked(selectedDealId, applications.data, applications.isLoading, Boolean(applications.error));
   const validDeal = !dealBlocked;
@@ -78,7 +79,8 @@ function ClientApplicationForm() {
       return data ?? [];
     },
   });
-  const choice = resolveApplicationChoice(responseChoices.data ?? [], searchParams.get("response"), searchParams.get("product"), searchParams.get("new") === "1");
+  const startNew = searchParams.get("new") === "1";
+  const choice = resolveApplicationChoice(responseChoices.data ?? [], searchParams.get("response"), searchParams.get("product"), startNew);
   const choiceBlocked = responseChoices.isPending || Boolean(responseChoices.error) || choice.needsChoice;
   const requestedProduct = choice.response?.product_code ?? searchParams.get("product") ?? "working_capital";
 
@@ -96,9 +98,10 @@ function ClientApplicationForm() {
     ? requestedProduct : products.data?.[0]?.code ?? requestedProduct);
 
   const draft = useQuery({
-    queryKey: ["client-application-draft", identity.data?.clientId, selectedProduct, selectedDealId, choice.response?.id],
+    queryKey: ["client-application-draft", identity.data?.clientId, selectedProduct, selectedDealId, choice.response?.id, startNew],
     enabled: Boolean(identity.data?.clientId && selectedProduct && validDeal && !choiceBlocked),
     queryFn: async (): Promise<Draft | null> => {
+      if (startNew) return null;
       let query = supabase.from("client_form_responses")
         .select("id,requested_amount,status").eq("client_id", identity.data!.clientId)
         .eq("product_code", selectedProduct).neq("status", "superseded");
@@ -157,7 +160,7 @@ function ClientApplicationForm() {
     }
     if (draft.data?.status === "submitted") throw new Error("This application is already submitted and locked for review.");
 
-    let responseId = draft.data?.id;
+    let responseId = createdResponse.current ?? draft.data?.id;
     if (responseId) {
       const { error } = await supabase.from("client_form_responses")
         .update({ requested_amount: hasAmount ? requestedAmount : null }).eq("id", responseId);
@@ -169,6 +172,7 @@ function ClientApplicationForm() {
       }).select("id").single();
       if (error) throw error;
       responseId = data.id as string;
+      createdResponse.current = responseId;
     }
 
     const answerRows = (Object.entries(fieldsBySection) as [Answer["section"], string[]][])
@@ -186,16 +190,20 @@ function ClientApplicationForm() {
       const { error } = await supabase.from("client_form_responses").update({ status: "submitted" }).eq("id", responseId);
       if (error) throw error;
     }
-    return { submitted: submit };
+    return { submitted: submit, responseId };
   };
 
   const save = useMutation({
     mutationFn: (submit: boolean) => persist(submit),
-    onSuccess: async ({ submitted }) => {
+    onSuccess: async ({ submitted, responseId }) => {
       toast.success(submitted ? "Application submitted securely." : "Draft saved.");
       setDirty(false);
       await queryClient.invalidateQueries({ queryKey: ["client-application-choices", identity.data?.clientId, selectedDealId] });
-      await queryClient.invalidateQueries({ queryKey: ["client-application-draft", identity.data?.clientId, selectedProduct, selectedDealId, choice.response?.id] });
+      await queryClient.invalidateQueries({ queryKey: ["client-application-draft", identity.data?.clientId, selectedProduct, selectedDealId] });
+      setSearchParams(current => {
+        const next = new URLSearchParams(current);
+        next.set("response", responseId!); next.delete("new"); return next;
+      }, { replace: true });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "The application could not be saved."),
   });
@@ -204,12 +212,12 @@ function ClientApplicationForm() {
     setDirty(true);
     setValues((current) => ({ ...current, [name]: value }));
   };
-  const changeProduct = (nextProduct: string) => {
+  const changeProduct = (nextProduct: string, createNew = false) => {
     if (dirty) {
       toast.info("Save your current draft before changing the funding type.");
       return;
     }
-    setSearchParams((current) => { const next = new URLSearchParams(current); next.set("product", nextProduct); next.delete("response"); next.set("new", "1"); return next; });
+    setSearchParams((current) => { const next = new URLSearchParams(current); next.set("product", nextProduct); next.delete("response"); if (createNew) next.set("new", "1"); else next.delete("new"); return next; });
   };
   const product = products.data?.find((item) => item.code === selectedProduct);
   const submitted = draft.data?.status === "submitted";
@@ -265,10 +273,10 @@ function ClientApplicationForm() {
               {products.data?.find(item => item.code === row.product_code)?.display_name ?? row.product_code} — {row.status} ({row.id.slice(0, 8)})
             </option>)}
           </select>
-          <select className={inputClass} aria-label="Start a different funding request" value="" disabled={save.isPending}
-            onChange={event => changeProduct(event.target.value)}>
-            <option value="" disabled>Start a different funding request…</option>
-            {(products.data ?? []).filter(item => !responseChoices.data?.some(row => row.product_code === item.code)).map(item =>
+          <select className={inputClass} aria-label="Start a new funding request" value="" disabled={save.isPending}
+            onChange={event => changeProduct(event.target.value, true)}>
+            <option value="" disabled>Start a new funding request…</option>
+            {(products.data ?? []).map(item =>
               <option key={item.code} value={item.code}>{item.display_name}{responseChoices.data?.some(row => row.product_code === item.code) ? " — saved application" : " — new request"}</option>)}
           </select>
         </label> : null}

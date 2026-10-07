@@ -20,3 +20,7 @@ The form now discovers saved responses within the selected client/deal scope bef
 Completed deals are excluded from the selector, and progress is refreshed and checked immediately before linked saves. Unlinked enquiries do not require progress-service availability. These checks protect the UI flow; the existing database trigger still enforces client/deal ownership and immutable response identity. It does not yet provide an atomic terminal-deal write restriction for direct API callers; that separate backend hardening remains pending and must not be claimed deployed.
 
 Twelve targeted tests pass, including executable relationship guards and choice/eligibility regressions. No live migration or staff object changed in this follow-up.
+
+## Repeat-request follow-up
+
+Qodo review5442418601 identified that explicit new requests still resumed an existing same-product response. The resolver now gives explicit new mode precedence; draft lookup returns no old response in that mode, and the new-request selector offers all products. After saving, navigation records the saved response ID and clears new mode, so later saves resume the new response. A component-scoped created-response reference retains the ID across answer-write failures for retries. Thirteen targeted checks passed. This does not claim atomicity across the separate form/answer HTTP writes or protection from an ambiguous insert response after a network interruption.
