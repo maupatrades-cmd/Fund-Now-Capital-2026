@@ -81,7 +81,7 @@ test('switchboard operations (calls, handover, tasks, checklist, diary) are enfo
     // the explicit revokes in the migrations) is what actually restricts them.
     await db.exec('alter default privileges in schema public grant all on tables to authenticated;');
     for (const f of ['20261007091000_staff_access_and_audit.sql', '20261007092000_organisation_team_structure.sql',
-      '20261007093000_submission_intake_core.sql', '20261007094000_submission_intake_rpcs.sql', '20261007100000_switchboard_operations.sql']) {
+      '20261007093000_submission_intake_core.sql', '20261007094000_submission_intake_rpcs.sql', '20261007100000_switchboard_operations.sql', '20261007101000_staff_intake_lookups.sql']) {
       await db.exec(await mig(f));
     }
 
@@ -173,6 +173,19 @@ test('switchboard operations (calls, handover, tasks, checklist, diary) are enfo
     assert.deepEqual(Object.keys(list[0]).sort(), ['document_type', 'flagged_suspicious', 'last_received_at', 'received', 'received_count', 'requirement']);
     await as(U.partner1);
     await rejects(() => q('select * from public.staff_document_checklist($1)', [lead]), /permission/, '42501');
+
+    // ---- Lookups carry names only -------------------------------------------
+    await as(U.owner);
+    const lkTeam = (await one("select public.owner_create_team($1,'Lookup Team') as id", [id(101)])).id;
+    await q("select public.owner_add_team_member($1,$2,'team_leader',current_date - 5)", [lkTeam, U.teamLeader]);
+    await as(U.switchboard);
+    const lookups = (await one('select public.staff_intake_lookups() as l')).l;
+    assert.equal(lookups.funding_types[0].code, 'working_capital');
+    assert.equal(lookups.organisations.length >= 2, true);
+    assert.deepEqual(Object.keys(lookups.members[0]).sort(), ['membership_role', 'name', 'profile_id', 'team_id']);
+    assert.deepEqual(Object.keys(lookups.direct_agents[0]).sort(), ['name', 'profile_id']);
+    await as(U.partner1);
+    await rejects(() => q('select public.staff_intake_lookups()'), /permission/, '42501');
 
     // ---- Nothing new is readable or writable directly -----------------------
     await as(U.coordinator);
