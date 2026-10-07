@@ -12,6 +12,7 @@ import AgreementDetailPage from "@/pages/AgreementDetailPage";
 import OwnerGate from "@/components/layout/OwnerGate";
 import PartnerGate from "@/pages/PartnerGate";
 import StaffGate from "@/pages/staff/StaffGate";
+import CalendarAccessPage from "@/pages/CalendarAccessPage";
 import StaffCallLogPage from "@/pages/staff/StaffCallLogPage";
 import StaffNewLeadPage from "@/pages/staff/StaffNewLeadPage";
 import StaffDocumentTrackerPage from "@/pages/staff/StaffDocumentTrackerPage";
@@ -263,6 +264,7 @@ function AppRoutes() {
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/calendar" element={<OwnerCalendarPage />} />
+        <Route path="/calendar/access" element={<CalendarAccessPage />} />
         <Route path="/deals/:id" element={<DealDetailPage />} />
         <Route path="/deals/archived" element={<ArchivedDealsPage />} />
         <Route path="/deals/:id/package" element={<DealPackagePage />} />

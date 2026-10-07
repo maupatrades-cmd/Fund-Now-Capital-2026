@@ -198,7 +198,13 @@ export type RegisterIntakeInput = {
   idempotencyKey: string;
 };
 
-export type RegisterIntakeResult = { status: string; lead_id?: string; [k: string]: unknown };
+export type RegisterIntakeResult = {
+  status: string;
+  lead_id?: string;
+  // The RPC returns an object of booleans, not a list.
+  flags?: { recent_submission?: boolean; duplicate_contact?: boolean; registration_conflict?: boolean };
+  [k: string]: unknown;
+};
 
 export function useRegisterIntake() {
   const qc = useQueryClient();
@@ -251,4 +257,138 @@ export type StaffDiary = {
 
 export function useStaffDiary() {
   return useQuery({ queryKey: ["staff-diary"], queryFn: () => rpc<StaffDiary>("staff_diary", { p_date: null }) });
+}
+
+// ---- Calendar (Batch 3) ----------------------------------------------------
+export type CalendarPermission = "view_availability" | "create" | "change_own" | "manage_others";
+export const CALENDAR_PERMISSIONS: { value: CalendarPermission; label: string; help: string }[] = [
+  { value: "view_availability", label: "View availability", help: "See busy and open blocks only" },
+  { value: "create", label: "Create bookings", help: "Add bookings to this calendar" },
+  { value: "change_own", label: "Change own bookings", help: "Reschedule or cancel bookings they created" },
+  { value: "manage_others", label: "Manage others' bookings", help: "Reschedule or cancel anyone's booking on this calendar" },
+];
+export const BOOKING_CATEGORIES = [
+  ["call", "Call"], ["consultation", "Consultation"], ["presentation", "Presentation"], ["paperwork_review", "Paperwork review"],
+  ["submission", "Submission"], ["submission_update", "Submission update"], ["urgent", "Urgent"],
+] as const;
+
+export type MyGrant = { calendar_owner_id: string; calendar_owner_name: string; permission: CalendarPermission; effective_to: string | null };
+export function useMyCalendarGrants() {
+  return useQuery({ queryKey: ["staff-calendar-grants"], queryFn: () => rpc<MyGrant[]>("staff_my_calendar_grants") });
+}
+
+export type AvailabilityBlock = { kind: "busy" | "open"; starts_at: string; ends_at: string };
+export function useCalendarAvailability(calendarOwner: string | null, from: string, to: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["staff-calendar-availability", calendarOwner, from, to],
+    enabled: !!calendarOwner && enabled,
+    queryFn: () => rpc<AvailabilityBlock[]>("calendar_availability", { p_calendar_owner: calendarOwner, p_from: from, p_to: to }),
+  });
+}
+
+export type DiaryEvent = {
+  event_id: string; starts_at: string; ends_at: string; status: string; display_title: string; is_mine: boolean;
+  can_change: boolean; lead_id: string | null; notice_status: string | null; short_notice: boolean;
+  needs_short_notice_handling: boolean; confirmation_id: string | null;
+};
+export function useCalendarDiary(calendarOwner: string | null, from: string, to: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["staff-calendar-diary", calendarOwner, from, to],
+    enabled: !!calendarOwner && enabled,
+    queryFn: () => rpc<DiaryEvent[]>("staff_calendar_diary", { p_calendar_owner: calendarOwner, p_from: from, p_to: to }),
+  });
+}
+
+function invalidateCalendar(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ["staff-calendar-diary"] });
+  void qc.invalidateQueries({ queryKey: ["staff-calendar-availability"] });
+}
+
+export type CreateBookingInput = {
+  calendarOwner: string; title: string; category: string; startsAt: string; endsAt: string; visibility: "private" | "busy" | "public";
+  publicTitle: string; agenda: string; attendeeEmail: string; attendeeName: string; idempotencyKey: string;
+};
+export function useCreateBooking() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: CreateBookingInput) => rpc<{ status: string; event_id: string; short_notice?: boolean }>("staff_create_calendar_event", {
+      p_calendar_owner: i.calendarOwner, p_title: i.title, p_category: i.category, p_starts_at: i.startsAt, p_ends_at: i.endsAt,
+      p_visibility: i.visibility, p_public_title: i.publicTitle || null, p_agenda: i.agenda || null, p_lead_id: null,
+      p_attendee_email: i.attendeeEmail || null, p_attendee_name: i.attendeeName || null, p_idempotency_key: i.idempotencyKey,
+    }),
+    onSuccess: () => invalidateCalendar(qc),
+  });
+}
+
+export function useRescheduleBooking() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { eventId: string; startsAt: string; endsAt: string; reason: string }) =>
+      rpc<{ notices_queued: number; short_notice: boolean }>("staff_reschedule_calendar_event", {
+        p_event_id: i.eventId, p_starts_at: i.startsAt, p_ends_at: i.endsAt, p_reason: i.reason,
+      }),
+    onSuccess: () => invalidateCalendar(qc),
+  });
+}
+
+export function useCancelBooking() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { eventId: string; reason: string }) => rpc<{ notices_queued: number }>("staff_cancel_calendar_event", { p_event_id: i.eventId, p_reason: i.reason }),
+    onSuccess: () => invalidateCalendar(qc),
+  });
+}
+
+export function useRecordShortNoticeHandling() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { confirmationId: string; note: string }) => rpc<void>("staff_record_short_notice_handling", { p_confirmation_id: i.confirmationId, p_note: i.note }),
+    onSuccess: () => invalidateCalendar(qc),
+  });
+}
+
+// ---- Check-in reminders (Coordinator / Owner) --------------------------------
+export type CheckinReminder = {
+  id: string; subject_kind: "team" | "organisation"; subject_name: string | null; leader_name: string | null;
+  cadence: string; due_on: string; status: string; overdue: boolean; completed_by_name: string | null; completed_at: string | null; note: string | null;
+};
+export function useCheckinReminders(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-checkins"], enabled, queryFn: () => rpc<CheckinReminder[]>("staff_checkin_list", { p_status: "open" }) });
+}
+export function useCompleteCheckin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { id: string; note: string }) => rpc<void>("staff_complete_checkin", { p_reminder_id: i.id, p_note: i.note || null }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-checkins"] }); },
+  });
+}
+
+// ---- Call follow-through -------------------------------------------------------
+export type CallTask = { task_id: string; title: string; status: string; route_to: string; due_at: string | null; completed_by_name: string | null; completed_at: string | null; completion_note: string | null };
+export function useCallTasks(callId: string, enabled: boolean) {
+  return useQuery({ queryKey: ["staff-call-tasks", callId], enabled, queryFn: () => rpc<CallTask[]>("staff_call_tasks", { p_call_log_id: callId }) });
+}
+
+// ---- Owner: calendar access admin ---------------------------------------------------
+export type GrantRow = {
+  id: string; calendar_owner_id: string; calendar_owner_name: string; grantee_id: string; grantee_name: string;
+  permission: CalendarPermission; effective_from: string; effective_to: string | null; revoked_at: string | null;
+};
+export function useOwnerGrantList() {
+  return useQuery({ queryKey: ["owner-calendar-grants"], queryFn: () => rpc<GrantRow[]>("owner_calendar_grant_list") });
+}
+export function useSetCalendarGrant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { calendarOwner: string; grantee: string; permission: CalendarPermission; effectiveTo: string | null }) =>
+      rpc<string>("owner_set_calendar_grant", { p_calendar_owner: i.calendarOwner, p_grantee: i.grantee, p_permission: i.permission, p_effective_to: i.effectiveTo }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["owner-calendar-grants"] }); },
+  });
+}
+export function useRevokeCalendarGrant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { grantId: string; reason: string }) => rpc<void>("owner_revoke_calendar_grant", { p_grant_id: i.grantId, p_reason: i.reason }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["owner-calendar-grants"] }); },
+  });
 }
