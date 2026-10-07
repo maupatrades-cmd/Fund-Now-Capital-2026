@@ -25,7 +25,7 @@ test('real commission writer supports Path A, Path B, refresh and immutable sett
   assert.ok(start>=0 && end>start);
   await db.exec(base.slice(start,end));
  }
- const migration = await sqlFile('20260814000000_lead_referrer_path_a_support.sql');
+ const migration = await sqlFile('20261007161245_lead_referrer_path_a_support.sql');
  await db.exec(migration.slice(0,migration.indexOf('-- Assertions')));
  const scalar = async (sql,args=[]) => (await db.query(sql,args)).rows[0].value;
  for(const channel of ['A','B']) {

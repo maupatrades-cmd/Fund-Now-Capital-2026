@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const migration = await readFile(new URL("../supabase/migrations/20260824164115_r100_reward_payroll_workspace.sql", import.meta.url), "utf8");
+const migration = await readFile(new URL("../supabase/migrations/20261007161254_r100_reward_payroll_workspace.sql", import.meta.url), "utf8");
 const app = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
 const contractorGate = await readFile(new URL("../src/pages/ContractorGate.tsx", import.meta.url), "utf8");
 const page = await readFile(new URL("../src/pages/QualifiedRewardsPage.tsx", import.meta.url), "utf8");

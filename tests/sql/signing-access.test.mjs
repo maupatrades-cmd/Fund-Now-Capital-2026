@@ -38,7 +38,7 @@ test('signing RPCs enforce authenticated identity, consent, token lifecycle and 
       const signature = name === 'open_signature_request' ? '(text)' : '(text,text,text,boolean,text,text)';
       await db.exec(`revoke all on function public.${name}${signature} from public,anon; grant execute on function public.${name}${signature} to authenticated;`);
     }
-    const migration = await source('20260816000000_signing_identity_binding.sql');
+    const migration = await source('20261007161251_signing_identity_binding.sql');
     await db.exec(migration.slice(0, migration.indexOf('-- Behavioural assertions')));
     await db.exec(await source('20260815193733_signing_packet_read.sql'));
     const scalar = async (sql, args = []) => (await db.query(sql, args)).rows[0].value;
@@ -75,8 +75,8 @@ test('signing RPCs enforce authenticated identity, consent, token lifecycle and 
     await uid('');
     await assert.rejects(read(first.token), /Sign in/);
     await db.exec('set role service_role');
-    await assert.rejects(read(first.token), /Sign in/);
-    await assert.rejects(sign(first.token), /Sign in/);
+    await assert.rejects(read(first.token), /permission denied/);
+    await assert.rejects(sign(first.token), /permission denied/);
     await db.exec('set role authenticated');
     await uid(signer);
     assert.equal((await read(first.token)).can_sign, true);

@@ -23,7 +23,7 @@ test('payroll executes retries, carry-forward, payment guards and beneficiary pr
  "insert into public.complete_document_reward_locks(id,beneficiary_profile_id,beneficiary_role,amount,cutoff_date) values ('"+reward+"','"+beneficiary+"','contractor',100,'2026-10-22');",
  "select set_config('request.jwt.claim.sub','"+owner+"',false);"
  ].join('\n'));
- await db.exec(await readFile(new URL('../../supabase/migrations/20260824164115_r100_reward_payroll_workspace.sql',import.meta.url),'utf8'));
+ await db.exec(await readFile(new URL('../../supabase/migrations/20261007161254_r100_reward_payroll_workspace.sql',import.meta.url),'utf8'));
  const scalar = async (sql, args=[]) => (await db.query(sql,args)).rows[0].value;
  const schedule = async (month,day=25) => scalar('select public.owner_schedule_qualified_reward_batch($1::date,$2::integer) as value',[month,day]);
  const action = async (type,key,reason='Owner private reason') => scalar('select public.owner_record_qualified_reward_action($1::uuid,$2,$3,$4) as value',[reward,type,reason,key]);

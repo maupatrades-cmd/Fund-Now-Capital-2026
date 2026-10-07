@@ -9,7 +9,7 @@
 -- it is the one thing that implementation did better, so it is kept here while
 -- the rest of that duplicate surface is retired in favour of the merged one.
 --
--- Service-role EXECUTE is not an identity bypass: a real auth.uid() is required.
+-- Signer-facing read/sign RPCs require an authenticated user; service-role execution is not supported.
 -- The rule is deliberately conditional: `profile_id` is NULL for a party who has
 -- no platform account (an external client signatory), and those must keep
 -- working exactly as before. Only a LINKED party is bound to their account.
@@ -149,8 +149,8 @@ begin
   );
 end $$;
 
-revoke all on function public.get_agreement_signing_package(text) from public, anon;
-grant execute on function public.get_agreement_signing_package(text) to authenticated, service_role, postgres;
+revoke all on function public.get_agreement_signing_package(text) from public, anon, service_role;
+grant execute on function public.get_agreement_signing_package(text) to authenticated, postgres;
 
 -- ---------------------------------------------------------------------------
 -- Signing preserves the current multi-signer lifecycle and rechecks the token
@@ -267,8 +267,8 @@ begin
   return jsonb_build_object('was_transitioned', true, 'state', v_new_state, 'agreement_id', v_req.agreement_id);
 end $$;
 
-revoke all on function public.submit_agreement_signature(text, public.signature_method, text, text, text, text, text) from public, anon;
-grant execute on function public.submit_agreement_signature(text, public.signature_method, text, text, text, text, text) to authenticated, service_role, postgres;
+revoke all on function public.submit_agreement_signature(text, public.signature_method, text, text, text, text, text) from public, anon, service_role;
+grant execute on function public.submit_agreement_signature(text, public.signature_method, text, text, text, text, text) to authenticated, postgres;
 
 -- ---------------------------------------------------------------------------
 -- Behavioural assertions — rolled back. Proves a LINKED party's link is refused

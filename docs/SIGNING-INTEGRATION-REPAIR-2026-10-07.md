@@ -2,7 +2,7 @@
 
 The pending signing migration now validates the signature evidence at the RPC boundary. Typed signatures require a nonblank adopted name and cannot attach an image. Drawn/uploaded signatures require a fingerprint and an existing object in the private signature bucket, under the authenticated signer's folder and the exact agreement. Signers cannot choose the owner/system-applied method.
 
-This repairs the existing, **not yet applied** `20260816000000_signing_identity_binding.sql` in the integration branch. The live RPC still lacks the identity guard and storage existence check as verified on 7 October. Do not claim production is fixed or rewrite this migration after it has been applied.
+This repairs the existing, **not yet applied** `20261007161251_signing_identity_binding.sql` in the integration branch. The live RPC still lacks the identity guard and storage existence check as verified on 7 October. Do not claim production is fixed or rewrite this migration after it has been applied.
 
 ## Evidence
 
