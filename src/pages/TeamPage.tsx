@@ -46,6 +46,7 @@ import {
 import ApplicationsPanel from "@/components/team/ApplicationsPanel";
 import ContractorProgressionDialog from "@/components/team/ContractorProgressionDialog";
 import { useApplications } from "@/hooks/useApplications";
+import { useSetStaffAccess, useStaffAccessList } from "@/hooks/useStaffAccessAdmin";
 
 const fieldCls =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-brand-navy outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20";
@@ -323,6 +324,7 @@ function TeamTable({
               </td>
               <td className="px-4 py-3">
                 <Badge className={statusBadgeClass(m.is_active)}>{m.is_active ? "Active" : "Deactivated"}</Badge>
+                {(m.role === "switchboard" || m.role === "coordinator") && <StaffAccessToggle member={m} />}
               </td>
               <td className="px-4 py-3 text-muted-foreground">{formatJoined(m.created_at)}</td>
               <td className="px-4 py-3 text-right">
@@ -338,6 +340,38 @@ function TeamTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+// Owner switches a staff member's workspace on or off. Off by default: the role
+// alone grants nothing until the Owner has checked the signed contract.
+function StaffAccessToggle({ member }: { member: TeamMember }) {
+  const { data: access } = useStaffAccessList();
+  const setAccess = useSetStaffAccess();
+  const enabled = access?.[member.id] === true;
+
+  const toggle = () => {
+    let contractReference: string | null = null;
+    if (!enabled) {
+      const ref = window.prompt("Contract reference code (a document code only, never salary, ID or signature details):");
+      if (!ref || !ref.trim()) return;
+      contractReference = ref.trim();
+    }
+    setAccess.mutate(
+      { profileId: member.id, enabled: !enabled, contractReference },
+      { onSuccess: () => toast.success(enabled ? "Staff access switched off" : "Staff access switched on"), onError: (e) => toast.error(e instanceof Error ? e.message : "Could not change staff access") },
+    );
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      disabled={setAccess.isPending}
+      className="mt-1 block text-xs font-semibold text-brand-teal underline disabled:opacity-50"
+    >
+      {enabled ? "Staff access ON · switch off" : "Staff access OFF · switch on"}
+    </button>
   );
 }
 
