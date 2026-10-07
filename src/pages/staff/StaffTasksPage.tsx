@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { FounderDecisionPanel } from "@/components/staff/FounderDecision";
 import { Input } from "@/components/ui/input";
 import { Field, SAFE_TEXT_NOTE, card, errorText, primaryButton, selectClass, textareaClass } from "@/components/staff/StaffShell";
 import {
@@ -101,7 +102,7 @@ export default function StaffTasksPage() {
               </p>
               {t.status === "open" ? (
                 <div className="flex flex-wrap gap-3 pt-1">
-                  {t.task_kind !== "founder_decision" || role === "owner" ? (
+                  {t.task_kind !== "founder_decision" ? (
                     <button type="button" className="text-xs font-semibold text-green-700 underline"
                       onClick={() => close.mutate({ taskId: t.id, outcome: "done", note: "" }, { onError: (e) => toast.error(errorText(e)) })}>Mark done</button>
                   ) : null}
@@ -110,6 +111,7 @@ export default function StaffTasksPage() {
                   )) : null}
                 </div>
               ) : null}
+              {t.status === "open" && t.task_kind === "founder_decision" && role === "owner" ? <FounderDecisionPanel taskId={t.id} /> : null}
             </li>
           ))}
           {tasks.data && tasks.data.length === 0 ? <li className="py-3 text-muted-foreground">Nothing here.</li> : null}
