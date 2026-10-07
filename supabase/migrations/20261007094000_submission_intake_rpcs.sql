@@ -168,7 +168,7 @@ as $$
   union all
   select 'registration_conflict', null::uuid, c.id
     from public.clients c
-   where nullif(btrim(p_cipc), '') is not null and btrim(c.registration_number) = btrim(p_cipc)
+   where nullif(btrim(p_cipc), '') is not null and btrim(c.cipc_number) = btrim(p_cipc)
   union all
   select 'recent_submission', l.id, null::uuid
     from public.leads l
