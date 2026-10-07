@@ -211,7 +211,7 @@ begin
     if v_uid is null or split_part(v_path, '/', 1) <> 'signature'
        or split_part(v_path, '/', 2) <> v_uid::text
        or split_part(v_path, '/', 3) <> v_req.agreement_id::text
-       or v_path !~ '^signature/[0-9a-f-]{36}/[0-9a-f-]{36}/[0-9a-f-]{36}\.(png|jpg|jpeg)$' then
+       or v_path !~ '^signature/[0-9a-f-]{36}/[0-9a-f-]{36}/[a-z0-9-]{1,100}\.(png|jpg|jpeg)$' then
       raise exception 'Signature image does not belong to this signer and agreement';
     end if;
     if not exists (select 1 from storage.objects

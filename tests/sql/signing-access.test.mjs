@@ -122,7 +122,8 @@ test('signing RPCs enforce authenticated identity, consent, token lifecycle and 
     assert.equal(artifacts, 3);
     const imageSigner = await fixture(other);
     await accept(imageSigner.token);
-    const imagePath = `signature/${other}/${imageSigner.agreement}/00000000-0000-0000-0000-000000000088.png`;
+    // Match the browser helper's timestamp/random fallback as well as UUID names.
+    const imagePath = `signature/${other}/${imageSigner.agreement}/1791378000000-abc123xyz.png`;
     await privileged(() => db.query("insert into storage.objects values ('legal-signature-artifacts',$1)", [imagePath]));
     const imageResult = await scalar("select submit_agreement_signature($1,'drawn',$2,$3,'Name') as value", [imageSigner.token,'b'.repeat(64),imagePath]);
     assert.equal(imageResult.state, 'countersign_pending');
