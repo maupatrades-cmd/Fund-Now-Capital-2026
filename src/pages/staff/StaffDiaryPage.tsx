@@ -1,11 +1,13 @@
 import { Link } from "react-router-dom";
 import { card, errorText } from "@/components/staff/StaffShell";
+import StaffCalendarPanel from "@/components/staff/StaffCalendarPanel";
+import StaffCheckinsPanel from "@/components/staff/StaffCheckinsPanel";
 import { useStaffDiary } from "@/hooks/useStaffDesk";
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", dateStyle: "medium", timeStyle: "short" });
 
-// Batch 2 diary: what is due today (tasks, callbacks) and handovers waiting for
-// acknowledgement. Calendar bookings and the Founder diary arrive in Batch 3.
+// Diary: what is due today (tasks, callbacks), handovers waiting, check-ins, and
+// the calendars the Owner has granted this person.
 export default function StaffDiaryPage() {
   const diary = useStaffDiary();
   const d = diary.data;
@@ -50,6 +52,8 @@ export default function StaffDiaryPage() {
           </section>
         </>
       ) : null}
+      <StaffCheckinsPanel />
+      <StaffCalendarPanel />
     </>
   );
 }

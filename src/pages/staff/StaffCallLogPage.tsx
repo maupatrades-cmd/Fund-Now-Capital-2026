@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Field, SAFE_TEXT_NOTE, card, errorText, primaryButton, selectClass, textareaClass } from "@/components/staff/StaffShell";
 import {
-  CALLER_KINDS, CALL_OUTCOMES, CALL_TOPICS, useAcknowledgeHandover, useLogCall, useStaffCalls, useStaffHandovers, useWriteHandover,
+  CALLER_KINDS, CALL_OUTCOMES, CALL_TOPICS, useAcknowledgeHandover, useCallTasks, useLogCall, useStaffCalls, useStaffHandovers, useWriteHandover,
 } from "@/hooks/useStaffDesk";
 
 const blank = {
@@ -98,6 +98,7 @@ export default function StaffCallLogPage() {
                 {fmt(c.logged_at)} · {c.logged_by_name} · {c.outcome.replace("_", " ")}
                 {c.callback_due_at ? ` · call back by ${fmt(c.callback_due_at)}` : ""}
               </p>
+              {c.outcome === "routed" ? <CallFollowThrough callId={c.id} /> : null}
             </li>
           ))}
           {calls.data && calls.data.length === 0 ? <li className="py-3 text-sm text-muted-foreground">No calls logged yet.</li> : null}
@@ -168,5 +169,29 @@ function HandoverPanel() {
         ))}
       </ul>
     </section>
+  );
+}
+
+// What happened to the work this call created: completion comes back here.
+function CallFollowThrough({ callId }: { callId: string }) {
+  const [open, setOpen] = useState(false);
+  const tasks = useCallTasks(callId, open);
+  return (
+    <div className="pt-1">
+      <button type="button" className="text-xs font-semibold text-brand-teal underline" onClick={() => setOpen((o) => !o)}>
+        {open ? "Hide follow-through" : "Show follow-through"}
+      </button>
+      {open ? (
+        <ul className="mt-1 space-y-0.5 text-xs">
+          {(tasks.data ?? []).map((t) => (
+            <li key={t.task_id}>
+              {t.status === "done" ? "Done" : t.status === "cancelled" ? "Cancelled" : "Open"}: {t.title} (with {t.route_to})
+              {t.completed_by_name ? ` · closed by ${t.completed_by_name}` : ""}{t.completion_note ? ` · ${t.completion_note}` : ""}
+            </li>
+          ))}
+          {tasks.data && tasks.data.length === 0 ? <li className="text-muted-foreground">No linked tasks.</li> : null}
+        </ul>
+      ) : null}
+    </div>
   );
 }
