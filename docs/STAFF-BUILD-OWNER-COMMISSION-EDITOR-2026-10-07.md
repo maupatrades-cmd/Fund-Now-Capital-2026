@@ -1,6 +1,6 @@
 # Owner-only manual commission editor: design and conflict register
 
-Status: **design for agreement with Codex and the Owner. No commission logic has been changed.**
+Status: **editor ledger built as source in `20261007095000_owner_commission_editor.sql` (new objects only, not applied). The guards in the conflict register below are NOT built: they are Codex's lane and need agreement. No existing commission logic has been changed.**
 Source rule (Owner clarification, 6 October 2026): the Owner personally enters commission. No automatic assignment, population, approval or change of payable commission from agreement bands, deal outcomes, membership changes or background jobs. Arithmetic totals and validation are allowed. Conflicts with the applicable agreement are flagged for Owner review, never silently changed.
 
 ## What the editor must do
@@ -38,6 +38,6 @@ These are in Codex's lane or shared. I have not edited any of them.
 
 ## What I will build and when
 
-1. Now (new files only, no shared edits): the three tables, RLS, immutability triggers, the Owner RPCs above, tests, as a separate draft PR stacked after Batch 1.
+1. Done in source (new files only, no shared edits): four tables (stated total, entries, append-only adjustments, flags), RLS, immutability triggers, the Owner RPCs above, and `tests/sql/owner-commission.test.mjs`. Reconciliation, duplicate-allocation prevention, approval-before-payment, adjustments instead of edits and the audit trail are tested on an isolated PostgreSQL.
 2. Only after Codex and the Owner agree rows 1 to 6: the exemption flag and the guard edits, authored by whichever side owns each function.
 3. Until row 1 to 4 are agreed and applied, the automation can still write engine rows for a funded deal. The editor will show an engine row next to any Owner entry as a conflict for Owner review, and the Owner entry is the only one that approval and payout use. This is a known gap, reported rather than hidden.
