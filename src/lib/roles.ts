@@ -3,7 +3,17 @@
 // bounces in the gates can never disagree.
 //
 // Mirrors the live `public.user_role` enum on profiles.role.
-export type UserRole = "owner" | "partner" | "contractor" | "client" | "lead_referrer";
+// switchboard / coordinator are the two staff roles. Holding one grants nothing
+// until the owner enables the person (staff_access); they land on /dashboard,
+// where OwnerGate shows the restricted card, until their workspaces ship.
+export type UserRole =
+  | "owner"
+  | "partner"
+  | "contractor"
+  | "client"
+  | "lead_referrer"
+  | "switchboard"
+  | "coordinator";
 
 export function roleHome(role: string | null | undefined): string {
   if (role === "partner") return "/partner";

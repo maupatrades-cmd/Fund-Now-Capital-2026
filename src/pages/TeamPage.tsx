@@ -524,7 +524,7 @@ const inviteSchema = z
     full_name: z.string().trim().min(1, "Full name is required."),
     email: z.string().trim().email("Enter a valid email address."),
     phone: z.string().trim().min(1, "Phone is required."),
-    role: z.enum(["partner", "contractor", "lead_referrer", "sub_agent"]),
+    role: z.enum(["partner", "contractor", "lead_referrer", "sub_agent", "switchboard", "coordinator"]),
     parent_partner_id: z.string(),
     invite_method: z.enum(["magic_link", "temp_password"]),
     temp_password: z.string(),
@@ -699,7 +699,9 @@ function InviteDialog({
                 ? "Contractors are FNC's direct team, with their own portal."
                 : role === "sub_agent"
                   ? "A sub-agent is a lead referrer connected to one selected partner."
-                  : "A direct lead referrer is connected to Fund Now Capital, not to a partner."}
+                  : role === "switchboard" || role === "coordinator"
+                    ? "Staff accounts have no access until you switch them on after checking their signed contract."
+                    : "A direct lead referrer is connected to Fund Now Capital, not to a partner."}
           </p>
         </div>
 
