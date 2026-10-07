@@ -198,7 +198,13 @@ export type RegisterIntakeInput = {
   idempotencyKey: string;
 };
 
-export type RegisterIntakeResult = { status: string; lead_id?: string; [k: string]: unknown };
+export type RegisterIntakeResult = {
+  status: string;
+  lead_id?: string;
+  // The RPC returns an object of booleans, not a list.
+  flags?: { recent_submission?: boolean; duplicate_contact?: boolean; registration_conflict?: boolean };
+  [k: string]: unknown;
+};
 
 export function useRegisterIntake() {
   const qc = useQueryClient();

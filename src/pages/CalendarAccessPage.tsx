@@ -51,7 +51,7 @@ export default function CalendarAccessPage() {
         <Field label="Calendar of">
           <select required className={selectClass} value={calendarOwner} onChange={(e) => setCalendarOwner(e.target.value)}>
             <option value="">Choose...</option>
-            {people.map((m) => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
+            {people.filter((m) => m.role === "owner").map((m) => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
           </select>
         </Field>
         <Field label="Give access to" hint="Only staff you have switched on appear here.">

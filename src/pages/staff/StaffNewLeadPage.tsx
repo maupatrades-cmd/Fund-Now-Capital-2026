@@ -66,7 +66,7 @@ export default function StaffNewLeadPage() {
       ) : null}
       {result && result.status === "created" ? (
         <div role="status" className="rounded-xl border border-green-300 bg-green-50 p-4 text-sm text-green-900">
-          Registered. {Array.isArray(result.flags) && result.flags.length ? "A possible duplicate was found and the Owner will review it. " : ""}
+          Registered. {result.flags?.recent_submission || result.flags?.duplicate_contact ? "A possible duplicate was found and the Owner will review it. " : ""}
           <Link className="font-semibold underline" to="/staff/documents">Go to the Document tracker</Link>.
         </div>
       ) : null}
