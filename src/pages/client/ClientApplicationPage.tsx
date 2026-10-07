@@ -163,7 +163,7 @@ function ClientApplicationForm() {
     let responseId = createdResponse.current ?? draft.data?.id;
     if (responseId) {
       const { error } = await supabase.from("client_form_responses")
-        .update({ requested_amount: hasAmount ? requestedAmount : null }).eq("id", responseId);
+        .update({ requested_amount: hasAmount ? requestedAmount : null }).eq("id", responseId).select("id").single();
       if (error) throw error;
     } else {
       const { data, error } = await supabase.from("client_form_responses").insert({
@@ -176,7 +176,7 @@ function ClientApplicationForm() {
     }
 
     const answerRows = (Object.entries(fieldsBySection) as [Answer["section"], string[]][])
-      .flatMap(([section, keys]) => keys.filter((key) => values[key].trim()).map((key) => ({
+      .flatMap(([section, keys]) => keys.map((key) => ({
         response_id: responseId, section, subject_key: "primary", answer_key: key,
         answer_value: values[key].trim(), source: "client",
       })));
@@ -187,7 +187,7 @@ function ClientApplicationForm() {
       if (error) throw error;
     }
     if (submit) {
-      const { error } = await supabase.from("client_form_responses").update({ status: "submitted" }).eq("id", responseId);
+      const { error } = await supabase.from("client_form_responses").update({ status: "submitted" }).eq("id", responseId).select("id").single();
       if (error) throw error;
     }
     return { submitted: submit, responseId };

@@ -6,18 +6,20 @@ const { PGlite } = await import(process.env.FNC_PGLITE_MODULE || '@electric-sql/
 test('application relationships isolate two deals and preserve submitted identities', async () => {
  const db = new PGlite();
  try {
-  await db.exec(`create schema auth;
+  await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth;
    create function auth.uid() returns uuid language sql as $$ select '00000000-0000-0000-0000-000000000001'::uuid $$;
    create table profiles(id uuid primary key); create table clients(id uuid primary key);
-   create table deals(id uuid primary key, client_id uuid references clients);
+   create table deals(id uuid primary key, client_id uuid references clients, stage text default 'new_lead');
    insert into profiles values (auth.uid());
    insert into clients values ('00000000-0000-0000-0000-000000000001'), ('00000000-0000-0000-0000-000000000002');
-   insert into deals values ('00000000-0000-0000-0000-000000000011',auth.uid()), ('00000000-0000-0000-0000-000000000012',auth.uid()), ('00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000002');`);
+   insert into deals(id,client_id) values ('00000000-0000-0000-0000-000000000011',auth.uid()), ('00000000-0000-0000-0000-000000000012',auth.uid()), ('00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000002');`);
   const sql = await readFile(new URL('../../supabase/migrations/20260810041542_client_canonical_form_answers.sql', import.meta.url),'utf8');
   await db.exec(sql.slice(sql.indexOf('create table public.client_form_responses'),sql.indexOf('create table public.client_form_answers')));
   const start = sql.indexOf('create or replace function public.validate_client_form_response_relationships()');
   await db.exec(sql.slice(start,sql.indexOf('revoke execute',start)));
   await db.exec('create trigger validate before insert or update on client_form_responses for each row execute function validate_client_form_response_relationships()');
+  await db.exec('create table client_form_answers(response_id uuid references client_form_responses, answer_key text, answer_value jsonb)');
+  await db.exec(await readFile(new URL('../../supabase/migrations/20261007163650_client_application_open_deal_guard.sql',import.meta.url),'utf8'));
   const insert = async deal => (await db.query("insert into client_form_responses(client_id,deal_id,product_code,requested_amount) values(auth.uid(),$1,'working_capital',5000) returning id",[deal])).rows[0].id;
   const first = await insert('00000000-0000-0000-0000-000000000011');
   const second = await insert('00000000-0000-0000-0000-000000000012');
@@ -30,6 +32,19 @@ test('application relationships isolate two deals and preserve submitted identit
   await assert.rejects(db.query('update client_form_responses set deal_id=$1 where id=$2',['00000000-0000-0000-0000-000000000011',unlinked]),/identity are immutable/);
   await db.query("update client_form_responses set status='submitted' where id=$1",[first]);
   await assert.rejects(db.query('update client_form_responses set requested_amount=6000 where id=$1',[first]),/forms are immutable/);
+  // Existing drafts and new requests both reject terminal deals; unlinked enquiries still work.
+  for (const stage of ['funded','invoiced','commission_paid','declined']) {
+    await db.query('update deals set stage=$1 where id=$2',[stage,'00000000-0000-0000-0000-000000000012']);
+    await assert.rejects(insert('00000000-0000-0000-0000-000000000012'),/Completed deals/);
+    await assert.rejects(db.query('update client_form_responses set requested_amount=7000 where id=$1',[second]),/Completed deals/);
+    await assert.rejects(db.query("insert into client_form_answers values($1,'notes','\"blocked\"')",[second]),/Completed deals/);
+  }
+  await insert(null);
+  await db.query("update deals set stage='document_collection' where id=$1",['00000000-0000-0000-0000-000000000012']);
+  await db.query("insert into client_form_answers values($1,'notes','\"original\"')",[second]);
+  await db.query("update client_form_answers set answer_value='\"\"' where response_id=$1",[second]);
+  assert.equal((await db.query('select answer_value from client_form_answers where response_id=$1',[second])).rows[0].answer_value,'');
+  await assert.rejects(db.query("insert into client_form_answers values($1,'notes','\"blocked\"')",[first]),/form is a draft/);
  } finally { await db.close(); }
 });
 
@@ -78,4 +93,13 @@ test('explicit repeat requests never reuse old responses and leave new mode afte
  assert.match(page,/next\.set\("response", responseId!\); next\.delete\("new"\)/);
  assert.match(page,/changeProduct\(event\.target\.value, true\)/);
  assert.doesNotMatch(page,/filter\(item => !responseChoices/);
+});
+
+
+test('save writes cleared answers and requires a returned response row', async () => {
+ const page=await readFile(new URL('../../src/pages/client/ClientApplicationPage.tsx',import.meta.url),'utf8');
+ assert.doesNotMatch(page,/keys\.filter/);
+ assert.match(page,/keys\.map/);
+ assert.match(page,/update\(\{ requested_amount:[^\n]+select\("id"\)\.single\(\)/);
+ assert.match(page,/update\(\{ status: "submitted" \}\)[^\n]+select\("id"\)\.single\(\)/);
 });
