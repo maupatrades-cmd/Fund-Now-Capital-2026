@@ -1,7 +1,9 @@
 import type { ReactElement } from "react";
+import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { toast } from "sonner";
 import { card, errorText } from "@/components/staff/StaffShell";
-import { useCoordinatorLanding, useStaffRole } from "@/hooks/useStaffDesk";
+import { useCompleteDocumentChaser, useCoordinatorLanding, useDocumentChasers, useStaffRole } from "@/hooks/useStaffDesk";
 
 const STATUS_ORDER = [["new", "New"], ["documents_incomplete", "Documents incomplete"], ["complete", "Complete"], ["with_founder", "With Founder"], ["verified", "Verified"]] as const;
 const DECISION_LABEL: Record<string, string> = {
@@ -22,7 +24,11 @@ function Tile({ label, value, to, alert }: { label: string; value: number; to?: 
 // Coordinator landing page: where files stand and what needs attention first.
 export default function StaffHomePage() {
   const { data: role, isLoading } = useStaffRole();
-  const landing = useCoordinatorLanding(role === "coordinator" || role === "owner");
+  const allowed = role === "coordinator" || role === "owner";
+  const landing = useCoordinatorLanding(allowed);
+  const chasers = useDocumentChasers(allowed);
+  const done = useCompleteDocumentChaser();
+  const [note, setNote] = useState<Record<string, string>>({});
   if (isLoading) return null;
   if (role !== "coordinator" && role !== "owner") return <Navigate to="/staff" replace />;
   const d = landing.data;
@@ -44,6 +50,26 @@ export default function StaffHomePage() {
             <Tile label="Questions running late (amber)" value={d.answers_amber} to="/staff/answers" alert />
             <Tile label="Time requests waiting" value={d.time_requests_pending} to="/staff/diary" />
           </div>
+          <section className={card}>
+            <h2 className="mb-2 text-base font-bold text-brand-navy">Document chasers due</h2>
+            <ul className="divide-y divide-border text-sm">
+              {(chasers.data ?? []).map((c) => (
+                <li key={c.id} className="space-y-1 py-2">
+                  <p className="font-semibold text-brand-navy">
+                    {c.business_name}
+                    <span className={`ml-2 rounded px-1.5 py-0.5 text-xs ${c.day_mark === 7 ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>day {c.day_mark}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">{c.missing_documents.length ? `Still missing: ${c.missing_documents.join(", ").replaceAll("_", " ")}` : "No required document is missing."}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input className="h-9 max-w-xs rounded-md border border-input px-3 text-sm" maxLength={300} placeholder="What you did (optional)" aria-label="Note" value={note[c.id] ?? ""} onChange={(e) => setNote({ ...note, [c.id]: e.target.value })} />
+                    <button type="button" className="text-xs font-semibold text-green-700 underline" disabled={done.isPending}
+                      onClick={() => done.mutate({ id: c.id, note: note[c.id] ?? "" }, { onSuccess: () => toast.success("Done"), onError: (e) => toast.error(errorText(e)) })}>I have chased this</button>
+                  </div>
+                </li>
+              ))}
+              {chasers.data && chasers.data.length === 0 ? <li className="py-2 text-muted-foreground">No chasers due.</li> : null}
+            </ul>
+          </section>
           <section className={card}>
             <h2 className="mb-3 text-base font-bold text-brand-navy">Files by status</h2>
             <ul className="flex flex-wrap gap-3 text-sm">
