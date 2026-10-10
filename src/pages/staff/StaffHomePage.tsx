@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { toast } from "sonner";
+import { QualifyingAndKpis } from "@/components/staff/QualifyingAndKpis";
 import { card, errorText } from "@/components/staff/StaffShell";
 import { useCompleteDocumentChaser, useCoordinatorLanding, useDocumentChasers, useStaffRole } from "@/hooks/useStaffDesk";
 
@@ -107,6 +108,7 @@ export default function StaffHomePage() {
           </section>
         </>
       ) : null}
+      <QualifyingAndKpis enabled={allowed} />
     </>
   );
 }

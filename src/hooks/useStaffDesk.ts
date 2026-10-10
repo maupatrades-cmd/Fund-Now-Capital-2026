@@ -588,3 +588,18 @@ export const useFlagReceipt = () => useQueueMutation<{ receiptId: string; reason
   "staff_flag_document_suspicious", (i) => ({ p_receipt_id: i.receiptId, p_reason: i.reason }));
 export const useClearReceiptFlag = () => useQueueMutation<{ receiptId: string; reason: string }>(
   "owner_clear_document_flag", (i) => ({ p_receipt_id: i.receiptId, p_reason: i.reason }));
+
+// ---- Qualifying files and KPIs (SC9) -----------------------------------------
+export type QualifyingFiles = {
+  month: string; rate_per_file: number; count: number; estimate_total: number; cutoff_date: string; pay_date: string; status: string;
+  files: { lead_id: string; business_name: string; handler_name: string | null; reached_founder_at: string }[];
+};
+export function useQualifyingFiles(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-qualifying-files"], enabled, queryFn: () => rpc<QualifyingFiles>("staff_qualifying_files") });
+}
+export type CoordinatorKpi = {
+  key: string; label: string; target_pct: number; direction: "min" | "max"; sample?: number; value_pct?: number | null; not_tracked?: boolean;
+};
+export function useCoordinatorKpis(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-coordinator-kpis"], enabled, queryFn: () => rpc<{ days: number; kpis: CoordinatorKpi[] }>("staff_coordinator_kpis", { p_days: 30 }) });
+}
