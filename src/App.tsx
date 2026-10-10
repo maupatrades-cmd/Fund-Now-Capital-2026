@@ -20,6 +20,7 @@ import StaffDocumentTrackerPage from "@/pages/staff/StaffDocumentTrackerPage";
 import StaffDiaryPage from "@/pages/staff/StaffDiaryPage";
 import StaffTasksPage from "@/pages/staff/StaffTasksPage";
 import StaffQueuePage from "@/pages/staff/StaffQueuePage";
+import StaffHomePage, { StaffIndex } from "@/pages/staff/StaffHomePage";
 import PartnerHomePage from "@/pages/PartnerHomePage";
 import PartnerNetworkPage from "@/pages/PartnerNetworkPage";
 import PartnerSubmitLeadPage from "@/pages/partner/SubmitLeadPage";
@@ -231,12 +232,13 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/client" replace />} />
       </Route>
       <Route path="/staff" element={<StaffGate />}>
-        <Route index element={<StaffCallLogPage />} />
+        <Route index element={<StaffIndex callLog={<StaffCallLogPage />} />} />
         <Route path="new-lead" element={<StaffNewLeadPage />} />
         <Route path="documents" element={<StaffDocumentTrackerPage />} />
         <Route path="diary" element={<StaffDiaryPage />} />
         <Route path="tasks" element={<StaffTasksPage />} />
         <Route path="queue" element={<StaffQueuePage />} />
+        <Route path="home" element={<StaffHomePage />} />
         <Route path="*" element={<Navigate to="/staff" replace />} />
       </Route>
       <Route path="/lead-referrer" element={<LeadReferrerGate />}>

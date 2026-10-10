@@ -489,3 +489,15 @@ export function useDecideTimeRequest() {
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-time-requests"] }); invalidateCalendar(qc); },
   });
 }
+
+// ---- Coordinator landing (SC5) ----------------------------------------------
+export type CoordinatorLanding = {
+  status_counts: Record<string, number>;
+  oldest_open_files: { lead_id: string; business_name: string; workflow_status: string; waiting_days: number; missing_count: number }[];
+  founder_open: number;
+  founder_recent: { lead_id: string; business_name: string; decision: FounderDecision; decline_category: string | null; note: string | null; decided_at: string }[];
+  time_requests_pending: number; time_requests_answered_7d: number; my_open_tasks: number; my_overdue_tasks: number;
+};
+export function useCoordinatorLanding(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-coordinator-landing"], enabled, refetchInterval: 60_000, queryFn: () => rpc<CoordinatorLanding>("staff_coordinator_landing") });
+}
