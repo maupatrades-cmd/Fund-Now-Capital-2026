@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpenCheck, LayoutDashboard, CalendarDays, FilePlus2, ListChecks, LogOut, PhoneCall, ClipboardList } from "lucide-react";
+import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarDays, FilePlus2, ListChecks, LogOut, PhoneCall, ClipboardList } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -15,6 +15,7 @@ const navigation: Item[] = [
   { to: "/staff/documents", label: "Document tracker", icon: BookOpenCheck, end: false },
   { to: "/staff/diary", label: "Diary", icon: CalendarDays, end: false },
   { to: "/staff/tasks", label: "Tasks", icon: ListChecks, end: false },
+  { to: "/staff/answers", label: "Answer desk", icon: MessageSquareReply, end: false, managerOnly: true },
   { to: "/staff/queue", label: "Submission queue", icon: ClipboardList, end: false, managerOnly: true },
 ];
 

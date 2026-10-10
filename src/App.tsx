@@ -20,6 +20,7 @@ import StaffDocumentTrackerPage from "@/pages/staff/StaffDocumentTrackerPage";
 import StaffDiaryPage from "@/pages/staff/StaffDiaryPage";
 import StaffTasksPage from "@/pages/staff/StaffTasksPage";
 import StaffQueuePage from "@/pages/staff/StaffQueuePage";
+import StaffAnswerDeskPage from "@/pages/staff/StaffAnswerDeskPage";
 import StaffHomePage, { StaffIndex } from "@/pages/staff/StaffHomePage";
 import PartnerHomePage from "@/pages/PartnerHomePage";
 import PartnerNetworkPage from "@/pages/PartnerNetworkPage";
@@ -239,6 +240,7 @@ function AppRoutes() {
         <Route path="tasks" element={<StaffTasksPage />} />
         <Route path="queue" element={<StaffQueuePage />} />
         <Route path="home" element={<StaffHomePage />} />
+        <Route path="answers" element={<StaffAnswerDeskPage />} />
         <Route path="*" element={<Navigate to="/staff" replace />} />
       </Route>
       <Route path="/lead-referrer" element={<LeadReferrerGate />}>
