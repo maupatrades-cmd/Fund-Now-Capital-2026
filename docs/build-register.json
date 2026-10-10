@@ -131,7 +131,7 @@
       "outcome": "Invitee/client reviews, consents, signs, receives an executed PDF and appears ready in the relevant portal.",
       "status": "partial",
       "pr": 246,
-      "repo_evidence": ["src/pages/AgreementSigningPage.tsx", "src/pages/AgreementDetailPage.tsx", "src/hooks/useAgreementSigning.ts", "supabase/functions/generate-legal-document-pdf/index.ts"],
+      "repo_evidence": ["src/pages/SignAgreementPage.tsx", "src/pages/AgreementDetailPage.tsx", "src/hooks/useAgreementSigning.ts", "supabase/functions/generate-legal-document-pdf/index.ts"],
       "remaining": "Complete approved-template ingestion, deploy/verify renderer and signing dependencies, then smoke dispatch, signature, countersignature, executed artifact, portal projection and cross-role denial.",
       "depends_on": ["LEGAL-TEMPLATE-CONTENT", "ROLE-ONBOARDING"]
     },

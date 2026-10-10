@@ -243,6 +243,18 @@ export function defaultExpiry(
 // ---- Expiry status pill ----------------------------------------------------
 export type ExpiryStatus = "none" | "ok" | "soon" | "urgent" | "expired";
 
+/** A historic verification never makes an unusable document satisfy a checklist. */
+export function checklistVerificationStatus(document: {
+  is_current_version: boolean;
+  status: DocumentStatus;
+  verification_status: VerificationStatus;
+  expiry_date: string | null;
+} | undefined, now = new Date()): VerificationStatus | undefined {
+  if (!document || !document.is_current_version || document.status === "archived") return undefined;
+  if (document.status !== "active" || expiryStatus(document.expiry_date, now) === "expired") return "rejected";
+  return document.verification_status;
+}
+
 /** Classify an expiry date into a pill status. 7d → urgent, 30d → soon. */
 export function expiryStatus(
   expiryDate: string | null,

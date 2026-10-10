@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import {
 } from "@/components/legal/SignaturePad";
 import {
   documentTypeLabel,
+  downloadReviewCopy,
   isValidSigningToken,
   REQUIRED_CONSENTS,
   SIGNATURE_ACCEPTED_TYPES,
@@ -94,6 +95,19 @@ export default function SignAgreementPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const docRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => {
+    setScrolledToEnd(false);
+    const element = docRef.current;
+    if (!element) return;
+    const checkFit = () => {
+      if (element.scrollHeight <= element.clientHeight + 24) setScrolledToEnd(true);
+    };
+    checkFit();
+    const observer = new ResizeObserver(checkFit);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [token, pkg?.document.content_markdown]);
+
   // Memoised on the server-supplied object so the derived flag below has a
   // stable dependency (a fresh `{}` each render would defeat the memo).
   const recordedConsents = useMemo(() => pkg?.consents ?? {}, [pkg?.consents]);
@@ -119,6 +133,7 @@ export default function SignAgreementPage() {
   };
 
   const handleSign = async () => {
+    if (!canSubmit) return;
     setActionError(null);
     try {
       let image: Blob | null = null;
@@ -199,6 +214,7 @@ export default function SignAgreementPage() {
     allConsentsRecorded &&
     scrolledToEnd &&
     adoptedName.trim().length > 1 &&
+    !nameMismatch &&
     methodReady &&
     !sign.isPending;
 
@@ -257,7 +273,18 @@ export default function SignAgreementPage() {
       {/* The execution copy. Rendered as the renderer draws it — raw markdown,
           no substitution — so the screen and the executed PDF cannot diverge. */}
       <section className="mt-5">
-        <h2 className="mb-2 text-sm font-semibold text-brand-navy">The document</h2>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-brand-navy">The document</h2>
+          {document.content_markdown && (
+            <button
+              type="button"
+              onClick={() => downloadReviewCopy(agreement.reference, agreement.title, document.content_markdown!)}
+              className="text-xs font-semibold text-brand-teal underline underline-offset-2"
+            >
+              Download a copy to keep
+            </button>
+          )}
+        </div>
         {document.content_markdown ? (
           <div
             ref={docRef}

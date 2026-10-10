@@ -2,6 +2,12 @@
 
 **Status:** Owner-locked as of 2026-08-09. Any change requires new owner instruction and a version bump.
 
+**Owner update, 2026-10-07:** automatic calculation remains available alongside
+Owner manual entry/override. Agents, Team Leaders and partners may see only their
+own estimates, subject to Owner approval; staff see no commission figures. The
+Owner controls final amounts and payouts. See `COMMISSION-OWNER-OPTIONS-2026-10-07.md`
+for implementation gaps; this rule does not claim the combined flow is complete.
+
 > Extracted from `docs/FNC-CONSOLIDATION-DOC-2026-08-09.md` Section 4. That consolidation document remains the authoritative source for the locks recorded here.
 
 ## Purpose
@@ -44,7 +50,9 @@ Lead Refers CANNOT:
 
 ## Commission
 
-Formula (both PO and non-PO): Lead Refer earns X% of Doctor's earning on that deal.
+Path B formula (both PO and non-PO): Lead Refer earns X% of the introducing
+partner's earning on that deal. Path A uses the Owner's direct-deal residual as
+the base, under the subsequent 2026-08-16 ruling implemented in Path-A support.
 
 Money source: Thapelo's personal residual on the deal. NOT from FNC's retention. NOT from Doctor's earning.
 
@@ -63,7 +71,8 @@ FNC's retention: UNTOUCHED regardless of Lead Refer presence.
 
 Level 1 is day-one entry.
 
-Constraint: Lead Refer's earning must never exceed Doctor's on the same deal.
+Path B constraint: Lead Refer's earning must never exceed the partner's earning
+on the same deal. Path A has no partner earning and is bounded by Owner residual.
 
 ## Doctor's "My Network" view (Path B only)
 

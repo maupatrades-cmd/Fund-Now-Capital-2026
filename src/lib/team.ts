@@ -7,7 +7,7 @@ import type { UserRole } from "@/lib/roles";
 export type { UserRole };
 
 export type InviteMethod = "magic_link" | "temp_password";
-export type TeamInviteRole = "partner" | "contractor" | "lead_referrer" | "sub_agent";
+export type TeamInviteRole = "partner" | "contractor" | "lead_referrer" | "sub_agent" | "switchboard" | "coordinator";
 export type AssignableTeamRole = Exclude<UserRole, "owner" | "client">;
 
 // A person in the CRM (a profiles row), with the referral partner name resolved
@@ -36,6 +36,8 @@ export const ASSIGNABLE_ROLES: { value: AssignableTeamRole; label: string }[] = 
   { value: "partner", label: "Partner" },
   { value: "contractor", label: "Contractor" },
   { value: "lead_referrer", label: "Lead Referrer" },
+  { value: "switchboard", label: "Switchboard Assistant" },
+  { value: "coordinator", label: "Sales Coordinator" },
 ];
 
 export const INVITE_ROLE_OPTIONS: { value: TeamInviteRole; label: string }[] = [
@@ -49,6 +51,8 @@ export const ROLE_LABEL: Record<string, string> = {
   contractor: "Contractor",
   lead_referrer: "Lead Referrer",
   sub_agent: "Sub-agent",
+  switchboard: "Switchboard Assistant",
+  coordinator: "Sales Coordinator",
 };
 
 export function roleLabel(role: string): string {
@@ -67,6 +71,9 @@ export function roleBadgeClass(role: string): string {
     case "lead_referrer":
     case "sub_agent":
       return "bg-amber-50 text-amber-800 ring-amber-200";
+    case "switchboard":
+    case "coordinator":
+      return "bg-violet-50 text-violet-800 ring-violet-200";
     default:
       return "bg-slate-100 text-slate-600 ring-slate-200";
   }

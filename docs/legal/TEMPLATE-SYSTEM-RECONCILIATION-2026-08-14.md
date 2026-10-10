@@ -88,4 +88,24 @@ Rationale: the e-sign backend, the versioned legal registry, the source-asset ha
 
 ---
 
-*This doc decides nothing on its own — it exists so the owner can make one ruling (§5) and unblock Build 8. No code or schema is affected by this document.*
+## 8. RULED — FINAL (owner, 2026-08-15)
+
+**APPROVED: Option 1.** Legal *agreements* (client + role) are signed through the legal lane's e-sign backend (System B); official/funder *forms* stay with Codex's System A.
+
+**Sub-ruling 1 — signing surface.** ONE canonical, FNC-branded **standalone signing route owned by the legal lane**. The same route opens from **(a)** the client's secure email / magic link, **and (b)** the Client Portal "Review and sign" action. **Do NOT** build a second signing engine or a duplicated signing UI inside the Client Portal — the portal only *launches* the canonical route. After signing, return the client to the portal and refresh readiness status.
+
+**Sub-ruling 2 — readiness.** `client_legal_document_readiness` stays as **Codex's** client-portal projection/card. It MUST read a **stable, client-safe, read-only view/RPC supplied by the legal lane**, ultimately sourced from `agreement_instances` → signature requests/events → executed-artifact status. The card:
+- shows client-safe document names + statuses and actions (Review and sign / Awaiting FNC countersignature / Completed / Declined / Expired);
+- NEVER exposes internal notes, evidence hashes, other parties' private info, or raw tokens;
+- NEVER writes signature state itself;
+- NEVER duplicates agreement status in another table.
+
+**Ownership.** The legal lane (Claude) owns the **signing route** and the **read-only status contract**. Codex owns the **portal readiness presentation** and integrates **after that contract is stable**. **No concurrent live migration application.**
+
+### Build-8 status against this ruling (2026-08-15)
+- ✅ **8.1 — canonical signing route DONE + merged** (PR #241 / commit `9ac4fb8`): `/sign/:token`, `SignAgreementPage`, `get_agreement_signing_package(token)`, `useAgreementSigning`, migration `20260815000000`. Role-agnostic token signing (satisfies the "one canonical route" of sub-ruling 1).
+- 🔨 **Remaining:** the **client-safe read-only status contract** (sub-ruling 2 — a client-scoped view/RPC over agreement state for Codex's card) is **not built yet**; plus the client return-to-portal + magic-link launch integration (sub-ruling 1's client path; magic-link delivery is email-domain-gated).
+
+---
+
+*Superseded by §8: the owner has ruled (Option 1). This document is now the canonical record of that ruling.*

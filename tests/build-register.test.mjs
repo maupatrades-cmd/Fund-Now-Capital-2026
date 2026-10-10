@@ -33,5 +33,5 @@ test("every cited repository evidence path exists at the baseline", async () => 
 test("committed markdown is generated from the machine-readable register", async () => {
   const register = await loadRegister();
   const committed = await readFile(path.join(root, "docs", "FNC-CANONICAL-OUTSTANDING-BUILD-REGISTER.md"), "utf8");
-  assert.equal(committed, renderRegister(register));
+  assert.equal(committed.replace(/\r\n/g, "\n"), renderRegister(register));
 });

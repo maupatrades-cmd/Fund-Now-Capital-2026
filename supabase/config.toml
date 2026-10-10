@@ -75,3 +75,7 @@ verify_jwt = false
 # verify_jwt = false (to answer CORS preflight + return clean JSON errors).
 [functions.ingest-legal-source-asset]
 verify_jwt = false
+
+# Database webhook authenticates with the handler's required WEBHOOK_SECRET.
+[functions.sign-invoice-url]
+verify_jwt = false

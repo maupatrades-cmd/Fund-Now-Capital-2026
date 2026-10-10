@@ -1,6 +1,7 @@
 import PortalShell from "@/components/portal/PortalShell";
 import { BrightDestinyPartnerDashboard } from "@/components/portal/BrightDestinyPartnerDashboard";
 import { usePartnerPortalIdentity } from "@/hooks/usePartnerPortalIdentity";
+import { QualifiedRewardSummary } from "@/components/rewards/QualifiedRewardSummary";
 
 /*
  * Partner Portal home. PortalShell keeps Fund Now Capital as the platform
@@ -18,6 +19,7 @@ export default function PartnerHomePage() {
         displayName={identity.data?.displayName ?? "Partner"}
         identityLoading={identity.isPending}
       />
+      <QualifiedRewardSummary href="/partner/rewards" />
     </PortalShell>
   );
 }

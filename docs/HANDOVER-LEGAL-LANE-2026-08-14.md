@@ -44,7 +44,7 @@ e-sign evidence backend **#200/#214** · role-document-requirements **#201** · 
 
 - CRM carves the Lead-Referrer earning from **Thapelo's residual (`owner_share`) for BOTH paths** — never Doctor's `partner_share`, never FNC retention. #198 encodes this; keep it. The 12–22 % is contract text only.
 - Tier ladder L1 25 / L2 35 / L3 40 / L4 50 %. **Path B works** (tier% of Doctor's `partner_share`, carved from `owner_share`).
-- **⛔ OPEN — the Path-A base.** A Direct-FNC deal has no `partner_share`. What base does the Path-A LR's tier% apply to? Candidate: `SUM(owner_share)` (Thapelo's own take). **Do NOT invent it.** #237 raises `PATH_A_BASE_NOT_CONFIGURED` until the owner confirms; the exact plug-in point + the two schema sub-questions (no-Doctor commission_records shape; `doctor_partner_id` NOT NULL) are marked `TODO(owner-ruling)` in `20260814000000_lead_referrer_path_a_support.sql`.
+- **⛔ OPEN — the Path-A base.** A Direct-FNC deal has no `partner_share`. What base does the Path-A LR's tier% apply to? Candidate: `SUM(owner_share)` (Thapelo's own take). **Do NOT invent it.** #237 raises `PATH_A_BASE_NOT_CONFIGURED` until the owner confirms; the exact plug-in point + the two schema sub-questions (no-Doctor commission_records shape; `doctor_partner_id` NOT NULL) are marked `TODO(owner-ruling)` in `20261007161245_lead_referrer_path_a_support.sql`.
 
 ## 6. Open gates / rulings (surface, don't guess past)
 

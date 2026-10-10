@@ -5,11 +5,20 @@ import AuthPage from "@/pages/AuthPage";
 import ChangePasswordPage from "@/pages/ChangePasswordPage";
 import PublicApplyPage from "@/pages/PublicApplyPage";
 import TermsViewPage from "@/pages/TermsViewPage";
+import SignAgreementPage from "@/pages/SignAgreementPage";
 import AgreementsPage from "@/pages/AgreementsPage";
 import NewAgreementPage from "@/pages/NewAgreementPage";
 import AgreementDetailPage from "@/pages/AgreementDetailPage";
 import OwnerGate from "@/components/layout/OwnerGate";
 import PartnerGate from "@/pages/PartnerGate";
+import StaffGate from "@/pages/staff/StaffGate";
+import CalendarAccessPage from "@/pages/CalendarAccessPage";
+import StaffCallLogPage from "@/pages/staff/StaffCallLogPage";
+import StaffNewLeadPage from "@/pages/staff/StaffNewLeadPage";
+import StaffDocumentTrackerPage from "@/pages/staff/StaffDocumentTrackerPage";
+import StaffDiaryPage from "@/pages/staff/StaffDiaryPage";
+import StaffTasksPage from "@/pages/staff/StaffTasksPage";
+import StaffQueuePage from "@/pages/staff/StaffQueuePage";
 import PartnerHomePage from "@/pages/PartnerHomePage";
 import PartnerNetworkPage from "@/pages/PartnerNetworkPage";
 import PartnerSubmitLeadPage from "@/pages/partner/SubmitLeadPage";
@@ -33,7 +42,6 @@ import ClientMessagesPage from "@/pages/client/ClientMessagesPage";
 import ClientOffersPage from "@/pages/client/ClientOffersPage";
 import ClientProfilePage from "@/pages/client/ClientProfilePage";
 import ClientLegalDocumentsPage from "@/pages/client/ClientLegalDocumentsPage";
-import AgreementSigningPage from "@/pages/AgreementSigningPage";
 import LeadReferrerGate from "@/pages/LeadReferrerGate";
 import LeadReferrerHomePage from "@/pages/lead-referrer/LeadReferrerHomePage";
 import LeadReferrerSubmitLeadPage from "@/pages/lead-referrer/LeadReferrerSubmitLeadPage";
@@ -82,6 +90,9 @@ import TermsAdminPage from "@/pages/TermsAdminPage";
 import LegalStudioPage from "@/pages/LegalStudioPage";
 import OwnerPayeesPage from "@/pages/OwnerPayeesPage";
 import MoneyCommandCenterPage from "@/pages/MoneyCommandCenterPage";
+import QualifiedRewardsPage from "@/pages/QualifiedRewardsPage";
+import PortalShell from "@/components/portal/PortalShell";
+import { LeadReferrerShell } from "@/components/lead-referrer/LeadReferrerShell";
 import NotificationDeliveryPage from "@/pages/NotificationDeliveryPage";
 import { ConfettiProvider } from "@/lib/celebration/ConfettiProvider";
 import { useProfileRole } from "@/hooks/useProfileRole";
@@ -156,18 +167,23 @@ function AppRoutes() {
         the FNC website footer links here. RLS exposes the current version to anon.
       */}
       <Route path="/terms/current" element={<TermsViewPage />} />
-      <Route path="/sign/:token" element={session ? <AgreementSigningPage /> : <AuthPage />} />
 
       {/*
-        Agreement signing (Build 8.1). ROLE-AGNOSTIC on purpose: the token in the
+        Agreement signing. ROLE-AGNOSTIC on purpose: the token in the
         URL identifies the signing party, so a partner, contractor or
         lead-referrer all sign here rather than each portal growing its own copy.
 
         It sits behind a session (not a role gate) because every signer RPC is
         granted to `authenticated` only — anon is explicitly revoked across the
         e-sign surface. An unauthenticated visitor is bounced to the login page,
-        signs in, and returns to the same link.
+        signs in, and returns to the same link. An unauthenticated visitor gets
+        the login page in place rather than a redirect, so the link they were
+        sent still works after they sign in.
       */}
+      <Route
+        path="/sign/:token"
+        element={session ? <SignAgreementPage /> : <AuthPage />}
+      />
 
       {/*
         Role portals — the route entries live here because App.tsx owns
@@ -190,6 +206,7 @@ function AppRoutes() {
         <Route path="network" element={<PartnerNetworkPage surface="partner" />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="calendar" element={<PortalBookingPage portal="partner" />} />
+        <Route path="rewards" element={<PortalShell portal="partner"><QualifiedRewardsPage /></PortalShell>} />
         <Route path="statements" element={<PartnerStatementsPage />} />
         <Route path="invoices" element={<PartnerInvoicesPage />} />
         <Route path="invoices/:invoiceId" element={<PartnerInvoiceDetailPage />} />
@@ -212,6 +229,15 @@ function AppRoutes() {
         <Route path="legal-documents" element={<ClientLegalDocumentsPage />} />
         <Route path="*" element={<Navigate to="/client" replace />} />
       </Route>
+      <Route path="/staff" element={<StaffGate />}>
+        <Route index element={<StaffCallLogPage />} />
+        <Route path="new-lead" element={<StaffNewLeadPage />} />
+        <Route path="documents" element={<StaffDocumentTrackerPage />} />
+        <Route path="diary" element={<StaffDiaryPage />} />
+        <Route path="tasks" element={<StaffTasksPage />} />
+        <Route path="queue" element={<StaffQueuePage />} />
+        <Route path="*" element={<Navigate to="/staff" replace />} />
+      </Route>
       <Route path="/lead-referrer" element={<LeadReferrerGate />}>
         <Route index element={<LeadReferrerHomePage />} />
         <Route path="submit-lead" element={<LeadReferrerSubmitLeadPage />} />
@@ -220,6 +246,7 @@ function AppRoutes() {
         <Route path="tasks" element={<LeadReferrerTasksPage />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="calendar" element={<LeadReferrerBookingPage />} />
+        <Route path="rewards" element={<LeadReferrerShell><QualifiedRewardsPage /></LeadReferrerShell>} />
         <Route path="*" element={<Navigate to="/lead-referrer" replace />} />
       </Route>
 
@@ -237,6 +264,7 @@ function AppRoutes() {
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/calendar" element={<OwnerCalendarPage />} />
+        <Route path="/calendar/access" element={<CalendarAccessPage />} />
         <Route path="/deals/:id" element={<DealDetailPage />} />
         <Route path="/deals/archived" element={<ArchivedDealsPage />} />
         <Route path="/deals/:id/package" element={<DealPackagePage />} />
@@ -249,6 +277,7 @@ function AppRoutes() {
         <Route path="/partner-earnings" element={<PartnerEarningsPage />} />
         <Route path="/payouts" element={<PayoutsPage />} />
         <Route path="/money" element={<MoneyCommandCenterPage />} />
+        <Route path="/rewards" element={<QualifiedRewardsPage />} />
         <Route path="/leads" element={<LeadsPage />} />
         <Route path="/leads/new" element={<LeadFormPage />} />
         <Route path="/leads/:id" element={<LeadDetailPage />} />
