@@ -44,6 +44,8 @@ test('commission is entered, reconciled, approved, adjusted and paid only by the
       await db.exec(review.slice(start, end));
     }
     await db.exec(await mig('20261010071407_owner_commission_payment_recheck.sql'));
+    await db.exec('create table public.commission_records(id uuid primary key default gen_random_uuid(), deal_id uuid not null references deals, status text not null, settled_at timestamptz);');
+    await db.exec(`begin; ${await mig('20261010095939_commission_payment_route_guard.sql')} commit;`);
     const deal = (await one('insert into public.deals default values returning id')).id;
     const deal2 = (await one('insert into public.deals default values returning id')).id;
     const save = (over = {}) => {
@@ -134,5 +136,17 @@ test('commission is entered, reconciled, approved, adjusted and paid only by the
       'commission_flag_acknowledged', 'commission_entries_approved', 'commission_entry_paid', 'commission_entry_adjusted', 'commission_entry_voided']) {
       assert.ok(events.includes(t), `audit has ${t}`);
     }
+    // Exercise the real Owner payment RPC against automatic payment history.
+    // Draft creation and approval remain available; paying twice is refused.
+    await as(null);
+    await db.query("insert into commission_records(deal_id,status,settled_at) values ($1,'settled',now())", [deal2]);
+    await assert.rejects(() => db.query("insert into commission_records(deal_id,status,settled_at) values ($1,'settled',now())", [deal]), /manual.*automatic.*blocked/);
+    await as(U.owner);
+    await q("select public.owner_set_commission_total($1,'ZAR',10)", [deal2]);
+    const duplicate = await save({ deal: deal2, kind: 'external_payee', profile: null, name: 'Another payee', amount: 10 });
+    await q('select public.owner_approve_commission_entries($1)', [deal2]);
+    await rejects(() => q("select public.owner_mark_commission_entry_paid($1,'EFT-DUPLICATE')", [duplicate]), /automatic.*manual.*blocked/);
+    assert.equal((await one('select status from public.owner_commission_entries where id=$1', [duplicate])).status, 'approved');
+    assert.equal((await q("select 1 from public.staff_audit_events where entity_id=$1 and event_type='commission_entry_paid'", [duplicate])).length, 0);
   } finally { await db.close(); }
 });

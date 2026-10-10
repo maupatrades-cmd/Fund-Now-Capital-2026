@@ -35,8 +35,32 @@ The isolated PostgreSQL regression passes for a flag raised after approval,
 an adjustment that breaks reconciliation, a new zero-value unapproved draft,
 denial of payment to staff/beneficiaries, and successful Owner payment after
 resolution. Multi-session concurrency has not been exercised by this test.
-This migration has not been applied to production. It does not yet prevent
-duplicates between the automatic and manual ledgers.
+This migration has not been applied to production. Cross-ledger payment
+protection is provided by the separate migration below.
+
+## Payment route protection — 10 October
+
+`20261010095939_commission_payment_route_guard.sql` reserves one payment route
+per deal at the first recorded payment: automatic or manual. Further payments
+through the other ledger are rejected by database triggers. Multiple manual
+beneficiaries on the same deal remain possible. Calculations, manual drafts and
+approval do not themselves claim a route.
+
+The reservation is private and immutable. A reversal does not release it:
+reversing an accounting entry does not establish that money was recovered.
+Existing settled/paid history, including reversed rows with payment timestamps,
+is imported; contradictory history aborts migration installation. The migration
+locks both ledgers while importing history and installing the triggers.
+
+Regression tests cover both directions, historical conflicts, rollback of the
+route claim and associated state changes, and the actual Owner manual-payment
+RPC. The invoice rollback fixture is synthetic; full invoice-RPC and concurrent
+multi-session acceptance remain outstanding. This is not a bank-payment service
+and does not stop a human making a duplicate EFT outside the CRM.
+
+Not applied live. The unified override/approval/invoice UI, own-estimate-only
+projections and contractual reward dates remain unfinished. A deal with an
+existing payment cannot switch routes through this safeguard.
 
 ## Migration mapping — do not replay
 
