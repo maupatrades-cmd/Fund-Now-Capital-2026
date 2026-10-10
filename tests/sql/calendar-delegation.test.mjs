@@ -185,13 +185,20 @@ test('delegated calendars, conflict protection, confirmations and check-ins are 
     assert.equal(sbDiary[pub.r.event_id].lead_id, null);
 
     // ---- Change rights --------------------------------------------------------
+    await db.exec('reset role;');
+    await db.exec(await mig('20261010051353_calendar_notice_revision_guard.sql'));
+    const initialNotice = (await one('select id from public.calendar_confirmation_outbox where event_id=$1', [first.event_id])).id;
+    await q('select * from public.claim_calendar_confirmation($1)', [initialNotice]);
+    await as(U.switchboard);
     await rejects(() => q("select public.staff_reschedule_calendar_event($1,$2,$3,'Moved')", [pub.r.event_id, sast(TUE, 16, 30), sast(TUE, 17, 30)]), /permission to change/, '42501');
     await rejects(() => q("select public.staff_reschedule_calendar_event($1,$2,$3,'')", [first.event_id, sast(TUE, 16, 30), sast(TUE, 17, 30)]), /reason is required/);
     const moved = (await one("select public.staff_reschedule_calendar_event($1,$2,$3,'Client asked') as r", [first.event_id, sast(TUE, 13), sast(TUE, 14)])).r;
     assert.equal(moved.notices_queued, 1);
     await as(U.owner);
     const notices = await q("select revision, kind, status from public.calendar_confirmation_outbox where event_id=$1 order by revision", [first.event_id]);
-    assert.deepEqual(notices.map((n) => [n.revision, n.kind, n.status]), [[1, 'confirmation', 'superseded'], [2, 'rescheduled', 'queued']], 'stale notice superseded, one fresh notice queued');
+    assert.deepEqual(notices.map((n) => [n.revision, n.kind, n.status]), [[1, 'confirmation', 'superseded'], [2, 'confirmation', 'queued']], 'claimed stale notice superseded, initial confirmation retained until delivery');
+    await db.exec('reset role;');
+    await rejects(() => q("select * from public.record_calendar_confirmation_result($1,'sent','stale-provider-result')", [initialNotice]), /not processing|not claimed|processing/);
     await as(U.coordinator);
     await q("select public.staff_cancel_calendar_event($1,'Duplicate booking')", [second.event_id]);
     await rejects(() => q("select public.staff_cancel_calendar_event($1,'again')", [second.event_id]), /Only a scheduled booking/);

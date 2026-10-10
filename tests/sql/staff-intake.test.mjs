@@ -177,13 +177,27 @@ test('staff roles, organisations and intake are enforced by the database', async
     assert.equal((await q('select 1 from public.leads where cipc_number=$1', ['2020/111111/07'])).length, 1);
 
     // ---- Relationship-scoped reads: no cross-organisation access ----------
-    const visible = async (uid) => { await as(uid); return (await q('select lead_id from public.submission_intakes order by registered_at')).map((r) => r.lead_id); };
+    await as(null);
+    await db.exec(await mig('20261010050432_external_intake_safe_projection.sql'));
+    const visible = async (uid) => { await as(uid); return (await q('select lead_id from public.my_submission_intakes()')).map((r) => r.lead_id); };
     assert.deepEqual(await visible(U.partner2), [], 'partner of another organisation sees nothing');
     assert.deepEqual(await visible(U.agentOrg2), []);
     assert.deepEqual(await visible(U.direct), [direct.lead_id], 'direct agent sees only their own direct file');
     assert.deepEqual((await visible(U.agentOrg1)), [leadId], 'agent sees only files they are registered on');
     assert.deepEqual((await visible(U.teamLeader)), [leadId], 'Team Leader sees their own team');
     assert.deepEqual((await visible(U.partner1)).sort(), [leadId, referral.lead_id].sort(), 'partner sees own organisation files');
+    assert.equal((await q('select * from public.submission_intakes')).length, 0, 'own relationship no longer exposes internal rows');
+    const safeRows = await q('select * from public.my_submission_intakes(null,1)');
+    assert.equal(safeRows.length, 1);
+    assert.deepEqual(Object.keys(safeRows[0]).sort(), ['archived','first_complete_at','funding_type','lead_id','registered_at','workflow_status']);
+    const nextPage = await q('select * from public.my_submission_intakes($1,1)', [safeRows[0].lead_id]);
+    assert.equal(nextPage.length, 1);
+    assert.notEqual(nextPage[0].lead_id, safeRows[0].lead_id);
+    await as(null);
+    await q('update public.profiles set is_active=false where id=$1', [U.partner1]);
+    assert.deepEqual(await visible(U.partner1), [], 'inactive partner loses projection access');
+    await as(null);
+    await q('update public.profiles set is_active=true where id=$1', [U.partner1]);
     assert.deepEqual(await visible(U.coordinator), [], 'staff have no direct table reads');
     assert.deepEqual(await visible(U.switchboard), []);
     await as(U.partner2);
