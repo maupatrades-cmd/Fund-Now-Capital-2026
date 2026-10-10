@@ -536,3 +536,16 @@ export function useResolveAnswerItem() {
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-answer-desk"] }); void qc.invalidateQueries({ queryKey: ["staff-coordinator-landing"] }); },
   });
 }
+
+// ---- Day 3 / day 7 document chasers (Batch 4) -------------------------------
+export type DocumentChaser = { id: string; lead_id: string; business_name: string; day_mark: 3 | 7; due_at: string; missing_documents: string[] };
+export function useDocumentChasers(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-document-chasers"], enabled, refetchInterval: 60_000, queryFn: () => rpc<DocumentChaser[]>("staff_document_chasers") });
+}
+export function useCompleteDocumentChaser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { id: string; note: string }) => rpc<void>("staff_complete_document_chaser", { p_id: i.id, p_note: i.note || null }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-document-chasers"] }); },
+  });
+}
