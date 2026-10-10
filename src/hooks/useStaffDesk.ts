@@ -496,8 +496,43 @@ export type CoordinatorLanding = {
   oldest_open_files: { lead_id: string; business_name: string; workflow_status: string; waiting_days: number; missing_count: number }[];
   founder_open: number;
   founder_recent: { lead_id: string; business_name: string; decision: FounderDecision; decline_category: string | null; note: string | null; decided_at: string }[];
+  answers_amber: number; answers_red: number;
   time_requests_pending: number; time_requests_answered_7d: number; my_open_tasks: number; my_overdue_tasks: number;
 };
 export function useCoordinatorLanding(enabled: boolean) {
   return useQuery({ queryKey: ["staff-coordinator-landing"], enabled, refetchInterval: 60_000, queryFn: () => rpc<CoordinatorLanding>("staff_coordinator_landing") });
+}
+
+// ---- Answer desk (SC7) ------------------------------------------------------
+export const ANSWER_KINDS = [
+  ["status_question", "Status question (4 working hours)"], ["founder_holding_reply", "Founder question: holding reply (same day)"],
+  ["founder_answer", "Founder question: answer (1 working day)"], ["outcome_relay", "Relay an outcome (1 working day)"],
+  ["complaint_to_ops", "Complaint for the Operations Manager (same day)"],
+] as const;
+export const ASKER_TYPES = [["agent", "Agent"], ["team_leader", "Team Leader"], ["partner", "Partner"], ["client", "Client"], ["founder", "Founder"], ["other", "Other"]] as const;
+export type AnswerItem = {
+  id: string; kind: string; asker_type: string; asker_label: string | null; topic: string; lead_id: string | null; business_name: string | null;
+  asked_at: string; due_at: string; status: "open" | "answered"; answered_at: string | null; answered_late: boolean | null;
+  sla_state: "green" | "amber" | "red" | "answered"; minutes_left: number | null;
+};
+export function useAnswerDesk(includeAnswered: boolean, enabled: boolean) {
+  return useQuery({
+    queryKey: ["staff-answer-desk", includeAnswered], enabled, refetchInterval: 60_000,
+    queryFn: () => rpc<AnswerItem[]>("staff_answer_desk", { p_include_answered: includeAnswered }),
+  });
+}
+export function useLogAnswerItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { kind: string; askerType: string; askerLabel: string; topic: string }) =>
+      rpc<string>("staff_log_answer_item", { p_kind: i.kind, p_asker_type: i.askerType, p_asker_label: i.askerLabel || null, p_topic: i.topic, p_lead_id: null, p_asked_at: null }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-answer-desk"] }); void qc.invalidateQueries({ queryKey: ["staff-coordinator-landing"] }); },
+  });
+}
+export function useResolveAnswerItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { id: string; note: string }) => rpc<void>("staff_resolve_answer_item", { p_id: i.id, p_note: i.note || null }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-answer-desk"] }); void qc.invalidateQueries({ queryKey: ["staff-coordinator-landing"] }); },
+  });
 }

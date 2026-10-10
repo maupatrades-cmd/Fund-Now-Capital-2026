@@ -40,6 +40,8 @@ export default function StaffHomePage() {
             <Tile label="Your overdue tasks" value={d.my_overdue_tasks} to="/staff/tasks" alert />
             <Tile label="Your open tasks" value={d.my_open_tasks} to="/staff/tasks" />
             <Tile label="With the Founder, waiting" value={d.founder_open} to="/staff/queue" />
+            <Tile label="Questions overdue" value={d.answers_red} to="/staff/answers" alert />
+            <Tile label="Questions running late (amber)" value={d.answers_amber} to="/staff/answers" alert />
             <Tile label="Time requests waiting" value={d.time_requests_pending} to="/staff/diary" />
           </div>
           <section className={card}>
