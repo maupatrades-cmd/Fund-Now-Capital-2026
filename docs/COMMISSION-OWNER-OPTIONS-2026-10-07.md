@@ -23,6 +23,21 @@ payment across the ledgers, and estimate-only backend/UI projections remain
 unfinished. Do not describe this as a completed override workflow or activate
 the legacy payroll dates until they are aligned with the contracts.
 
+## Manual payment recheck — 10 October
+
+`20261010071407_owner_commission_payment_recheck.sql` rechecks the whole deal
+before marking a manual entry paid: the total must still reconcile, no open
+commission flags may remain, and every draft must be approved. Flag creation,
+resolution, adjustment and payment now take the same per-deal advisory lock as
+approval and draft editing. Existing Owner authorization and audit events remain.
+
+The isolated PostgreSQL regression passes for a flag raised after approval,
+an adjustment that breaks reconciliation, a new zero-value unapproved draft,
+denial of payment to staff/beneficiaries, and successful Owner payment after
+resolution. Multi-session concurrency has not been exercised by this test.
+This migration has not been applied to production. It does not yet prevent
+duplicates between the automatic and manual ledgers.
+
 ## Migration mapping — do not replay
 
 | Source version | Live version | Name |

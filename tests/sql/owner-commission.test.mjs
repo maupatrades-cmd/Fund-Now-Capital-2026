@@ -35,6 +35,15 @@ test('commission is entered, reconciled, approved, adjusted and paid only by the
       `insert into public.profiles(id,full_name,role,sourced_via_partner_id) values ('${U.agent}','agent','lead_referrer','${id(101)}'),('${U.leader}','leader','lead_referrer','${id(101)}');`].join('\n'));
     await db.exec('alter default privileges in schema public grant all on tables to authenticated;');
     for (const f of ['20261007091000_staff_access_and_audit.sql', '20261007092000_organisation_team_structure.sql', '20261007095000_owner_commission_editor.sql']) await db.exec(await mig(f));
+    // Use the current draft writers without importing unrelated calendar RPCs.
+    const review = await mig('20261007110000_staff_review_fixes_1.sql');
+    for (const name of ['owner_save_commission_entry', 'owner_set_commission_total', 'owner_void_commission_entry']) {
+      const start = review.indexOf(`create or replace function public.${name}(`);
+      const end = review.indexOf('$function$;', start) + '$function$;'.length;
+      assert.ok(start >= 0 && end > start);
+      await db.exec(review.slice(start, end));
+    }
+    await db.exec(await mig('20261010071407_owner_commission_payment_recheck.sql'));
     const deal = (await one('insert into public.deals default values returning id')).id;
     const deal2 = (await one('insert into public.deals default values returning id')).id;
     const save = (over = {}) => {
@@ -82,6 +91,25 @@ test('commission is entered, reconciled, approved, adjusted and paid only by the
 
     // Approval is not payment; payment needs a reference.
     await rejects(() => q("select public.owner_mark_commission_entry_paid($1,'')", [a]), /payment reference/);
+    // A flag raised after approval must still block payment, including a flag
+    // on another beneficiary on the same deal.
+    const lateFlag = (await one("select public.owner_flag_commission_entry($1,'other','Owner needs to review this allocation') as id", [b])).id;
+    await rejects(() => q("select public.owner_mark_commission_entry_paid($1,'EFT-BLOCKED')", [a]), /open commission flags before payment/);
+    assert.equal((await one('select status from public.owner_commission_entries where id=$1', [a])).status, 'approved');
+    await q("select public.owner_resolve_commission_flag($1,'Owner completed the additional review')", [lateFlag]);
+    // An adjustment after approval can invalidate the original reconciliation.
+    await q("select public.owner_adjust_commission_entry($1,-50,'Owner adjusts allocation after approval')", [b]);
+    await rejects(() => q("select public.owner_mark_commission_entry_paid($1,'EFT-BLOCKED')", [a]), /reconcile before payment/);
+    await q("select public.owner_adjust_commission_entry($1,50,'Owner restores the reconciled allocation')", [b]);
+    // Even a zero-value draft needs explicit approval before any payout.
+    await save({ kind: 'external_payee', profile: null, name: 'Pending allocation', amount: 0 });
+    await rejects(() => q("select public.owner_mark_commission_entry_paid($1,'EFT-BLOCKED')", [a]), /Approve all draft/);
+    await q('select public.owner_approve_commission_entries($1)', [deal]);
+    for (const uid of [U.coordinator, U.switchboard, U.partner, U.agent]) {
+      await as(uid);
+      await rejects(() => q("select public.owner_mark_commission_entry_paid($1,'EFT-DENIED')", [a]), /Only the owner/, '42501');
+    }
+    await as(U.owner);
     await q("select public.owner_mark_commission_entry_paid($1,'EFT-0001')", [a]);
     await rejects(() => q("select public.owner_mark_commission_entry_paid($1,'EFT-0002')", [a]), /Only an approved entry/);
 
