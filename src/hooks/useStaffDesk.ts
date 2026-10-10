@@ -549,3 +549,42 @@ export function useCompleteDocumentChaser() {
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-document-chasers"] }); },
   });
 }
+
+// ---- Queue actions: status, archive, assign, suspicious documents (Batch 4) --
+export type IntakeDetail = {
+  lead_id: string; workflow_status: string; archived_at: string | null; archive_reason_code: string | null;
+  assignee_name: string | null; missing_documents: string[]; open_review_flags: number;
+  receipts: { receipt_id: string; document_type: string; received_via: string; received_at: string; flagged_suspicious: boolean }[];
+  history: { at: string; event: string; actor_role: string | null; actor_name: string | null; reason: string | null; to: string | null }[];
+};
+export function useIntakeDetail(leadId: string, enabled: boolean) {
+  return useQuery({ queryKey: ["staff-intake-detail", leadId], enabled, queryFn: () => rpc<IntakeDetail>("staff_intake_detail", { p_lead_id: leadId }) });
+}
+export function useAssignableStaff(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-assignable"], enabled, staleTime: 5 * 60_000, queryFn: () => rpc<{ profile_id: string; full_name: string; staff_role: string }[]>("staff_assignable_staff") });
+}
+function useQueueMutation<T>(fn: string, toArgs: (i: T) => Record<string, unknown>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: T) => rpc<unknown>(fn, toArgs(i)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["staff-intake-queue"] });
+      void qc.invalidateQueries({ queryKey: ["staff-intake-detail"] });
+      void qc.invalidateQueries({ queryKey: ["staff-coordinator-landing"] });
+      void qc.invalidateQueries({ queryKey: ["staff-document-chasers"] });
+    },
+  });
+}
+export const ARCHIVE_REASONS = [["withdrawn", "Withdrawn"], ["duplicate", "Duplicate"], ["lapsed", "Lapsed"]] as const;
+export const useSetIntakeStatus = () => useQueueMutation<{ leadId: string; to: string; reason: string }>(
+  "staff_set_intake_status", (i) => ({ p_lead_id: i.leadId, p_to_status: i.to, p_reason: i.reason || null }));
+export const useArchiveIntake = () => useQueueMutation<{ leadId: string; code: string; reason: string }>(
+  "staff_archive_intake", (i) => ({ p_lead_id: i.leadId, p_reason_code: i.code, p_reason: i.reason }));
+export const useReverseArchive = () => useQueueMutation<{ leadId: string; reason: string }>(
+  "owner_reverse_intake_archive", (i) => ({ p_lead_id: i.leadId, p_reason: i.reason }));
+export const useAssignIntake = () => useQueueMutation<{ leadId: string; assigneeId: string | null }>(
+  "staff_assign_intake", (i) => ({ p_lead_id: i.leadId, p_assignee_id: i.assigneeId }));
+export const useFlagReceipt = () => useQueueMutation<{ receiptId: string; reason: string }>(
+  "staff_flag_document_suspicious", (i) => ({ p_receipt_id: i.receiptId, p_reason: i.reason }));
+export const useClearReceiptFlag = () => useQueueMutation<{ receiptId: string; reason: string }>(
+  "owner_clear_document_flag", (i) => ({ p_receipt_id: i.receiptId, p_reason: i.reason }));
