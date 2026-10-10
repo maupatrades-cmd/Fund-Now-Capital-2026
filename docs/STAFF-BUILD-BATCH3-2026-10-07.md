@@ -1,6 +1,6 @@
 # Staff build, Batch 3: delegated calendars, conflict protection, confirmations, check-in reminders
 
-Status: **source only. Not merged, not applied to the live database, not deployed, not role-tested live.**
+Status (updated 10 Oct 2026): **merged into `codex/integration-repair` (#282) and applied to the live database; not deployed to production; not click-tested as real roles.** See `docs/STAFF-BUILD-RUNBOOK-2026-10-10.md` for the current state of the whole build.
 Branch: `claude/staff-build-batch3`, stacked on `claude/staff-build-batch2` (PR #281), which stacks on Batch 1 (PR #279). Merge in that order.
 
 ## Inventory
