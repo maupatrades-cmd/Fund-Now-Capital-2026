@@ -1,6 +1,6 @@
 # Staff build, Batch 1: roles, organisations, secure intake
 
-Status: **source only. Not merged, not applied to the live database, not deployed, not role-tested live.**
+Status (updated 10 Oct 2026): **merged into `codex/integration-repair` (#279) and applied to the live database; not deployed to production; not click-tested as real roles.** See `docs/STAFF-BUILD-RUNBOOK-2026-10-10.md` for the current state of the whole build.
 Branch: `claude/staff-build-batch1`, started from `ba57f5670b9af92cd82fad6f5a476a20f4f6afda` (`codex/integration-repair`).
 Owner handover: FNC STAFF BUILD v2, 6 October 2026, with the Owner commission clarification.
 
