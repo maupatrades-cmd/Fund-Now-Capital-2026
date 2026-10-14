@@ -68,5 +68,8 @@ jobs:
       - name: Verify document checklist states
         run: node --test tests/document-checklist-states.test.mjs
 
+      - name: Verify agreement login return paths
+        run: node --test tests/signing-return-path.test.mjs
+
       - name: Execute isolated PostgreSQL payroll regression
         run: npm run test:payroll-sql

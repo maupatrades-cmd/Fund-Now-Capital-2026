@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const migration = await readFile(new URL("../supabase/migrations/20261007161254_r100_reward_payroll_workspace.sql", import.meta.url), "utf8");
+const calendar = await readFile(new URL("../supabase/migrations/20261010205101_r100_submission_fee_payment_calendar.sql", import.meta.url), "utf8");
 const app = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
 const contractorGate = await readFile(new URL("../src/pages/ContractorGate.tsx", import.meta.url), "utf8");
 const page = await readFile(new URL("../src/pages/QualifiedRewardsPage.tsx", import.meta.url), "utf8");
@@ -15,9 +16,10 @@ test("R100 payroll remains exactly-once and separate from commission money", () 
   assert.doesNotMatch(migration, /commission_records|partner_invoices|contractor_invoices/i);
 });
 
-test("cutoff batches only permit the 25th or 30th with evidence-backed payment", () => {
-  assert.match(migration, /selected_payday in \(25, 30\)/);
-  assert.match(migration, /reward\.cutoff_date = \(v_cycle \+ interval '21 days'\)::date/);
+test("submission-fee calendar replaces legacy paydays without changing payment evidence", () => {
+  assert.match(calendar, /selected_payday = 15/);
+  assert.match(calendar, /interval '1 month 14 days'/);
+  assert.doesNotMatch(page, /22nd|25th|30th/);
   assert.match(migration, /Payment reference and proof of payment are required/);
   assert.match(migration, /event_type[^\n]*'paid'|event_type = 'paid'/);
   assert.match(migration, /proof_storage_path/);

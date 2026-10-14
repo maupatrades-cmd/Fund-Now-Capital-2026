@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Eye, EyeOff, KeyRound, Loader2, ShieldCheck } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { signingReturnPath } from "@/lib/signingReturnPath";
 
 async function functionErrorMessage(error: unknown): Promise<string> {
   const context = (error as { context?: unknown })?.context;
@@ -19,6 +20,7 @@ async function functionErrorMessage(error: unknown): Promise<string> {
 
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -42,7 +44,7 @@ export default function ChangePasswordPage() {
       if (functionError) throw new Error(await functionErrorMessage(functionError));
       await supabase.auth.signOut();
       toast.success("Password changed. Sign in with your new password.");
-      navigate("/", { replace: true });
+      navigate(signingReturnPath(location) ?? "/", { replace: true });
     } catch (caught) {
       setError((caught as Error).message || "Could not change the password.");
     } finally {
