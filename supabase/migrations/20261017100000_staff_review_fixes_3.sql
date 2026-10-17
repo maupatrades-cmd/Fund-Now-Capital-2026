@@ -28,15 +28,17 @@ returns timestamptz
 language sql stable security definer set search_path = '' as $$
   select coalesce((select max(e.occurred_at) from public.staff_audit_events e
                     where e.entity_type = 'submission_intake' and e.entity_id = si.lead_id
-                      and e.event_type = 'status_changed' and e.detail ->> 'to' = 'documents_incomplete'),
+                      -- A return from Complete is audited as complete_reversed, so count both kinds of move.
+                      and e.event_type in ('status_changed', 'complete_reversed')
+                      and e.detail ->> 'to' = 'documents_incomplete'),
                   si.registered_at)
     from public.submission_intakes si
    where si.lead_id = p_lead_id and si.workflow_status = 'documents_incomplete' and si.archived_at is null;
 $$;
 revoke all on function public.intake_docs_incomplete_since(uuid) from public, anon, authenticated;
 
--- Open-slot rule for a MOVE: the target must sit inside one Founder slot that is open, or that is
--- closed only because this booking occupies it.
+-- Open-slot rule for a MOVE: the target must sit inside one Founder slot that is open, or the closed
+-- slot that holds this booking.
 create or replace function public.calendar_require_open_slot_for_move(
   p_event_id uuid, p_calendar_owner uuid, p_category text, p_starts_at timestamptz, p_ends_at timestamptz)
 returns void
@@ -49,7 +51,9 @@ begin
      where s.owner_id = p_calendar_owner
        and s.starts_at <= p_starts_at and s.ends_at >= p_ends_at
        and p_category = any (s.allowed_booking_types)
-       and (s.is_open or tstzrange(s.starts_at, s.ends_at, '[)') && tstzrange(v_from, v_to, '[)'))) then
+       -- A closed slot counts only when it contains the WHOLE booking being moved, i.e. it is the
+       -- slot this booking was made into; a slot that merely overlaps it does not.
+       and (s.is_open or (s.starts_at <= v_from and s.ends_at >= v_to))) then
     raise exception 'That time is not open. Pick a slot the Founder has opened, or request another time';
   end if;
 end;
@@ -143,12 +147,10 @@ begin
   update public.intake_document_reminders d set status = 'skipped'
    where d.status = 'open' and d.entered_at is distinct from public.intake_docs_incomplete_since(d.lead_id);
 
-  for r in select si.lead_id, si.registered_at from public.submission_intakes si
+  for r in select si.lead_id from public.submission_intakes si
             where si.workflow_status = 'documents_incomplete' and si.archived_at is null loop
-    select max(e.occurred_at) into v_entered from public.staff_audit_events e
-     where e.entity_type = 'submission_intake' and e.entity_id = r.lead_id
-       and e.event_type = 'status_changed' and e.detail->>'to' = 'documents_incomplete';
-    v_entered := coalesce(v_entered, r.registered_at);
+    -- Same "current stay" start as cleanup and the staff read use.
+    v_entered := public.intake_docs_incomplete_since(r.lead_id);
     foreach v_mark in array array[3, 7] loop
       v_due := public.business_hours_add(v_entered, v_mark * 12);
       if now() >= v_due then

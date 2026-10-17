@@ -52,6 +52,11 @@ alter table public.client_form_responses
   references public.funding_product_catalog(code) not valid;
 alter table public.client_form_responses validate constraint client_form_responses_product_code_fk;
 
+-- Entity-specific documents get their own condition wording (Qodo, PR #298). Entity rules are not
+-- versioned, so each change is kept in the audit trail with its old and new wording.
+alter table public.doc_entity_rules add column if not exists condition_text text
+  check (condition_text is null or length(btrim(condition_text)) between 3 and 300);
+
 -- 2. Effective list with a pinned included-list version (finding 5) ------------------------------
 -- The 4-argument version is retired by rename (not dropped) so this applies without a destructive step.
 alter function public.doc_effective_list(text, text, integer, integer) rename to doc_effective_list_retired_v1;
@@ -89,7 +94,7 @@ final as (
     from kept k
    where not exists (select 1 from er e where e.op in ('remove', 'replace') and e.target_code = k.doc_code)
   union all
-  select e.doc_code, c.title, e.level, c.note, 'ENTITY:' || p_entity, 3000 + e.sort_order
+  select e.doc_code, c.title, e.level, coalesce(e.condition_text, c.note), 'ENTITY:' || p_entity, 3000 + e.sort_order
     from er e join public.doc_catalogue c on c.code = e.doc_code
    where e.op in ('add', 'replace'))
 select f.doc_code, f.title, f.level, f.cond, f.src, f.srt from final f order by f.srt, f.doc_code
@@ -309,6 +314,27 @@ begin
     jsonb_build_object('list', p_code, 'version', (select current_version from public.doc_lists where code = p_code),
                        'files_pinned', v_pinned));
 end $$;
+
+-- Owner edits the condition wording of a document an entity type adds or swaps in.
+create or replace function public.owner_edit_entity_doc_condition(p_entity text, p_doc text, p_condition text)
+returns void
+language plpgsql security definer set search_path = '' as $$
+declare v_rule public.doc_entity_rules;
+begin
+  if not public.is_owner() then raise exception 'Only the Owner can edit a document list' using errcode = '42501'; end if;
+  if length(btrim(coalesce(p_condition, ''))) not between 3 and 300 then
+    raise exception 'Write the condition in 3 to 300 characters';
+  end if;
+  select * into v_rule from public.doc_entity_rules r
+   where r.entity_type = p_entity and r.doc_code = p_doc and r.op in ('add', 'replace')
+   order by r.id limit 1 for update;
+  if not found then raise exception 'That document is not added for this entity type'; end if;
+  update public.doc_entity_rules set condition_text = btrim(p_condition) where id = v_rule.id;
+  perform public.staff_audit_write('document_rules', null, 'doc_entity_condition_edited', null,
+    jsonb_build_object('entity_type', p_entity, 'doc', p_doc, 'from', v_rule.condition_text, 'to', btrim(p_condition)));
+end $$;
+revoke all on function public.owner_edit_entity_doc_condition(text, text, text) from public, anon;
+grant execute on function public.owner_edit_entity_doc_condition(text, text, text) to authenticated;
 
 -- 7. Queue detail shows catalogue receipts by title ------------------------------------------------
 create or replace function public.staff_intake_detail(p_lead_id uuid)
