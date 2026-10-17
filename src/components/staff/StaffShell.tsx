@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpenCheck, CalendarDays, FilePlus2, ListChecks, LogOut, PhoneCall, ClipboardList } from "lucide-react";
+import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarDays, FilePlus2, ListChecks, LogOut, PhoneCall, ClipboardList } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -9,11 +9,13 @@ import { useStaffRole } from "@/hooks/useStaffDesk";
 type Item = { to: string; label: string; icon: typeof PhoneCall; end: boolean; managerOnly?: boolean };
 
 const navigation: Item[] = [
+  { to: "/staff/home", label: "Home", icon: LayoutDashboard, end: false, managerOnly: true },
   { to: "/staff", label: "Call log", icon: PhoneCall, end: true },
   { to: "/staff/new-lead", label: "New lead", icon: FilePlus2, end: false },
   { to: "/staff/documents", label: "Document tracker", icon: BookOpenCheck, end: false },
   { to: "/staff/diary", label: "Diary", icon: CalendarDays, end: false },
   { to: "/staff/tasks", label: "Tasks", icon: ListChecks, end: false },
+  { to: "/staff/answers", label: "Answer desk", icon: MessageSquareReply, end: false, managerOnly: true },
   { to: "/staff/queue", label: "Submission queue", icon: ClipboardList, end: false, managerOnly: true },
 ];
 

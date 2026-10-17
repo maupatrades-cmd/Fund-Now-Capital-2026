@@ -392,3 +392,214 @@ export function useRevokeCalendarGrant() {
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["owner-calendar-grants"] }); },
   });
 }
+
+// Approved status wording per file (never funder names, rates or tiers). Staff see this
+// instead of any funder-side stage.
+export function useStatusWordings(leadIds: string[]) {
+  const key = [...leadIds].sort().join(",");
+  return useQuery({
+    queryKey: ["staff-status-wordings", key],
+    enabled: leadIds.length > 0,
+    queryFn: async (): Promise<Record<string, string>> => {
+      const rows = await rpc<{ lead_id: string; wording: string | null }[]>("staff_status_wordings", { p_lead_ids: leadIds.slice(0, 100) });
+      return Object.fromEntries((rows ?? []).map((r) => [r.lead_id, r.wording ?? ""]));
+    },
+  });
+}
+
+// ---- Founder decisions (SC3) ----------------------------------------------
+export type DealSummaryInput = {
+  leadId: string; amountPurpose: string; turnoverTrading: string; documentsNote: string; redFlags: string;
+};
+export type FounderDecision = "approve_to_submit" | "send_back_with_query" | "decline" | "call_me";
+export const DECLINE_CATEGORIES = [
+  ["affordability", "Affordability"], ["documentation", "Documentation"], ["credit_profile", "Credit profile"],
+  ["sector_policy", "Sector policy"], ["other", "Other"],
+] as const;
+
+// Coordinator (or Owner) sends a Complete file to the Founder with the Deal Summary.
+export function useSendToFounder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: DealSummaryInput) =>
+      rpc<string>("staff_send_founder_decision", {
+        p_lead_id: i.leadId, p_amount_purpose: i.amountPurpose, p_turnover_trading: i.turnoverTrading,
+        p_documents_note: i.documentsNote || null, p_red_flags: i.redFlags || null,
+      }),
+    onSuccess: () => { invalidateTasks(qc); void qc.invalidateQueries({ queryKey: ["staff-intake-queue"] }); void qc.invalidateQueries({ queryKey: ["staff-file-decision"] }); },
+  });
+}
+
+export type DealSummary = {
+  business_name: string; funding_type_label: string; requested_amount: number | null; amount_purpose: string;
+  turnover_trading: string; documents_note: string | null; red_flags: string | null;
+  agent_name: string | null; team_name: string | null; written_at: string;
+};
+export function useDealSummary(taskId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["staff-deal-summary", taskId],
+    enabled,
+    queryFn: async () => (await rpc<DealSummary[]>("owner_deal_summary", { p_task_id: taskId }))?.[0] ?? null,
+  });
+}
+
+export function useDecideFounderTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { taskId: string; decision: FounderDecision; note: string; declineCategory?: string }) =>
+      rpc<void>("owner_decide_founder_task", {
+        p_task_id: i.taskId, p_decision: i.decision, p_note: i.note || null, p_decline_category: i.declineCategory ?? null,
+      }),
+    onSuccess: () => { invalidateTasks(qc); void qc.invalidateQueries({ queryKey: ["staff-intake-queue"] }); void qc.invalidateQueries({ queryKey: ["staff-file-decision"] }); },
+  });
+}
+
+export type FileDecision = { decision: FounderDecision; decline_category: string | null; note: string | null; decided_at: string };
+export function useFileDecision(leadId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["staff-file-decision", leadId],
+    enabled,
+    queryFn: async () => (await rpc<FileDecision[]>("staff_file_decision", { p_lead_id: leadId }))?.[0] ?? null,
+  });
+}
+
+// ---- Requests for Founder time outside opened slots (SC4) ------------------
+export type TimeRequest = {
+  id: string; category: string; starts_at: string; ends_at: string; reason: string; status: "pending" | "accepted" | "declined";
+  owner_note: string | null; requester_name: string; created_at: string; decided_at: string | null;
+};
+export function useTimeRequests(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-time-requests"], enabled, queryFn: () => rpc<TimeRequest[]>("staff_time_requests", { p_status: null }) });
+}
+export function useRequestFounderTime() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { calendarOwner: string; category: string; startsAt: string; endsAt: string; reason: string }) =>
+      rpc<string>("staff_request_founder_time", {
+        p_calendar_owner: i.calendarOwner, p_category: i.category, p_starts_at: i.startsAt, p_ends_at: i.endsAt, p_reason: i.reason, p_lead_id: null,
+      }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-time-requests"] }); },
+  });
+}
+export function useDecideTimeRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { requestId: string; accept: boolean; note: string }) =>
+      rpc<string | null>("owner_decide_time_request", { p_request_id: i.requestId, p_accept: i.accept, p_note: i.note || null }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-time-requests"] }); invalidateCalendar(qc); },
+  });
+}
+
+// ---- Coordinator landing (SC5) ----------------------------------------------
+export type CoordinatorLanding = {
+  status_counts: Record<string, number>;
+  oldest_open_files: { lead_id: string; business_name: string; workflow_status: string; waiting_days: number; missing_count: number }[];
+  founder_open: number;
+  founder_recent: { lead_id: string; business_name: string; decision: FounderDecision; decline_category: string | null; note: string | null; decided_at: string }[];
+  answers_amber: number; answers_red: number;
+  time_requests_pending: number; time_requests_answered_7d: number; my_open_tasks: number; my_overdue_tasks: number;
+};
+export function useCoordinatorLanding(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-coordinator-landing"], enabled, refetchInterval: 60_000, queryFn: () => rpc<CoordinatorLanding>("staff_coordinator_landing") });
+}
+
+// ---- Answer desk (SC7) ------------------------------------------------------
+export const ANSWER_KINDS = [
+  ["status_question", "Status question (4 working hours)"], ["founder_holding_reply", "Founder question: holding reply (same day)"],
+  ["founder_answer", "Founder question: answer (1 working day)"], ["outcome_relay", "Relay an outcome (1 working day)"],
+  ["complaint_to_ops", "Complaint for the Operations Manager (same day)"],
+] as const;
+export const ASKER_TYPES = [["agent", "Agent"], ["team_leader", "Team Leader"], ["partner", "Partner"], ["client", "Client"], ["founder", "Founder"], ["other", "Other"]] as const;
+export type AnswerItem = {
+  id: string; kind: string; asker_type: string; asker_label: string | null; topic: string; lead_id: string | null; business_name: string | null;
+  asked_at: string; due_at: string; status: "open" | "answered"; answered_at: string | null; answered_late: boolean | null;
+  sla_state: "green" | "amber" | "red" | "answered"; minutes_left: number | null;
+};
+export function useAnswerDesk(includeAnswered: boolean, enabled: boolean) {
+  return useQuery({
+    queryKey: ["staff-answer-desk", includeAnswered], enabled, refetchInterval: 60_000,
+    queryFn: () => rpc<AnswerItem[]>("staff_answer_desk", { p_include_answered: includeAnswered }),
+  });
+}
+export function useLogAnswerItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { kind: string; askerType: string; askerLabel: string; topic: string }) =>
+      rpc<string>("staff_log_answer_item", { p_kind: i.kind, p_asker_type: i.askerType, p_asker_label: i.askerLabel || null, p_topic: i.topic, p_lead_id: null, p_asked_at: null }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-answer-desk"] }); void qc.invalidateQueries({ queryKey: ["staff-coordinator-landing"] }); },
+  });
+}
+export function useResolveAnswerItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { id: string; note: string }) => rpc<void>("staff_resolve_answer_item", { p_id: i.id, p_note: i.note || null }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-answer-desk"] }); void qc.invalidateQueries({ queryKey: ["staff-coordinator-landing"] }); },
+  });
+}
+
+// ---- Day 3 / day 7 document chasers (Batch 4) -------------------------------
+export type DocumentChaser = { id: string; lead_id: string; business_name: string; day_mark: 3 | 7; due_at: string; missing_documents: string[] };
+export function useDocumentChasers(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-document-chasers"], enabled, refetchInterval: 60_000, queryFn: () => rpc<DocumentChaser[]>("staff_document_chasers") });
+}
+export function useCompleteDocumentChaser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { id: string; note: string }) => rpc<void>("staff_complete_document_chaser", { p_id: i.id, p_note: i.note || null }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-document-chasers"] }); },
+  });
+}
+
+// ---- Queue actions: status, archive, assign, suspicious documents (Batch 4) --
+export type IntakeDetail = {
+  lead_id: string; workflow_status: string; archived_at: string | null; archive_reason_code: string | null;
+  assignee_name: string | null; missing_documents: string[]; open_review_flags: number;
+  receipts: { receipt_id: string; document_type: string; received_via: string; received_at: string; flagged_suspicious: boolean }[];
+  history: { at: string; event: string; actor_role: string | null; actor_name: string | null; reason: string | null; to: string | null }[];
+};
+export function useIntakeDetail(leadId: string, enabled: boolean) {
+  return useQuery({ queryKey: ["staff-intake-detail", leadId], enabled, queryFn: () => rpc<IntakeDetail>("staff_intake_detail", { p_lead_id: leadId }) });
+}
+export function useAssignableStaff(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-assignable"], enabled, staleTime: 5 * 60_000, queryFn: () => rpc<{ profile_id: string; full_name: string; staff_role: string }[]>("staff_assignable_staff") });
+}
+function useQueueMutation<T>(fn: string, toArgs: (i: T) => Record<string, unknown>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: T) => rpc<unknown>(fn, toArgs(i)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["staff-intake-queue"] });
+      void qc.invalidateQueries({ queryKey: ["staff-intake-detail"] });
+      void qc.invalidateQueries({ queryKey: ["staff-coordinator-landing"] });
+      void qc.invalidateQueries({ queryKey: ["staff-document-chasers"] });
+    },
+  });
+}
+export const ARCHIVE_REASONS = [["withdrawn", "Withdrawn"], ["duplicate", "Duplicate"], ["lapsed", "Lapsed"]] as const;
+export const useSetIntakeStatus = () => useQueueMutation<{ leadId: string; to: string; reason: string }>(
+  "staff_set_intake_status", (i) => ({ p_lead_id: i.leadId, p_to_status: i.to, p_reason: i.reason || null }));
+export const useArchiveIntake = () => useQueueMutation<{ leadId: string; code: string; reason: string }>(
+  "staff_archive_intake", (i) => ({ p_lead_id: i.leadId, p_reason_code: i.code, p_reason: i.reason }));
+export const useReverseArchive = () => useQueueMutation<{ leadId: string; reason: string }>(
+  "owner_reverse_intake_archive", (i) => ({ p_lead_id: i.leadId, p_reason: i.reason }));
+export const useAssignIntake = () => useQueueMutation<{ leadId: string; assigneeId: string | null }>(
+  "staff_assign_intake", (i) => ({ p_lead_id: i.leadId, p_assignee_id: i.assigneeId }));
+export const useFlagReceipt = () => useQueueMutation<{ receiptId: string; reason: string }>(
+  "staff_flag_document_suspicious", (i) => ({ p_receipt_id: i.receiptId, p_reason: i.reason }));
+export const useClearReceiptFlag = () => useQueueMutation<{ receiptId: string; reason: string }>(
+  "owner_clear_document_flag", (i) => ({ p_receipt_id: i.receiptId, p_reason: i.reason }));
+
+// ---- Qualifying files and KPIs (SC9) -----------------------------------------
+export type QualifyingFiles = {
+  month: string; rate_per_file: number; count: number; estimate_total: number; cutoff_date: string; pay_date: string; status: string;
+  files: { lead_id: string; business_name: string; handler_name: string | null; reached_founder_at: string }[];
+};
+export function useQualifyingFiles(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-qualifying-files"], enabled, queryFn: () => rpc<QualifyingFiles>("staff_qualifying_files") });
+}
+export type CoordinatorKpi = {
+  key: string; label: string; target_pct: number; direction: "min" | "max"; sample?: number; value_pct?: number | null; not_tracked?: boolean;
+};
+export function useCoordinatorKpis(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-coordinator-kpis"], enabled, queryFn: () => rpc<{ days: number; kpis: CoordinatorKpi[] }>("staff_coordinator_kpis", { p_days: 30 }) });
+}
