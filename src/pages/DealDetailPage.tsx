@@ -12,6 +12,7 @@ import { useDeal, useUpdateDeal, useReopenDeal, useSetDealArchived } from "@/hoo
 import { useCelebrate } from "@/lib/celebration/ConfettiProvider";
 import { FunderSubmissions } from "@/components/deals/FunderSubmissions";
 import { CommissionPickerWidget } from "@/components/deal/CommissionPickerWidget";
+import { OwnerCommissionPanel } from "@/components/deals/OwnerCommissionPanel";
 import { DealInvoices } from "@/components/deals/DealInvoices";
 import { DealPackageReadiness } from "@/components/deals/DealPackageReadiness";
 import { DealPackageDispatches } from "@/components/deals/DealPackageDispatches";
@@ -276,6 +277,8 @@ export default function DealDetailPage() {
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
         <CommissionPickerWidget key={deal.id} dealId={deal.id} amountRequested={deal.amount_requested} />
       </section>
+
+      <OwnerCommissionPanel key={deal.id} dealId={deal.id} />
 
       {/* Invoices — generate/track FNC → funder invoices for this deal (C1.2) */}
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">

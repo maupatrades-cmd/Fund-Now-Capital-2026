@@ -71,5 +71,8 @@ jobs:
       - name: Verify agreement login return paths
         run: node --test tests/signing-return-path.test.mjs
 
+      - name: Verify Owner commission input controls
+        run: node --test tests/owner-commission-input.test.mjs
+
       - name: Execute isolated PostgreSQL payroll regression
         run: npm run test:payroll-sql
