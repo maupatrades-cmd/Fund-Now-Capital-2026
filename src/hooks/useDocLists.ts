@@ -50,8 +50,8 @@ export function useConfirmDocList() {
 export function useEditDocItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { list: string; doc: string; level: DocLevel | null }) =>
-      rpc<number>("owner_edit_doc_item", { p_list: v.list, p_doc: v.doc, p_level: v.level }),
+    mutationFn: (v: { list: string; doc: string; level: DocLevel | null; condition?: string | null }) =>
+      rpc<number>("owner_edit_doc_item", { p_list: v.list, p_doc: v.doc, p_level: v.level, p_condition: v.condition ?? null }),
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["doc-lists-overview"] }); void qc.invalidateQueries({ queryKey: ["doc-list-detail"] }); },
   });
 }
