@@ -4,6 +4,7 @@ import { useOwnerCommission, useOwnerCommissionCommand, type CommissionCommand }
 import { canApproveCommission, commissionAmount, effectiveCommission, UnconfirmedCommissionChange, type ManualCommissionEntry } from "@/lib/ownerCommission";
 import { formatZAR } from "@/lib/format";
 import { OwnerCommissionEntryForm } from "@/components/deals/OwnerCommissionEntryForm";
+import { OwnerCommissionNotices } from "@/components/deals/OwnerCommissionNotices";
 
 const button = "rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-brand-navy disabled:opacity-50";
 const input = "rounded-lg border border-border bg-white px-3 py-2 text-sm";
@@ -89,6 +90,7 @@ export function OwnerCommissionPanel({ dealId }: { dealId: string }) {
               </div></td></tr>;
             })}
           </tbody></table></div>}
+        <OwnerCommissionNotices dealId={dealId} entries={data.entries} adjustments={data.adjustments} people={data.people} organisations={data.organisations} disabled={busy || !data.reconciliation.reconciled || data.reconciliation.open_flags > 0 || data.entries.some((entry) => entry.status === "draft")} />
         {data.flags.length > 0 ? <div className="space-y-2"><h3 className="font-semibold text-brand-navy">Review flags</h3>{data.flags.map((flag) => <div key={flag.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-3 text-sm"><div><p>{flag.note}</p><p className="text-xs text-muted-foreground">{flag.status === "open" ? "Open" : `Resolved: ${flag.resolution}`}</p></div>{flag.status === "open" ? <button type="button" disabled={busy} className={button} onClick={() => { setReview({ action: "resolve", flagId: flag.id }); setEditor(null); }}>Resolve</button> : null}</div>)}</div> : null}
         {data.adjustments.length > 0 ? <details className="rounded-lg border border-border p-3 text-sm"><summary className="cursor-pointer font-medium">Adjustment history ({data.adjustments.length})</summary><ul className="mt-3 space-y-2">{data.adjustments.map((item) => <li key={item.id}>{item.delta} · {item.reason} · {new Date(item.created_at).toLocaleString("en-ZA")}</li>)}</ul></details> : null}
       </> : null}

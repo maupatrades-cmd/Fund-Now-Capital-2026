@@ -85,6 +85,7 @@ export function useOwnerCommissionCommand(dealId: string) {
     onSettled: async () => {
       await cache.invalidateQueries({ queryKey: ["owner-manual-commission", uid, dealId] });
       await cache.invalidateQueries({ queryKey: ["owner-manual-payouts", uid] });
+      await cache.invalidateQueries({ queryKey: ["owner-commission-notices", uid, dealId] });
       invalidateActivity(cache);
     },
   });
