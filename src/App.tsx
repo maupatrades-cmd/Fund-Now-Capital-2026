@@ -13,12 +13,15 @@ import OwnerGate from "@/components/layout/OwnerGate";
 import PartnerGate from "@/pages/PartnerGate";
 import StaffGate from "@/pages/staff/StaffGate";
 import CalendarAccessPage from "@/pages/CalendarAccessPage";
+import DocumentRulesPage from "@/pages/DocumentRulesPage";
 import StaffCallLogPage from "@/pages/staff/StaffCallLogPage";
 import StaffNewLeadPage from "@/pages/staff/StaffNewLeadPage";
 import StaffDocumentTrackerPage from "@/pages/staff/StaffDocumentTrackerPage";
 import StaffDiaryPage from "@/pages/staff/StaffDiaryPage";
 import StaffTasksPage from "@/pages/staff/StaffTasksPage";
 import StaffQueuePage from "@/pages/staff/StaffQueuePage";
+import StaffAnswerDeskPage from "@/pages/staff/StaffAnswerDeskPage";
+import StaffHomePage, { StaffIndex } from "@/pages/staff/StaffHomePage";
 import PartnerHomePage from "@/pages/PartnerHomePage";
 import PartnerNetworkPage from "@/pages/PartnerNetworkPage";
 import PartnerSubmitLeadPage from "@/pages/partner/SubmitLeadPage";
@@ -229,12 +232,14 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/client" replace />} />
       </Route>
       <Route path="/staff" element={<StaffGate />}>
-        <Route index element={<StaffCallLogPage />} />
+        <Route index element={<StaffIndex callLog={<StaffCallLogPage />} />} />
         <Route path="new-lead" element={<StaffNewLeadPage />} />
         <Route path="documents" element={<StaffDocumentTrackerPage />} />
         <Route path="diary" element={<StaffDiaryPage />} />
         <Route path="tasks" element={<StaffTasksPage />} />
         <Route path="queue" element={<StaffQueuePage />} />
+        <Route path="home" element={<StaffHomePage />} />
+        <Route path="answers" element={<StaffAnswerDeskPage />} />
         <Route path="*" element={<Navigate to="/staff" replace />} />
       </Route>
       <Route path="/lead-referrer" element={<LeadReferrerGate />}>
@@ -264,6 +269,7 @@ function AppRoutes() {
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/calendar" element={<OwnerCalendarPage />} />
         <Route path="/calendar/access" element={<CalendarAccessPage />} />
+        <Route path="/settings/document-rules" element={<DocumentRulesPage />} />
         <Route path="/deals/:id" element={<DealDetailPage />} />
         <Route path="/deals/archived" element={<ArchivedDealsPage />} />
         <Route path="/deals/:id/package" element={<DealPackagePage />} />
