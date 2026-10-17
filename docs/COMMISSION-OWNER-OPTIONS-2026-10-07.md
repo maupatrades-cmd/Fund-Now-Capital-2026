@@ -18,8 +18,7 @@ skips rows with no funder submission. Live assertions passed with fixtures rolle
 back. No real commission or payment was created.
 
 Manual entries and automatic records still use separate ledgers. A shared
-authoritative approval/invoicing/payment path, protection against duplicate
-payment across the ledgers, and estimate-only backend/UI projections remain
+authoritative approval/invoicing/payment path and estimate-only backend/UI projections remain
 unfinished. Do not describe this as a completed override workflow or activate
 the legacy payroll dates until they are aligned with the contracts.
 
@@ -35,7 +34,7 @@ The isolated PostgreSQL regression passes for a flag raised after approval,
 an adjustment that breaks reconciliation, a new zero-value unapproved draft,
 denial of payment to staff/beneficiaries, and successful Owner payment after
 resolution. Multi-session concurrency has not been exercised by this test.
-This migration has not been applied to production. Cross-ledger payment
+Applied live as `20261010203440`. Cross-ledger payment
 protection is provided by the separate migration below.
 
 ## Payment route protection — 10 October
@@ -58,7 +57,7 @@ RPC. The invoice rollback fixture is synthetic; full invoice-RPC and concurrent
 multi-session acceptance remain outstanding. This is not a bank-payment service
 and does not stop a human making a duplicate EFT outside the CRM.
 
-Not applied live. The unified override/approval/invoice UI, own-estimate-only
+Applied live as `20261010203824`. The unified override/approval/invoice UI, own-estimate-only
 projections and contractual reward dates remain unfinished. A deal with an
 existing payment cannot switch routes through this safeguard.
 
@@ -69,6 +68,8 @@ existing payment cannot switch routes through this safeguard.
 | 20261007161245 | 20261007191720 | lead_referrer_path_a_support |
 | 20261007161251 | 20261007185939 | signing_identity_binding |
 | 20261007163650 | 20261007190030 | client_application_open_deal_guard |
+| 20261010071407 | 20261010203440 | owner_commission_payment_recheck |
+| 20261010095939 | 20261010203824 | commission_payment_route_guard |
 
 Reconcile the source/live manifest before a CLI push. No migration ledger was
-manually edited for these three applications.
+manually edited for these applications.

@@ -27,7 +27,10 @@ test("temporary-password invitations force a verified password change", async ()
     source("supabase/functions/admin-invite-user/index.ts"),
   ]);
   assert.match(invite, /must_change_password: inviteMethod === "temp_password"/);
-  assert.match(auth, /navigate\("\/change-password"/);
+  // The destination now carries the signing link through a mandatory reset.
+  // Keep the invitation gate and state transfer covered instead of requiring
+  // the old literal redirect that discarded the link.
+  assert.match(auth, /if \(data\.user\?\.app_metadata\?\.must_change_password === true\) \{\s*const destination = passwordChangeLocation\(location\);\s*navigate\(destination\.pathname, \{ replace: true, state: destination\.state \}\);\s*return;/);
   assert.match(app, /must_change_password === true/);
   assert.match(changePage, /current_password: currentPassword, new_password: newPassword/);
   assert.match(changeFunction, /signInWithPassword/);

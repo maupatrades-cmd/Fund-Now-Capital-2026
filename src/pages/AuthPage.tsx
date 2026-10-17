@@ -8,10 +8,11 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { roleHome } from "@/lib/roles";
 import { supabase } from "@/lib/supabase";
+import { passwordChangeLocation, signingReturnPath } from "@/lib/signingReturnPath";
 import "./AuthPage.css";
 
 const MARK_SRC = "/brand-mark.png";
@@ -239,6 +240,7 @@ export default function AuthPage() {
   const [pwVisible, setPwVisible] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const particles = useParticles();
   useVaporizeIntro(canvasRef, setPhase);
@@ -268,7 +270,14 @@ export default function AuthPage() {
     }
 
     if (data.user?.app_metadata?.must_change_password === true) {
-      navigate("/change-password", { replace: true });
+      const destination = passwordChangeLocation(location);
+      navigate(destination.pathname, { replace: true, state: destination.state });
+      return;
+    }
+
+    const returnTo = signingReturnPath(location);
+    if (returnTo) {
+      navigate(returnTo, { replace: true });
       return;
     }
 

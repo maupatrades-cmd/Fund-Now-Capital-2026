@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import AuthPage from "@/pages/AuthPage";
@@ -102,6 +102,7 @@ import { useProfileRole } from "@/hooks/useProfileRole";
 import { roleHome } from "@/lib/roles";
 import { useSession } from "@/lib/useSession";
 import { queryClient } from "@/lib/queryClient";
+import { passwordChangeLocation, signingReturnPath } from "@/lib/signingReturnPath";
 
 // Signed-in landing for `/`: owner → /dashboard (unchanged), partner →
 // /partner, contractor → /contractor. Role errors fall through to /dashboard,
@@ -122,15 +123,12 @@ function RoleLanding() {
 
 function AppRoutes() {
   const session = useSession();
+  const location = useLocation();
 
   // The public /apply and /terms/current pages have no account and must not wait
-  // on the session read — render them immediately (a cold applicant or a website
-  // footer visitor lands here on a fresh load, so reading window.location at mount
-  // is correct). Every other route stays behind the brief session-loading state.
-  const publicPath =
-    typeof window !== "undefined"
-      ? window.location.pathname.replace(/\/+$/, "")
-      : "";
+  // on the session read — render them immediately. React Router's location also
+  // keeps the password-change gate in sync with navigation inside the app.
+  const publicPath = location.pathname.replace(/\/+$/, "");
   const onPublicRoute = publicPath === "/apply" || publicPath === "/terms/current";
 
   // Brief loading state while we read the persisted session.
@@ -144,7 +142,8 @@ function AppRoutes() {
 
   const mustChangePassword = session?.user.app_metadata?.must_change_password === true;
   if (session && mustChangePassword && publicPath !== "/change-password" && !onPublicRoute) {
-    return <Navigate to="/change-password" replace />;
+    const destination = passwordChangeLocation(location);
+    return <Navigate to={destination.pathname} state={destination.state} replace />;
   }
 
   return (
@@ -155,7 +154,7 @@ function AppRoutes() {
       />
       <Route
         path="/change-password"
-        element={session ? <ChangePasswordPage /> : <Navigate to="/" replace />}
+        element={session ? <ChangePasswordPage /> : <Navigate to={signingReturnPath(location) ?? "/"} replace />}
       />
 
       {/*

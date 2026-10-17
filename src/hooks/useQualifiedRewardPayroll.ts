@@ -39,10 +39,10 @@ export function useQualifiedRewardPayroll() {
 export function useScheduleQualifiedRewardBatch() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async ({ cycleMonth, payday }: { cycleMonth: string; payday: 25 | 30 }) => {
+    mutationFn: async ({ cycleMonth }: { cycleMonth: string }) => {
       const { data, error } = await supabase.rpc("owner_schedule_qualified_reward_batch", {
         p_cycle_month: cycleMonth,
-        p_selected_payday: payday,
+        p_selected_payday: 15,
         p_owner_note: null,
       });
       if (error) throw error;
