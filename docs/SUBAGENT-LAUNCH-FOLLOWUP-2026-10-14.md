@@ -10,6 +10,22 @@ The signed-out password-change guard and both form handlers use the same helper.
 Functional helper tests, route wiring checks and the TypeScript build pass.
 Live authenticated browser acceptance is still outstanding.
 
+## Release audit — 17 October 2026
+
+The PR296 release failure was an outdated onboarding assertion requiring the old
+literal password-change redirect. The assertion now checks the mandatory-change
+branch, validated destination and router-state transfer together. The invitation
+flag and server-side password verification checks remain in place.
+
+After that correction, all 38 cross-role source contracts, 17 targeted release,
+signing and payroll checks, and all 15 isolated PostgreSQL regressions passed.
+The signing destination tests include invalid/external destinations and ordinary
+portal login. These are local results; GitHub CI must pass on the published
+correction before merging. Browser acceptance remains outstanding.
+
+No payroll migration was applied during this audit. Its activation hold below
+still applies. No staff migration or document-catalogue function was changed.
+
 The R100 calendar follow-up migration uses the 15th of the following SAST lock
 month, includes locks after the old 22nd cutoff, and rejects payment before that
 month ends. It follows `20261007161254_r100_reward_payroll_workspace.sql`.
