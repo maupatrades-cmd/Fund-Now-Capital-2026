@@ -3,7 +3,7 @@ import { useProfileRole } from "@/hooks/useProfileRole";
 import { useOwnStaffAccess, useStaffRole } from "@/hooks/useStaffDesk";
 import { StaffShell, card } from "@/components/staff/StaffShell";
 
-// Admits an enabled Switchboard / Coordinator (and the Owner, who can open every
+// Admits an enabled Switchboard / Coordinator / Administrator (and the Owner, who can open every
 // staff screen). The database is the real gate; this only decides which screen to
 // show, and it fails closed: anything unclear shows the waiting card or bounces.
 export default function StaffGate() {
@@ -14,7 +14,7 @@ export default function StaffGate() {
   if (isLoading || staffRole.isLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-muted-foreground">Loading...</div>;
   }
-  if (profileRole !== "switchboard" && profileRole !== "coordinator" && profileRole !== "owner") {
+  if (profileRole !== "switchboard" && profileRole !== "coordinator" && profileRole !== "administrator" && profileRole !== "owner") {
     return <Navigate to="/" replace />;
   }
   if (!staffRole.data) {

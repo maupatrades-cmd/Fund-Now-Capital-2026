@@ -1,13 +1,13 @@
 import { toast } from "sonner";
 import { card, errorText } from "@/components/staff/StaffShell";
-import { useCheckinReminders, useCompleteCheckin, useStaffRole } from "@/hooks/useStaffDesk";
+import { isStaffManager, useCheckinReminders, useCompleteCheckin, useStaffRole } from "@/hooks/useStaffDesk";
 
 // Weekly Team Leader and fortnightly organisation check-ins. In-app reminders
 // for the Coordinator only; completing one records that the check-in happened.
 // Nothing is sent to the Team Leader or partner from here.
 export default function StaffCheckinsPanel() {
   const { data: role } = useStaffRole();
-  const allowed = role === "coordinator" || role === "owner";
+  const allowed = isStaffManager(role);
   const list = useCheckinReminders(allowed);
   const complete = useCompleteCheckin();
   if (!allowed) return null;

@@ -3,8 +3,9 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Field, card, errorText, primaryButton, selectClass, textareaClass } from "@/components/staff/StaffShell";
 import {
-  BOOKING_CATEGORIES, useCalendarAvailability, useCalendarDiary, useCancelBooking, useCreateBooking, useMyCalendarGrants,
-  useRecordShortNoticeHandling, useRescheduleBooking, type DiaryEvent,
+  BOOKING_CATEGORIES, canDecideTimeRequests, useAddMeetingNote, useCalendarAvailability, useCalendarDiary, useCancelBooking,
+  useCreateBooking, useMeetingNotes, useMyCalendarGrants, useRecordShortNoticeHandling, useRescheduleBooking, useStaffRole,
+  type DiaryEvent,
 } from "@/hooks/useStaffDesk";
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -188,6 +189,43 @@ function EventRow({ e }: { e: DiaryEvent }) {
           <button type="submit" className={primaryButton}>Move</button>
         </form>
       ) : null}
+      <MeetingNotes eventId={e.event_id} />
     </li>
+  );
+}
+
+// Founder and Administrator only; the database refuses everyone else.
+function MeetingNotes({ eventId }: { eventId: string }) {
+  const { data: role } = useStaffRole();
+  const allowed = canDecideTimeRequests(role);
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const notes = useMeetingNotes(eventId, allowed && open);
+  const add = useAddMeetingNote(eventId);
+  if (!allowed) return null;
+  return (
+    <div className="pt-1">
+      <button type="button" className="text-xs font-semibold text-brand-teal underline" onClick={() => setOpen((o) => !o)}>
+        {open ? "Hide meeting notes" : "Meeting notes"}
+      </button>
+      {open ? (
+        <div className="mt-1 space-y-2 rounded-lg bg-slate-50 p-2">
+          {notes.error ? <p role="alert" className="text-xs text-red-600">{errorText(notes.error)}</p> : null}
+          <ul className="space-y-1 text-xs">
+            {(notes.data ?? []).map((n) => (
+              <li key={n.id}><span className="font-semibold">{n.author_name ?? "Unknown"}</span> · {fmt(n.created_at)}<br />{n.note}</li>
+            ))}
+            {notes.data && notes.data.length === 0 ? <li className="text-muted-foreground">No notes yet.</li> : null}
+          </ul>
+          <form className="space-y-1" onSubmit={(ev) => {
+            ev.preventDefault();
+            add.mutate(draft, { onSuccess: () => { setDraft(""); toast.success("Note saved"); }, onError: (err) => toast.error(errorText(err)) });
+          }}>
+            <textarea aria-label="New meeting note" maxLength={4000} className={textareaClass} value={draft} onChange={(ev) => setDraft(ev.target.value)} />
+            <button type="submit" className={primaryButton} disabled={add.isPending || draft.trim().length < 3}>Add note</button>
+          </form>
+        </div>
+      ) : null}
+    </div>
   );
 }
