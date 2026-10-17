@@ -5,6 +5,7 @@ import {
   Bell,
   Briefcase,
   CalendarDays,
+  CalendarCheck,
   FileText,
   FileCheck2,
   GraduationCap,
@@ -56,6 +57,7 @@ function navItems(portal: PortalKind) {
       : []),
     { to: `${base}/client-invitations`, label: "Client invitations", icon: Send, end: false },
     { to: `${base}/calendar`, label: "Book the Owner", icon: CalendarDays, end: false },
+    { to: `${base}/appointments`, label: "My appointments", icon: CalendarCheck, end: false },
     { to: `${base}/rewards`, label: "R100 rewards", icon: Coins, end: false },
     ...(portal === "contractor"
       ? [{ to: `${base}/progression`, label: "My Progress", icon: TrendingUp, end: false }]
@@ -80,6 +82,7 @@ function partnerPageMeta(pathname: string) {
   if (pathname.endsWith("/network")) return ["My network", "Track your partner sub-agents"] as const;
   if (pathname.endsWith("/client-invitations")) return ["Client invitations", "Send secure access to attributed clients"] as const;
   if (pathname.endsWith("/calendar")) return ["Owner calendar", "Request a privacy-safe appointment"] as const;
+  if (pathname.endsWith("/appointments")) return ["My appointments", "Client meetings booked for you"] as const;
   if (pathname.endsWith("/rewards")) return ["R100 rewards", "Track qualified-submission reward payouts"] as const;
   if (pathname.includes("/invoices")) return ["Invoices", "Manage your partner invoices"] as const;
   if (pathname.endsWith("/statements")) return ["Statements", "Review your settlement history"] as const;
