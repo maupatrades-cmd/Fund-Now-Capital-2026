@@ -9,7 +9,7 @@ const id = (n) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const U = { owner: id(1), coordinator: id(2), switchboard: id(3), partner: id(4), agent: id(5), leader: id(6) };
 const mig = (n) => readFile(new URL(`../../supabase/migrations/${n}`, import.meta.url), 'utf8');
 
-test('commission is entered, reconciled, approved, adjusted and paid only by the Owner', async () => {
+test('commission is entered, reconciled, approved, adjusted and paid only by the Owner', async (t) => {
   const db = new PGlite();
   const q = async (sql, args = []) => (await db.query(sql, args)).rows;
   const one = async (sql, args = []) => (await q(sql, args))[0];
@@ -148,5 +148,83 @@ test('commission is entered, reconciled, approved, adjusted and paid only by the
     await rejects(() => q("select public.owner_mark_commission_entry_paid($1,'EFT-DUPLICATE')", [duplicate]), /automatic.*manual.*blocked/);
     assert.equal((await one('select status from public.owner_commission_entries where id=$1', [duplicate])).status, 'approved');
     assert.equal((await q("select 1 from public.staff_audit_events where entity_id=$1 and event_type='commission_entry_paid'", [duplicate])).length, 0);
+
+    await t.test('payment proof, stale amounts, replay safety and immutable snapshots', async () => {
+      await as(null);
+      await db.exec(`create schema storage;
+        create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+        create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,metadata jsonb,unique(bucket_id,name));
+        alter table storage.objects enable row level security;
+        grant usage on schema storage to authenticated;
+        grant select,insert,update,delete on storage.objects to authenticated;`);
+      await db.exec(await mig('20261017185316_manual_commission_payment_evidence.sql'));
+      // A future broad permissive policy must not bypass the restrictive proof guards.
+      await db.exec('create policy fixture_broad_access on storage.objects for all to authenticated using (true) with check (true)');
+      const d = (await one('insert into deals default values returning id')).id;
+      await as(U.owner);
+      await q("select owner_set_commission_total($1,'ZAR',10)", [d]);
+      const first = await save({ deal: d, amount: 6 });
+      const second = await save({ deal: d, kind: 'external_payee', profile: null, name: 'Evidence payee', amount: 4 });
+      await q('select owner_approve_commission_entries($1)', [d]);
+      const proof = `${U.owner}/${first}/proof.pdf`;
+      await q(`insert into storage.objects(bucket_id,name,metadata) values ('commission-payment-proofs',$1,'{"mimetype":"application/pdf","size":20}')`, [proof]);
+      const record = (entry = first, amount = '6.00', ccy = 'ZAR', ref = 'EFT-NEW', path = proof) =>
+        one('select (owner_record_commission_payment($1,$2,$3,$4,$5)).*', [entry, amount, ccy, ref, path]);
+      await rejects(() => q("select owner_mark_commission_entry_paid($1,'BYPASS')", [first]), /permission denied/);
+      await rejects(() => record(first, '6.001'), /positive exact/);
+      await rejects(() => record(first, 'NaN'), /positive exact/);
+      await rejects(() => record(first, '0'), /positive exact/);
+      await rejects(() => record(first, '6', 'USD'), /amount or currency changed/);
+      await rejects(() => record(first, '6', 'ZAR', 'EFT-NEW', `${U.owner}/${first}/absent.pdf`), /Upload the payment proof/);
+      await rejects(() => record(first, '6', 'ZAR', 'EFT-NEW', `${U.partner}/${first}/proof.pdf`), /this Owner and allocation/);
+      for (const [suffix, metadata, message] of [
+        ['empty.pdf', {}, /invalid file metadata/],
+        ['large.pdf', { mimetype: 'application/pdf', size: 10485761 }, /between 1 byte and 10 MB/],
+      ]) {
+        const invalidPath = `${U.owner}/${first}/${suffix}`;
+        await q(`insert into storage.objects(bucket_id,name,metadata) values ('commission-payment-proofs',$1,$2)`, [invalidPath, metadata]);
+        await rejects(() => record(first,'6','ZAR','EFT-NEW',invalidPath), message);
+      }
+      const f = (await one("select owner_flag_commission_entry($1,'other','Review before payment') as id", [second])).id;
+      await rejects(() => record(), /open commission flags/);
+      assert.equal((await q('select * from owner_commission_payments')).length, 0);
+      await q("select owner_resolve_commission_flag($1,'Owner has completed review')", [f]);
+      await q("select owner_adjust_commission_entry($1,1,'Owner moves one rand to this payee')", [first]);
+      await q("select owner_adjust_commission_entry($1,-1,'Owner moves one rand to the other payee')", [second]);
+      await rejects(() => record(), /amount or currency changed/);
+      const paid = await record(first, '7.00');
+      assert.equal(Number(paid.amount), 7);
+      assert.equal(paid.currency, 'ZAR');
+      assert.equal(paid.proof_path, proof);
+      assert.equal((await one('select status from owner_commission_entries where id=$1', [first])).status, 'paid');
+      assert.equal((await record(first, '7.00')).recorded_at.getTime(), paid.recorded_at.getTime());
+      await rejects(() => record(first, '7', 'ZAR', 'DIFFERENT'), /already recorded/);
+      await q("select owner_adjust_commission_entry($1,-1,'Owner corrects allocation after payment')", [first]);
+      await as(null);
+      assert.equal(Number((await one('select owner_commission_effective($1) as amount', [first])).amount), 6);
+      await as(U.owner);
+      assert.equal(Number((await record(first, '7')).amount), 7); // history survives later adjustments
+      assert.equal((await q("update storage.objects set metadata='{}' where name=$1 returning id", [proof])).length, 0);
+      assert.equal((await q('delete from storage.objects where name=$1 returning id', [proof])).length, 0);
+      for (const uid of [U.partner,U.coordinator,U.switchboard]) {
+        await as(uid);
+        assert.equal((await q('select * from owner_commission_payments')).length, 0);
+        assert.equal((await q("select * from storage.objects where bucket_id='commission-payment-proofs'")).length, 0);
+        await rejects(() => record(first,'7'), /Only the owner/);
+        await rejects(() => q("insert into storage.objects(bucket_id,name,metadata) values ('commission-payment-proofs',$1,'{}')", [`${uid}/${first}/bad.pdf`]), /row-level security/);
+      }
+      await as(null);
+      await rejects(() => q('update owner_commission_payments set amount=999'), /append-only/);
+      await rejects(() => q('delete from owner_commission_payments'), /append-only/);
+      await db.exec("select set_config('fnc.commission_transition','on',false)");
+      await rejects(() => q("update owner_commission_entries set payment_reference='EDITED' where id=$1", [first]), /metadata is immutable/);
+      await db.exec("select set_config('fnc.commission_transition','off',false)");
+      await as(U.owner);
+      const duplicateProof = `${U.owner}/${duplicate}/proof.pdf`;
+      await q(`insert into storage.objects(bucket_id,name,metadata) values ('commission-payment-proofs',$1,'{"mimetype":"application/pdf","size":20}')`, [duplicateProof]);
+      await rejects(() => record(duplicate,'10','ZAR','EFT-DUPLICATE',duplicateProof), /automatic.*manual.*blocked/);
+      assert.equal((await q('select * from owner_commission_payments where entry_id=$1', [duplicate])).length, 0);
+      assert.equal((await one('select status from owner_commission_entries where id=$1', [duplicate])).status, 'approved');
+    });
   } finally { await db.close(); }
 });

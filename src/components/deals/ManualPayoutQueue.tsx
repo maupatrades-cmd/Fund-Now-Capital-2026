@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useManualPayouts } from "@/hooks/useManualPayouts";
+import { useSession } from "@/lib/useSession";
+import { ManualPaymentForm } from "@/components/deals/ManualPaymentForm";
+import { useManualPaymentEvidence, downloadManualPaymentProof } from "@/hooks/useManualCommissionPayment";
+import type { ManualPayoutEntry } from "@/hooks/useManualPayouts";
 import { effectiveCommission } from "@/lib/ownerCommission";
 
 type Filter = "approved" | "draft" | "paid" | "void" | "all";
@@ -8,6 +12,11 @@ const kinds = { agent: "Agent", team_leader: "Team Leader", organisation: "Organ
 
 export function ManualPayoutQueue() {
   const query = useManualPayouts();
+  const uid = useSession()?.user.id;
+  const evidenceQuery = useManualPaymentEvidence();
+  const [selection, setSelection] = useState<{ entry: ManualPayoutEntry; amount: string; uid: string | undefined } | null>(null);
+  const [proofError, setProofError] = useState<string | null>(null);
+  const evidence = new Map((evidenceQuery.data ?? []).map((payment) => [payment.entry_id, payment]));
   const [filter, setFilter] = useState<Filter>("approved");
   const data = query.data;
   const entries = data?.entries.filter((entry) => filter === "all" || entry.status === filter) ?? [];
@@ -27,20 +36,27 @@ export function ManualPayoutQueue() {
     </div>
     <p className="text-sm text-muted-foreground">Approved allocations still need payment review. These amounts are separate from the automatic commission and invoice totals below. Open a deal to review its total, flags and allocation history.</p>
     <p className="text-xs text-muted-foreground">Current allocation includes later adjustments. For a payment recorded earlier, it is not a receipt of the amount transferred.</p>
+    {evidenceQuery.isError ? <p role="alert" className="text-sm text-red-700">Payment recording is unavailable until payment evidence can be loaded. {evidenceQuery.error.message}<button type="button" className="ml-2 underline" onClick={() => void evidenceQuery.refetch()}>Retry</button></p> : null}
+    {proofError ? <p role="alert" className="text-sm text-red-700">{proofError}</p> : null}
     {query.isPending ? <p role="status" className="text-sm">Loading manual allocations…</p> : query.isError ?
       <p role="alert" className="text-sm text-red-700">Could not load manual allocations: {query.error.message}</p> :
       entries.length === 0 ? <p className="text-sm text-muted-foreground">No {filter === "all" ? "manual" : filter} allocations.</p> :
       <div className="overflow-x-auto"><table className="w-full min-w-[800px] text-left text-sm">
-        <thead><tr className="border-b"><th className="p-2">Payee</th><th className="p-2">Status</th><th className="p-2">Original allocation</th><th className="p-2">Current allocation</th><th className="p-2">Review flags</th><th className="p-2">Payment reference</th><th className="p-2">Deal</th></tr></thead>
+        <thead><tr className="border-b"><th className="p-2">Payee</th><th className="p-2">Status</th><th className="p-2">Original allocation</th><th className="p-2">Current allocation</th><th className="p-2">Review flags</th><th className="p-2">Payment evidence</th><th className="p-2">Deal</th></tr></thead>
         <tbody>{entries.map((entry) => <tr key={entry.id} className="border-b">
           <td className="p-2">{entry.profile?.full_name || entry.organisation?.name || entry.beneficiary_name || "Name unavailable"}<span className="block text-xs text-muted-foreground">{kinds[entry.beneficiary_kind]}</span></td>
           <td className="p-2">{entry.status === "paid" ? "Payment recorded" : entry.status}</td>
           <td className="p-2 tabular-nums">{entry.currency} {effectiveCommission(entry, [])}</td>
           <td className="p-2 tabular-nums">{entry.currency} {effectiveCommission(entry, data?.adjustments ?? [])}</td>
           <td className="p-2">{flagCounts.get(entry.id) ?? 0} open</td>
-          <td className="p-2">{entry.payment_reference || "—"}</td>
+          <td className="p-2">{entry.payment_reference || "—"}
+            {evidence.has(entry.id) ? <><span className="block">Recorded: {evidence.get(entry.id)!.currency} {String(evidence.get(entry.id)!.amount)}</span>
+              <button type="button" className="block text-brand-teal underline" onClick={() => { setProofError(null); void downloadManualPaymentProof(evidence.get(entry.id)!).catch((error: Error) => setProofError(error.message)); }}>Download proof</button></> : entry.status === "paid" ? <span className="block text-xs">Legacy payment; no proof stored here</span> : null}
+            {entry.status === "approved" ? <button type="button" className="block text-brand-teal underline disabled:opacity-50" disabled={!evidenceQuery.isSuccess || evidenceQuery.isFetching || query.isFetching || (flagCounts.get(entry.id) ?? 0) > 0} onClick={() => setSelection({ entry, amount: effectiveCommission(entry, data?.adjustments ?? []), uid })}>Record completed payment</button> : null}
+          </td>
           <td className="p-2"><Link className="text-brand-teal underline" to={`/deals/${entry.deal_id}`} aria-label={`Review deal for allocation ${entry.id}`}>Review deal</Link></td>
         </tr>)}</tbody>
       </table></div>}
+    {selection && selection.uid === uid ? <ManualPaymentForm key={selection.entry.id} entry={selection.entry} amount={selection.amount} onClose={() => setSelection(null)} /> : null}
   </section>;
 }
