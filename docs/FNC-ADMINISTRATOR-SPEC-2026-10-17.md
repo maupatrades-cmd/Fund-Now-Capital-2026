@@ -104,6 +104,20 @@ the right client or staff folder · keep letter, form and notice templates curre
 Anything not resolved within 24 hours is escalated to the Director with a note. Client or agent complaints are logged,
 acknowledged the same day and escalated to the Director.
 
+## 18. Booking rules added by the owner (17 Oct, evening)
+- **Morning consultations:** the Sales Coordinator (and the Administrator) may book consultations on the Director's
+  diary from 08:30 to 17:00. Reception (Switchboard) may book consultations from 08:00 for outbound leads that came in
+  through Reception and need attending to. Presentations stay 14:00–17:00. (Built in PR #301.)
+- **Team diaries (Batch 1b, next build):** the Sales Coordinator **and Reception** set appointments on the diaries of
+  direct agents, sub-agents, Team Leaders and partners.
+  - Each booking holds the team member, the client, the date and time, and the reason for the meeting.
+  - The team member sees it in their portal ("My appointments") and gets an in-app notice.
+  - **Client email on booking:** "Your meeting is booked with our FNC partner [name]. Reason: [reason]. Date and time:
+    [date, time]", with the team member's **name, phone number and email address**. Built on one of the four
+    canonical email templates (SPEC S16). Never shows funders, rates or fees.
+  - **The team member may move or cancel** the appointment themselves (so may the Coordinator and Reception).
+  - **Every move or cancellation emails the client** an update, whoever makes it.
+
 ## Proposed batch order (3–4 items each, smoke-test before the next)
 
 1. **Role and calendar:** Administrator role with backend-enforced visibility (no funders, no success-fee invoices,

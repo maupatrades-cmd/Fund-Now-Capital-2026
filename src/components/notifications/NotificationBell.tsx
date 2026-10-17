@@ -17,7 +17,8 @@ import {
   useNotificationsRealtime,
 } from "@/hooks/useNotifications";
 
-export function NotificationBell() {
+// viewAllHref: null hides the "View all" link (the full list page is owner-only).
+export function NotificationBell({ viewAllHref = "/notifications" }: { viewAllHref?: string | null } = {}) {
   const session = useSession();
   const userId = session?.user?.id;
   useNotificationsRealtime(userId);
@@ -118,15 +119,17 @@ export function NotificationBell() {
               )}
             </div>
 
-            <div className="border-t border-border px-4 py-2 text-center">
-              <Link
-                to="/notifications"
-                onClick={() => setOpen(false)}
-                className="text-xs font-medium text-brand-teal hover:underline"
-              >
-                View all notifications
-              </Link>
-            </div>
+            {viewAllHref ? (
+              <div className="border-t border-border px-4 py-2 text-center">
+                <Link
+                  to={viewAllHref}
+                  onClick={() => setOpen(false)}
+                  className="text-xs font-medium text-brand-teal hover:underline"
+                >
+                  View all notifications
+                </Link>
+              </div>
+            ) : null}
           </div>
         </>
       )}

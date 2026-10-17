@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Field, SAFE_TEXT_NOTE, card, errorText, primaryButton, selectClass } from "@/components/staff/StaffShell";
 import {
-  ANSWER_KINDS, ASKER_TYPES, useAnswerDesk, useLogAnswerItem, useResolveAnswerItem, useStaffRole, type AnswerItem,
+  ANSWER_KINDS, ASKER_TYPES, isStaffManager, useAnswerDesk, useLogAnswerItem, useResolveAnswerItem, useStaffRole, type AnswerItem,
 } from "@/hooks/useStaffDesk";
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", dateStyle: "medium", timeStyle: "short" });
@@ -22,7 +22,7 @@ const left = (m: number | null) => {
 export default function StaffAnswerDeskPage() {
   const { data: role, isLoading } = useStaffRole();
   const [showAnswered, setShowAnswered] = useState(false);
-  const allowed = role === "coordinator" || role === "owner";
+  const allowed = isStaffManager(role);
   const list = useAnswerDesk(showAnswered, allowed);
   const log = useLogAnswerItem();
   const resolve = useResolveAnswerItem();

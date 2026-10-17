@@ -4,7 +4,8 @@ import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
-import { useStaffRole } from "@/hooks/useStaffDesk";
+import { isStaffManager, useStaffRole } from "@/hooks/useStaffDesk";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 type Item = { to: string; label: string; icon: typeof PhoneCall; end: boolean; managerOnly?: boolean };
 
@@ -22,8 +23,8 @@ const navigation: Item[] = [
 export function StaffShell({ children }: { children: ReactNode }) {
   const session = useSession();
   const { data: role } = useStaffRole();
-  const items = navigation.filter((i) => !i.managerOnly || role === "coordinator" || role === "owner");
-  const roleLabel = role === "coordinator" ? "Sales Coordinator" : role === "switchboard" ? "Switchboard" : "Staff";
+  const items = navigation.filter((i) => !i.managerOnly || isStaffManager(role));
+  const roleLabel = role === "administrator" ? "Administrator" : role === "coordinator" ? "Sales Coordinator" : role === "switchboard" ? "Switchboard" : "Staff";
 
   return (
     <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[250px_minmax(0,1fr)]">
@@ -64,10 +65,11 @@ export function StaffShell({ children }: { children: ReactNode }) {
               <p className="text-sm font-bold text-brand-navy">{roleLabel} workspace</p>
               <p className="max-w-56 truncate text-xs text-muted-foreground">{session?.user.email ?? ""}</p>
             </div>
+            <div className="ml-auto"><NotificationBell viewAllHref={null} /></div>
             <button
               type="button"
               onClick={() => void signOutAndRedirect()}
-              className="ml-auto inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold text-brand-navy hover:bg-slate-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold text-brand-navy hover:bg-slate-50"
             >
               <LogOut className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Sign out</span>

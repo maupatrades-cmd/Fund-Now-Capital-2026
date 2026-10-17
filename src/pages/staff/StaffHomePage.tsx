@@ -4,7 +4,7 @@ import { Link, Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import { QualifyingAndKpis } from "@/components/staff/QualifyingAndKpis";
 import { card, errorText } from "@/components/staff/StaffShell";
-import { useCompleteDocumentChaser, useCoordinatorLanding, useDocumentChasers, useStaffRole } from "@/hooks/useStaffDesk";
+import { isStaffManager, useCompleteDocumentChaser, useCoordinatorLanding, useDocumentChasers, useStaffRole } from "@/hooks/useStaffDesk";
 
 const STATUS_ORDER = [["new", "New"], ["documents_incomplete", "Documents incomplete"], ["complete", "Complete"], ["with_founder", "With Founder"], ["verified", "Verified"]] as const;
 const DECISION_LABEL: Record<string, string> = {
@@ -25,13 +25,13 @@ function Tile({ label, value, to, alert }: { label: string; value: number; to?: 
 // Coordinator landing page: where files stand and what needs attention first.
 export default function StaffHomePage() {
   const { data: role, isLoading } = useStaffRole();
-  const allowed = role === "coordinator" || role === "owner";
+  const allowed = isStaffManager(role);
   const landing = useCoordinatorLanding(allowed);
   const chasers = useDocumentChasers(allowed);
   const done = useCompleteDocumentChaser();
   const [note, setNote] = useState<Record<string, string>>({});
   if (isLoading) return null;
-  if (role !== "coordinator" && role !== "owner") return <Navigate to="/staff" replace />;
+  if (!isStaffManager(role)) return <Navigate to="/staff" replace />;
   const d = landing.data;
 
   return (
@@ -113,9 +113,9 @@ export default function StaffHomePage() {
   );
 }
 
-// /staff opens on the landing page for the Coordinator and on the call log for everyone else.
+// /staff opens on the landing page for the Coordinator and the Administrator, and on the call log for everyone else.
 export function StaffIndex({ callLog }: { callLog: ReactElement }) {
   const { data: role, isLoading } = useStaffRole();
   if (isLoading) return null;
-  return role === "coordinator" ? <Navigate to="/staff/home" replace /> : callLog;
+  return role === "coordinator" || role === "administrator" ? <Navigate to="/staff/home" replace /> : callLog;
 }

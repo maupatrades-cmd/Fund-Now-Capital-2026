@@ -74,6 +74,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   { value: "FUNDER_RESPONSE_RECEIVED", label: "Funder response received" },
   { value: "CLIENT_MESSAGE_RECEIVED", label: "Client message received" },
   { value: "FOLLOW_UP_DUE", label: "Follow-up due" },
+  { value: "DIARY_BOOKING_CHANGED", label: "Diary booking changed" },
   { value: "BADGE_EARNED", label: "Badge earned" },
   { value: "MONTHLY_TARGET_MILESTONE", label: "Monthly target milestone" },
   { value: "TIER_REVIEW_UPCOMING", label: "Tier review upcoming" },
@@ -150,6 +151,7 @@ const EVENT_ICON: Record<string, LucideIcon> = {
   // Engagement / ops
   CLIENT_MESSAGE_RECEIVED: MessageSquare,
   FOLLOW_UP_DUE: Clock,
+  DIARY_BOOKING_CHANGED: CalendarClock,
   BADGE_EARNED: Award,
   MONTHLY_TARGET_MILESTONE: Target,
   TIER_REVIEW_UPCOMING: TrendingUp,

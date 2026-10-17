@@ -6,7 +6,13 @@ import { supabase } from "@/lib/supabase";
 // hooks only shape requests and responses. Money, bank, ID contents, funder
 // identity and stored documents are not reachable from here by design.
 
-export type StaffRole = "owner" | "coordinator" | "switchboard";
+export type StaffRole = "owner" | "administrator" | "coordinator" | "switchboard";
+
+// The Administrator (Second-in-Charge) carries the Coordinator's authority (the database enforces it in
+// intake_require_actor); screens that were Coordinator + Owner open for the Administrator too.
+export const isStaffManager = (role: StaffRole | null | undefined) =>
+  role === "owner" || role === "administrator" || role === "coordinator";
+export const canDecideTimeRequests = (role: StaffRole | null | undefined) => role === "owner" || role === "administrator";
 
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args);
@@ -332,6 +338,22 @@ export function useRescheduleBooking() {
   });
 }
 
+// Meeting notes on the Founder's bookings: the Founder and the Administrator only (append-only).
+export type MeetingNote = { id: string; author_name: string | null; note: string; created_at: string };
+export function useMeetingNotes(eventId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["meeting-notes", eventId], enabled,
+    queryFn: () => rpc<MeetingNote[]>("staff_meeting_notes", { p_event_id: eventId }),
+  });
+}
+export function useAddMeetingNote(eventId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (note: string) => rpc<string>("staff_add_meeting_note", { p_event_id: eventId, p_note: note }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["meeting-notes", eventId] }); },
+  });
+}
+
 export function useCancelBooking() {
   const qc = useQueryClient();
   return useMutation({
@@ -469,6 +491,13 @@ export type TimeRequest = {
   id: string; category: string; starts_at: string; ends_at: string; reason: string; status: "pending" | "accepted" | "declined";
   owner_note: string | null; requester_name: string; created_at: string; decided_at: string | null;
 };
+// The Founder's diary for the request form: any enabled staff member may ask, grant or not.
+export function useFounderCalendar(enabled: boolean) {
+  return useQuery({
+    queryKey: ["staff-founder-calendar"], enabled,
+    queryFn: () => rpc<{ calendar_owner_id: string; calendar_owner_name: string }[]>("staff_founder_calendar"),
+  });
+}
 export function useTimeRequests(enabled: boolean) {
   return useQuery({ queryKey: ["staff-time-requests"], enabled, queryFn: () => rpc<TimeRequest[]>("staff_time_requests", { p_status: null }) });
 }
