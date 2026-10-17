@@ -9,6 +9,36 @@ labelled “Estimate—subject to Owner approval.” They cannot see other parti
 splits or FNC margins. Switchboard and Sales Coordinator see no commission figures.
 Only the Owner controls final amounts, approval, overrides and payouts.
 
+## Owner manual-entry screen — 17 October
+
+The Owner's Deal Detail now includes an optional manual-allocation panel beside
+the existing automatic calculator. Open a deal and choose "Enter commission
+manually", state the total to allocate, and save a draft for each beneficiary.
+Agent/partner profiles, Team Leaders, organisations and named external payees
+use the existing server-supported beneficiary kinds. The optional percentage
+records the Owner's basis; it does not calculate or replace the entered amount.
+
+Approval is explicit and requires the server's reconciliation, zero open flags
+and at least one draft. Drafts can be edited with a reason or voided; corrections
+to approved/paid rows use append-only adjustments. Review flags can be raised
+and resolved. Original amounts and adjustment history remain visible.
+
+The panel uses existing live Owner-only RPCs and RLS-protected reads. No new
+migration or production money mutation is required to deploy this UI. Cache keys
+include the authenticated user and deal, and mutations recheck session identity.
+Decimal strings retain exact cents. Requests are not automatically retried;
+an unconfirmed network result closes the editor and requires checking refreshed
+history before another attempt.
+
+Audit fixes: preserve each edited entry's currency, protect rapid repeat clicks,
+and paginate past server row caps. Six input/history tests and the existing
+Owner-commission/payment-route PostgreSQL regressions passed. Authenticated
+browser acceptance is still outstanding.
+
+This panel does not record an EFT, create an invoice or replace automatic
+commission rows. A shared authoritative invoice/settlement workflow and external
+own-estimate-only projections remain separate work. R100 remains on hold.
+
 ## Delivery status
 
 Path-A calculation, signing identity binding and application write protection
