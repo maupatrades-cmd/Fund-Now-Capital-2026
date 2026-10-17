@@ -65,7 +65,7 @@ export function StaffShell({ children }: { children: ReactNode }) {
               <p className="text-sm font-bold text-brand-navy">{roleLabel} workspace</p>
               <p className="max-w-56 truncate text-xs text-muted-foreground">{session?.user.email ?? ""}</p>
             </div>
-            <div className="ml-auto"><NotificationBell /></div>
+            <div className="ml-auto"><NotificationBell viewAllHref={null} /></div>
             <button
               type="button"
               onClick={() => void signOutAndRedirect()}

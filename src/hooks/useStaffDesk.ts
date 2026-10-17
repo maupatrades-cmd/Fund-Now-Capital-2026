@@ -491,6 +491,13 @@ export type TimeRequest = {
   id: string; category: string; starts_at: string; ends_at: string; reason: string; status: "pending" | "accepted" | "declined";
   owner_note: string | null; requester_name: string; created_at: string; decided_at: string | null;
 };
+// The Founder's diary for the request form: any enabled staff member may ask, grant or not.
+export function useFounderCalendar(enabled: boolean) {
+  return useQuery({
+    queryKey: ["staff-founder-calendar"], enabled,
+    queryFn: () => rpc<{ calendar_owner_id: string; calendar_owner_name: string }[]>("staff_founder_calendar"),
+  });
+}
 export function useTimeRequests(enabled: boolean) {
   return useQuery({ queryKey: ["staff-time-requests"], enabled, queryFn: () => rpc<TimeRequest[]>("staff_time_requests", { p_status: null }) });
 }

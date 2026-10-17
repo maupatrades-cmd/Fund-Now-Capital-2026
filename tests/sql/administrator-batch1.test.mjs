@@ -13,7 +13,7 @@ const { btree_gist } = await import(process.env.FNC_PGLITE_MODULE
   : '@electric-sql/pglite/contrib/btree_gist');
 
 const id = (n) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
-const U = { owner: id(1), coordinator: id(2), switchboard: id(3), admin: id(4), partner: id(5), adminOff: id(6) };
+const U = { owner: id(1), coordinator: id(2), switchboard: id(3), admin: id(4), partner: id(5), adminOff: id(6), sb2: id(7) };
 const mig = async (name) => readFile(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8');
 
 test('Administrator role, booking windows, approvals, notices and meeting notes are enforced by the database', async () => {
@@ -42,7 +42,7 @@ test('Administrator role, booking windows, approvals, notices and meeting notes 
       'create function public.set_updated_at() returns trigger language plpgsql as $$ begin new.updated_at = now(); return new; end $$;',
       'create function public.current_sast_date() returns date language sql stable as $$ select (now() at time zone \'Africa/Johannesburg\')::date $$;',
       "create table public.referral_partners(id uuid primary key default gen_random_uuid(), name text not null unique, contact_email text, contact_phone text, is_active boolean not null default true, notes text, created_at timestamptz default now(), updated_at timestamptz default now());",
-      'create table public.profiles(id uuid primary key, email text, full_name text, role public.user_role not null default \'partner\', referral_partner_id uuid, sourced_via_partner_id uuid, is_active boolean not null default true);',
+      'create table public.profiles(id uuid primary key, email text, full_name text, role public.user_role not null default \'partner\', referral_partner_id uuid, sourced_via_partner_id uuid, is_active boolean not null default true, created_at timestamptz not null default now());',
       "create function public.is_owner() returns boolean language sql stable security definer set search_path='' as $$ select coalesce((select role = 'owner' from public.profiles where id = auth.uid()), false) $$;",
       'create table public.funding_product_catalog(code text primary key, display_name text not null, is_active boolean not null default true);',
       'create table public.document_requirement_rules(id uuid primary key default gen_random_uuid(), rule_scope text, product_code text, document_type public.document_type, requirement text, is_active boolean default true);',
@@ -67,6 +67,7 @@ test('Administrator role, booking windows, approvals, notices and meeting notes 
       profile(U.owner, 'Founder', 'owner'), profile(U.coordinator, 'Coordinator', 'coordinator'),
       profile(U.switchboard, 'Switchboard', 'switchboard'), profile(U.admin, 'Administrator', 'administrator'),
       profile(U.partner, 'Partner', 'partner'), profile(U.adminOff, 'AdminOff', 'administrator'),
+      profile(U.sb2, 'Reception2', 'switchboard'),
     ].join('\n'));
     await db.exec('alter default privileges in schema public grant all on tables to authenticated;');
     await db.exec([
@@ -75,7 +76,7 @@ test('Administrator role, booking windows, approvals, notices and meeting notes 
       "create table public.crm_bookings(id uuid primary key default gen_random_uuid(), slot_id uuid not null references public.owner_availability_slots(id), status text not null default 'requested');",
       "create table public.owner_calendar_events(id uuid primary key default gen_random_uuid(), owner_id uuid not null, title text not null, category text not null, starts_at timestamptz not null, ends_at timestamptz not null, visibility text not null default 'private', public_title text, private_notes text, lead_id uuid, booking_id uuid, status text not null default 'scheduled', created_by uuid not null, created_at timestamptz not null default now(), updated_at timestamptz not null default now(), check (ends_at > starts_at), check (visibility <> 'public' or public_title is not null));",
       "alter table public.owner_calendar_events add constraint owner_calendar_events_no_overlap exclude using gist (owner_id with =, tstzrange(starts_at, ends_at, '[)') with &&) where (status = 'scheduled');",
-      "create function public.calendar_is_consultation_window(s timestamptz, e timestamptz) returns boolean language sql immutable as $$ select (s at time zone 'Africa/Johannesburg')::time >= time '14:00' and (e at time zone 'Africa/Johannesburg')::time <= time '20:00' $$;",
+      "create function public.calendar_is_consultation_window(s timestamptz, e timestamptz) returns boolean language sql immutable as $$ select e > s $$;", // as live: 20260816214614 lifted the consultation hours
       'alter table public.owner_calendar_events enable row level security; alter table public.owner_availability_slots enable row level security; alter table public.crm_bookings enable row level security;',
     ].join('\n'));
     for (const f of ['20261007091000_staff_access_and_audit.sql', '20261007092000_organisation_team_structure.sql',
@@ -90,12 +91,12 @@ test('Administrator role, booking windows, approvals, notices and meeting notes 
       const d = new Date(); d.setUTCDate(d.getUTCDate() + daysAhead); d.setUTCHours(hour - 2, min, 0, 0); return d.toISOString();
     };
     const dayWith = (dow, from = 3) => { for (let o = from; o < from + 14; o++) if (new Date(sast(o, 12)).getUTCDay() === dow) return o; };
-    const TUE = dayWith(2); const WED = dayWith(3); const SAT = dayWith(6);
+    const TUE = dayWith(2); const WED = dayWith(3); const THU = dayWith(4); const SAT = dayWith(6);
     const founder = U.owner;
 
     // ---- Role and access --------------------------------------------------------------
     await as(U.owner);
-    for (const [who, ref] of [[U.coordinator, 'SC-01'], [U.switchboard, 'SA-01'], [U.admin, 'AD-01']]) {
+    for (const [who, ref] of [[U.coordinator, 'SC-01'], [U.switchboard, 'SA-01'], [U.admin, 'AD-01'], [U.sb2, 'SA-02']]) {
       await q('select public.owner_set_staff_access($1,true,$2)', [who, ref]);
     }
     for (const p of ['create', 'view_availability', 'change_own']) {
@@ -125,12 +126,17 @@ test('Administrator role, booking windows, approvals, notices and meeting notes 
     await rejects(() => create({ s: sast(TUE, 15), e: sast(TUE, 16) }), /booking window .* 08:30 to 14:00/);
     await rejects(() => create({ s: sast(TUE, 8, 0), e: sast(TUE, 8, 30) }), /08:30 to 14:00/);
     const adminConsult = await create({ cat: 'consultation', title: 'Client consultation', s: sast(TUE, 15), e: sast(TUE, 16) });
-    assert.equal(adminConsult.status, 'created', 'consultations use the clients\' 14:00-17:00 window');
+    assert.equal(adminConsult.status, 'created', 'consultations run to 17:00');
+    assert.equal((await create({ cat: 'consultation', title: 'Morning consultation', s: sast(THU, 10), e: sast(THU, 11) })).status, 'created',
+      'the owner allows morning consultations from the Administrator and the Coordinator');
+    await rejects(() => create({ cat: 'presentation', s: sast(THU, 12), e: sast(THU, 13) }), /14:00 to 17:00/);
     await as(U.coordinator);
     await create({ title: 'Coordinator call', s: sast(TUE, 11), e: sast(TUE, 12) });
     await rejects(() => create({ s: sast(TUE, 16, 30), e: sast(TUE, 17, 30) }), /08:30 to 14:00/);
     await as(U.switchboard);
     await create({ title: 'Early call', s: sast(WED, 8), e: sast(WED, 8, 45) });
+    assert.equal((await create({ cat: 'consultation', title: 'Reception lead consultation', s: sast(WED, 9, 30), e: sast(WED, 10, 15) })).status, 'created',
+      'Reception books a morning consultation for an outbound lead');
     await create({ title: 'Late call', s: sast(WED, 16), e: sast(WED, 17) });
     await rejects(() => create({ s: sast(WED, 17, 30), e: sast(WED, 18) }), /08:00 to 17:00/);
     await rejects(() => create({ s: sast(SAT, 10), e: sast(SAT, 11) }), /weekends/);
@@ -180,6 +186,8 @@ test('Administrator role, booking windows, approvals, notices and meeting notes 
     await rejects(() => req(sast(TUE, 18, 30), sast(TUE, 19, 30)), /08:00 and 19:00/);
     await rejects(() => req(sast(SAT, 10), sast(SAT, 11)), /weekends/);
     await rejects(() => req(sast(TUE, 17, 30), sast(TUE, 18), 'short'), /at least 10/);
+    await rejects(() => one("select public.staff_request_founder_time($1,'presentation',$2,$3,'Investor deck walkthrough') as id", [founder, sast(TUE, 11), sast(TUE, 12)]), /Presentations start from 14:00/);
+    const morningConsult = (await one("select public.staff_request_founder_time($1,'consultation',$2,$3,'Client only free this morning') as id", [founder, sast(THU, 8), sast(THU, 8, 25)])).id;
     await db.exec('reset role;');
     assert.equal((await one('select kind from public.calendar_time_requests where id=$1', [afterHours])).kind, 'after_hours');
     assert.equal((await one('select kind from public.calendar_time_requests where id=$1', [important])).kind, 'important');
@@ -187,7 +195,8 @@ test('Administrator role, booking windows, approvals, notices and meeting notes 
     await rejects(() => q('select public.owner_decide_time_request($1,true,null)', [afterHours]), /Founder or the Administrator/, '42501');
     assert.equal((await q('select * from public.staff_time_requests(null)')).length, 0, 'Switchboard only sees its own requests');
     await as(U.admin);
-    assert.equal((await q("select * from public.staff_time_requests('pending')")).length, 2, 'Administrator sees every request');
+    assert.equal((await q("select * from public.staff_time_requests('pending')")).length, 3, 'Administrator sees every request');
+    assert.ok((await one('select public.owner_decide_time_request($1,true,null) as e', [morningConsult])).e, 'a morning consultation request can be approved');
     const ev = (await one('select public.owner_decide_time_request($1,true,null) as e', [afterHours])).e;
     assert.ok(ev, 'Administrator approves and the time is booked');
     await db.exec('reset role;');
@@ -198,6 +207,21 @@ test('Administrator role, booking windows, approvals, notices and meeting notes 
     await as(U.owner);
     assert.ok((await one('select public.owner_decide_time_request($1,true,null) as e', [own])).e, 'the Founder decides the Administrator\'s own request');
     await q("select public.owner_decide_time_request($1,false,'Not this week, sorry')", [important]);
+
+    // Any enabled staff member may ask for Founder time without a grant; the Administrator decides
+    // requests on the Founder's diary only.
+    await as(U.sb2);
+    assert.equal((await q('select * from public.staff_founder_calendar()'))[0].calendar_owner_id, founder);
+    const noGrant = (await one("select public.staff_request_founder_time($1,'call',$2,$3,'Caller wants the Founder after five') as id", [founder, sast(THU, 17, 30), sast(THU, 18)])).id;
+    assert.ok(noGrant, 'Reception without a diary grant can still send a request');
+    await as(U.owner);
+    await q("select public.owner_set_calendar_grant($1,$2,'create')", [U.coordinator, U.sb2]);
+    await as(U.sb2);
+    const otherDiary = (await one("select public.staff_request_founder_time($1,'call',$2,$3,'Coordinator diary request test') as id", [U.coordinator, sast(THU, 17, 30), sast(THU, 18)])).id;
+    await as(U.admin);
+    await rejects(() => q('select public.owner_decide_time_request($1,true,null)', [otherDiary]), /Founder's diary only/, '42501');
+    await as(U.partner);
+    await rejects(() => q('select * from public.staff_founder_calendar()'), /permission/, '42501');
 
     // ---- Meeting notes --------------------------------------------------------------------------------
     await as(U.admin);

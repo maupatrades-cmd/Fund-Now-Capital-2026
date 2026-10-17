@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Field, SAFE_TEXT_NOTE, card, errorText, primaryButton, selectClass } from "@/components/staff/StaffShell";
 import {
-  canDecideTimeRequests, useDecideTimeRequest, useMyCalendarGrants, useRequestFounderTime, useStaffRole, useTimeRequests,
+  canDecideTimeRequests, useDecideTimeRequest, useFounderCalendar, useRequestFounderTime, useStaffRole, useTimeRequests,
 } from "@/hooks/useStaffDesk";
 
 const CATS = [["consultation", "Consultation"], ["submission", "Submission"], ["submission_update", "Submission update"], ["call", "Call"], ["presentation", "Presentation"], ["paperwork_review", "Paperwork review"]] as const;
@@ -11,23 +11,28 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-ZA", { timeZone: "
 // datetime-local has no zone; staff work in Johannesburg time (UTC+2, no DST).
 const toIso = (local: string) => new Date(`${local}:00+02:00`).toISOString();
 
-// Booking windows on the Founder's diary (owner, 17 Oct): Administrator and Coordinator 08:30-14:00,
-// Switchboard 08:00-17:00, clients and agents 14:00-17:00. Any other time up to 19:00 is an Important
-// or after-hours request with a reason; the Administrator or the Founder decides (never their own).
-const afterHours = (iso: string) => Number(new Date(iso).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", hour: "2-digit", hourCycle: "h23" })) >= 17;
+// Booking windows on the Founder's diary (owner, 17 Oct): Administrator and Coordinator 08:30-14:00
+// (consultations to 17:00), Switchboard 08:00-17:00, clients and agents 14:00-17:00, presentations from
+// 14:00. Any other time up to 19:00 is an Important or after-hours request with a reason; the
+// Administrator or the Founder decides (never their own).
+// Matches the database: after hours means ending strictly after 17:00.
+const afterHours = (iso: string) => {
+  const [h, m] = new Date(iso).toLocaleTimeString("en-ZA", { timeZone: "Africa/Johannesburg", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).split(":").map(Number);
+  return h * 60 + m > 17 * 60;
+};
 
 export default function TimeRequestsPanel() {
   const { data: role } = useStaffRole();
   const enabled = !!role;
   const decider = canDecideTimeRequests(role);
-  const grants = useMyCalendarGrants();
+  const founder = useFounderCalendar(enabled);
   const list = useTimeRequests(enabled);
   const request = useRequestFounderTime();
   const decide = useDecideTimeRequest();
   const [f, setF] = useState({ category: "consultation", start: "", end: "", reason: "" });
   const [notes, setNotes] = useState<Record<string, string>>({});
   if (!enabled) return null;
-  const owner = (grants.data ?? []).find((g) => g.permission === "create");
+  const owner = founder.data?.[0];
   const ready = !!owner && !!f.start && !!f.end && f.reason.trim().length >= 10;
 
   return (
@@ -42,7 +47,7 @@ export default function TimeRequestsPanel() {
           });
         }}>
           <p className="text-xs text-muted-foreground">
-            Use this for a time outside your booking window (weekdays, up to 19:00). After 17:00 it is an after-hours request.
+            Use this for a time outside your booking window (weekdays, up to 19:00; presentations from 14:00). After 17:00 it is an after-hours request.
             The Administrator or the Founder approves it. {SAFE_TEXT_NOTE}
           </p>
           <div className="grid gap-3 sm:grid-cols-3">

@@ -13,10 +13,12 @@
 -- adds one.
 --
 -- Booking windows on the Founder's diary (weekdays, Africa/Johannesburg; holidays closed):
---   Administrator, Sales Coordinator  08:30-14:00 (consultations and presentations: 14:00-17:00, the
---                                     window of the clients and agents they are booked for)
---   Switchboard Assistant             08:00-17:00
+--   Administrator, Sales Coordinator  08:30-14:00 (consultations 08:30-17:00: the owner allows
+--                                     morning consultations from the Sales Coordinator)
+--   Switchboard Assistant (Reception) 08:00-17:00, consultations included (outbound leads that
+--                                     came in through Reception and need attending to)
 --   Anyone else                       14:00-17:00
+--   Presentations, for everyone       14:00-17:00 (the presentation rule allows 14:00-20:00)
 --   Founder                           any time
 -- Outside the window, up to 19:00: an Important (inside the day) or after-hours (17:00-19:00) request
 -- with a reason, approved by the Administrator or the Founder.
@@ -44,7 +46,10 @@ $$;
 
 -- The Administrator carries the Coordinator's authority: a check that admits 'coordinator' admits the
 -- Administrator too (and answers 'coordinator' so existing Coordinator branches apply), unless the
--- function names 'administrator' itself. The audit trail still records 'administrator' (staff_actor_role).
+-- function names 'administrator' itself. staff_audit_write and the calendar records keep the real role
+-- (staff_actor_role). Known gap, fixed in a later batch: functions that copy the returned role into their
+-- own history columns (document receipts and flags, call logs, handovers, staff tasks) record
+-- 'coordinator' for work an Administrator does there.
 create or replace function public.intake_require_actor(p_allowed text[])
 returns text
 language plpgsql
@@ -158,8 +163,9 @@ create or replace function public.calendar_booking_window(p_role text, p_categor
 returns table (win_start time, win_end time)
 language sql immutable set search_path = '' as $$
   select case
+           when p_category = 'presentation' then time '14:00'
            when p_role = 'switchboard' then time '08:00'
-           when p_role in ('administrator', 'coordinator') and p_category not in ('consultation', 'presentation') then time '08:30'
+           when p_role in ('administrator', 'coordinator') then time '08:30'
            else time '14:00' end,
          case
            when p_role in ('administrator', 'coordinator') and p_category not in ('consultation', 'presentation') then time '14:00'
@@ -384,7 +390,15 @@ declare
   v_s timestamp := p_starts_at at time zone 'Africa/Johannesburg';
   v_e timestamp := p_ends_at at time zone 'Africa/Johannesburg';
 begin
-  perform public.calendar_require_permission(p_calendar_owner, 'create');
+  -- Any enabled staff member may ask for time on the Founder's diary, grant or not; other diaries still
+  -- need a booking grant.
+  if public.calendar_is_founder(p_calendar_owner) then
+    if public.staff_role_of() is null then
+      raise exception 'Only enabled staff can request time on the Founder''s diary' using errcode = '42501';
+    end if;
+  else
+    perform public.calendar_require_permission(p_calendar_owner, 'create');
+  end if;
   if p_category not in ('consultation', 'submission', 'submission_update', 'call', 'presentation', 'paperwork_review') then
     raise exception 'Unsupported booking category';
   end if;
@@ -398,6 +412,10 @@ begin
   if extract(isodow from v_s) > 5 then raise exception 'Bookings are not taken on weekends'; end if;
   if exists (select 1 from public.business_holidays h where h.holiday_date = v_s::date) then
     raise exception 'That day is a public holiday';
+  end if;
+  -- Presentations are only ever held from 14:00, so a morning one could never be approved.
+  if p_category = 'presentation' and v_s::time < time '14:00' then
+    raise exception 'Presentations start from 14:00. Choose a time between 14:00 and 19:00';
   end if;
   if length(btrim(coalesce(p_reason, ''))) < 10 or not public.staff_text_is_safe(p_reason) then
     raise exception 'Give a reason of at least 10 characters, without ID or account numbers';
@@ -413,6 +431,22 @@ begin
   return v_id;
 end;
 $$;
+
+-- The Founder's diary, for the request form (no grant needed).
+create or replace function public.staff_founder_calendar()
+returns table (calendar_owner_id uuid, calendar_owner_name text)
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  if not (public.is_owner() or public.staff_role_of() is not null) then
+    raise exception 'You do not have permission for this action' using errcode = '42501';
+  end if;
+  return query
+    select p.id, p.full_name from public.profiles p
+     where p.role::text = 'owner' and p.is_active order by p.created_at limit 1;
+end;
+$$;
+revoke all on function public.staff_founder_calendar() from public, anon;
+grant execute on function public.staff_founder_calendar() to authenticated;
 
 -- Requesters see their own requests; the Founder and the Administrator see all of them.
 create or replace function public.staff_time_requests(p_status text default null)
@@ -442,6 +476,10 @@ begin
   end if;
   select * into r from public.calendar_time_requests where id = p_request_id for update;
   if not found or r.status <> 'pending' then raise exception 'That request is not waiting'; end if;
+  -- The Administrator's authority covers the Founder's diary only.
+  if not public.is_owner() and not public.calendar_is_founder(r.calendar_owner_id) then
+    raise exception 'The Administrator decides requests on the Founder''s diary only' using errcode = '42501';
+  end if;
   if r.requester_id = v_uid then raise exception 'You cannot decide your own request' using errcode = '42501'; end if;
   if p_note is not null and not public.staff_text_is_safe(p_note) then raise exception 'The note looks like it holds an ID or account number'; end if;
   if not p_accept and length(btrim(coalesce(p_note, ''))) < 10 then raise exception 'Say why (at least 10 characters)'; end if;
