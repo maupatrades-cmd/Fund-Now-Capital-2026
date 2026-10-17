@@ -44,7 +44,10 @@ The merged contact updates were deployed on 14 October: generate-invoice-pdf v7
 and send-notification-email v16. Unauthenticated POST probes returned 401 for
 both; no invoice was generated or email sent by these probes.
 
-Staff PRs #283–295 remain with Claude. Review found catalogue/Complete-gate
-mismatch, premature funder-submission wording, a reschedule open-slot bypass,
-an incorrect send-back KPI value and incomplete included-list version pinning.
-Resolve those and recheck the current heads before merging the staff stack.
+Claude consolidated the staff stack in PR297, merged to main at
+3c5c28f7b919378a85852d69f5df663b193fd2fa. Vercel reports that commit READY in
+production. This signing release merges that baseline and preserves its staff
+routes. Claude's changes address funder-submission wording, the reschedule
+open-slot check and the send-back KPI. The catalogue/Complete-gate cut-over and
+included-list version pinning remain with Claude. Staff browser acceptance is
+still outstanding; a READY deployment alone does not establish launch readiness.
