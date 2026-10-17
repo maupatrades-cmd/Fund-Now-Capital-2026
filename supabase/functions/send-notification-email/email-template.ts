@@ -252,6 +252,26 @@ function variantContent(m: EmailModel, variant: EmailVariant): VariantContent {
           "Please keep this email for your records. If anything changes, contact Fund Now Capital so we can help you reschedule.",
         ],
       };
+    // Team diaries (Batch 1b): the Edge Function composes one line per paragraph (who, reason, when,
+    // contact) into bodyText; nothing here names a funder, rate or fee.
+    case "TEAM_APPOINTMENT_BOOKED":
+    case "TEAM_APPOINTMENT_MOVED":
+    case "TEAM_APPOINTMENT_CANCELLED": {
+      const lines = fallback.split("\n").map((l) => l.trim()).filter(Boolean);
+      const moved = m.eventType === "TEAM_APPOINTMENT_MOVED";
+      const cancelled = m.eventType === "TEAM_APPOINTMENT_CANCELLED";
+      return {
+        subject: cancelled
+          ? "Your Fund Now Capital meeting has been cancelled"
+          : moved
+            ? "Your Fund Now Capital meeting has a new time"
+            : "Your Fund Now Capital meeting is booked",
+        h1: cancelled ? "Your meeting is cancelled" : moved ? "Your meeting has moved" : "Your meeting is booked",
+        ctaLabel: "Visit Fund Now Capital",
+        category: "appointment",
+        paras: lines.length ? lines : ["Your meeting with Fund Now Capital has been updated."],
+      };
+    }
     case "CLIENT_MAGIC_LINK":
       return {
         subject: "Your secure Fund Now Capital sign-in link",

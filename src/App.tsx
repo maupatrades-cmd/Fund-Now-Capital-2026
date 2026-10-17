@@ -18,6 +18,8 @@ import StaffCallLogPage from "@/pages/staff/StaffCallLogPage";
 import StaffNewLeadPage from "@/pages/staff/StaffNewLeadPage";
 import StaffDocumentTrackerPage from "@/pages/staff/StaffDocumentTrackerPage";
 import StaffDiaryPage from "@/pages/staff/StaffDiaryPage";
+import StaffTeamDiaryPage from "./pages/staff/StaffTeamDiaryPage";
+import MyAppointmentsPage from "./pages/portal/MyAppointmentsPage";
 import StaffTasksPage from "@/pages/staff/StaffTasksPage";
 import StaffOutboundPage from "@/pages/staff/StaffOutboundPage";
 import StaffQueuePage from "@/pages/staff/StaffQueuePage";
@@ -209,6 +211,7 @@ function AppRoutes() {
         <Route path="network" element={<PartnerNetworkPage surface="partner" />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="calendar" element={<PortalBookingPage portal="partner" />} />
+        <Route path="appointments" element={<MyAppointmentsPage portal="partner" />} />
         <Route path="rewards" element={<PortalShell portal="partner"><QualifiedRewardsPage /></PortalShell>} />
         <Route path="statements" element={<PartnerStatementsPage />} />
         <Route path="invoices" element={<PartnerInvoicesPage />} />
@@ -237,6 +240,7 @@ function AppRoutes() {
         <Route path="new-lead" element={<StaffNewLeadPage />} />
         <Route path="documents" element={<StaffDocumentTrackerPage />} />
         <Route path="diary" element={<StaffDiaryPage />} />
+        <Route path="team-diary" element={<StaffTeamDiaryPage />} />
         <Route path="tasks" element={<StaffTasksPage />} />
         <Route path="outbound" element={<StaffOutboundPage />} />
         <Route path="queue" element={<StaffQueuePage />} />
@@ -252,6 +256,7 @@ function AppRoutes() {
         <Route path="tasks" element={<LeadReferrerTasksPage />} />
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="calendar" element={<LeadReferrerBookingPage />} />
+        <Route path="appointments" element={<MyAppointmentsPage portal="lead_referrer" />} />
         <Route path="rewards" element={<LeadReferrerShell><QualifiedRewardsPage /></LeadReferrerShell>} />
         <Route path="*" element={<Navigate to="/lead-referrer" replace />} />
       </Route>

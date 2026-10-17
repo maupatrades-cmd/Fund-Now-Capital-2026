@@ -72,7 +72,7 @@ jobs:
         run: node --test tests/signing-return-path.test.mjs
 
       - name: Verify Owner commission input controls
-        run: node --test tests/owner-commission-input.test.mjs tests/manual-payout-reads.test.mjs tests/manual-payment-command.test.mjs
+        run: node --test tests/owner-commission-input.test.mjs tests/manual-payout-reads.test.mjs tests/manual-payment-command.test.mjs tests/commission-notice-command.test.mjs
 
       - name: Execute isolated PostgreSQL payroll regression
         run: npm run test:payroll-sql
