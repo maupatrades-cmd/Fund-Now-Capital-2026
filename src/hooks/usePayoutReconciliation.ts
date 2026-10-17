@@ -1,5 +1,8 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSession } from "@/lib/useSession";
+import { useProfileRole } from "@/hooks/useProfileRole";
+import { collectCommissionRows } from "@/lib/ownerCommission";
 import { supabase } from "@/lib/supabase";
 import {
   buildPayoutRows,
@@ -17,21 +20,15 @@ import {
 // long-lived ledger or invoice table must never silently truncate, or the
 // reconciliation would under-count the very money it exists to reconcile.
 
-const RECON_PAGE_SIZE = 1000;
-
-// Generic explicit-range pager. Loops until a short page signals the end.
+// Reuse the tested pager: a server cap must not truncate financial history.
 async function fetchAllPaged<Row>(
   buildPage: (from: number, to: number) => PromiseLike<{ data: Row[] | null; error: unknown }>,
 ): Promise<Row[]> {
-  const all: Row[] = [];
-  for (let from = 0; ; from += RECON_PAGE_SIZE) {
-    const { data, error } = await buildPage(from, from + RECON_PAGE_SIZE - 1);
+  return collectCommissionRows<Row>(async (from, to) => {
+    const { data, error } = await buildPage(from, to);
     if (error) throw error;
-    const batch = data ?? [];
-    all.push(...batch);
-    if (batch.length < RECON_PAGE_SIZE) break;
-  }
-  return all;
+    return { data, error: null };
+  });
 }
 
 const COMMISSION_COLUMNS =
@@ -100,17 +97,36 @@ export type PayoutReconciliation = {
 };
 
 export function usePayoutReconciliation(): PayoutReconciliation {
+  const uid = useSession()?.user.id;
+  const role = useProfileRole();
+  const enabled = !!uid && role.data === "owner";
+  const privateRead = async <T,>(read: () => Promise<T>): Promise<T> => {
+    const check = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error || !uid || data.user?.id !== uid) throw new Error("Your session changed. Reopen Payouts.");
+    };
+    await check();
+    const data = await read();
+    await check();
+    return data;
+  };
   const commissions = useQuery({
-    queryKey: ["payout-reconciliation", "commissions"],
-    queryFn: fetchAllCommissions,
+    queryKey: ["payout-reconciliation", uid, "commissions"],
+    enabled,
+    gcTime: 0,
+    queryFn: () => privateRead(fetchAllCommissions),
   });
   const partnerInvoices = useQuery({
-    queryKey: ["payout-reconciliation", "partner-invoices"],
-    queryFn: fetchAllPartnerInvoices,
+    queryKey: ["payout-reconciliation", uid, "partner-invoices"],
+    enabled,
+    gcTime: 0,
+    queryFn: () => privateRead(fetchAllPartnerInvoices),
   });
   const contractorInvoices = useQuery({
-    queryKey: ["payout-reconciliation", "contractor-invoices"],
-    queryFn: fetchAllContractorInvoices,
+    queryKey: ["payout-reconciliation", uid, "contractor-invoices"],
+    enabled,
+    gcTime: 0,
+    queryFn: () => privateRead(fetchAllContractorInvoices),
   });
 
   const partnerInvoiceRows = useMemo<ReconInvoice[]>(

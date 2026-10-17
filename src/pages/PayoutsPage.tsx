@@ -3,6 +3,7 @@ import { formatZAR } from "@/lib/format";
 import { EmptyState } from "@/components/ui/empty-state";
 import { usePayoutReconciliation } from "@/hooks/usePayoutReconciliation";
 import type { PayoutRow, PayoutTotals, PayeeType } from "@/lib/payoutReconciliation";
+import { ManualPayoutQueue } from "@/components/deals/ManualPayoutQueue";
 
 // Build 11 — Unified payout reconciliation queue. One owner view of what's owed
 // and where it sits, across referral partners AND contractors. Real names +
@@ -23,17 +24,18 @@ export default function PayoutsPage() {
       <div>
         <h1 className="text-2xl font-bold text-brand-navy">Payouts</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Everything you owe partners and contractors, and where each amount sits in the payout
-          pipeline.
+          Review your manual allocations and the automatic partner and contractor payout pipeline.
         </p>
       </div>
+
+      <ManualPayoutQueue />
 
       <div className="flex items-start gap-2 rounded-xl border border-brand-teal/30 bg-brand-teal/5 p-3 text-sm text-brand-navy">
         <Info className="mt-0.5 h-4 w-4 shrink-0" />
         <p>
-          <span className="font-medium">Payable</span> is ready to pay now.{" "}
+          Automatic commissions marked <span className="font-medium">Payable</span> have reached the payable ledger stage.{" "}
           <span className="font-medium">Awaiting approval / payment</span> track invoices through
-          their lifecycle. Due-date and overdue reminders arrive in a later build.
+          their lifecycle. Review invoice approval and payment evidence before settling.
         </p>
       </div>
 
