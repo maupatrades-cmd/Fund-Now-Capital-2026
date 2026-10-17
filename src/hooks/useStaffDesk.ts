@@ -124,17 +124,59 @@ export function useAcknowledgeHandover() {
 export type RouteTo = "switchboard" | "coordinator" | "owner";
 export type StaffTask = {
   id: string; title: string; notes: string | null; task_kind: string; priority: string; status: string;
-  due_at: string | null; route_to: RouteTo; assigned_name: string | null; lead_id: string | null;
+  due_at: string | null; route_to: RouteTo; assigned_to: string | null; assigned_name: string | null; lead_id: string | null;
   business_name: string | null; created_by_name: string; created_role: string; created_at: string; overdue: boolean;
+  // Administrator batch 2: a task given to a named person waits for their answer.
+  acceptance: "pending" | "accepted" | "declined" | null; assigned_by_name: string | null;
+  responded_at: string | null; decline_reason: string | null; given_by_me: boolean;
 };
 
+// Only the Founder and the Administrator give a task to a named person (the database enforces it).
+export const canAssignTasks = (role: StaffRole | null | undefined) => role === "owner" || role === "administrator";
+
 export function useStaffTasks(status: "open" | "done" | "cancelled" | null = "open") {
-  return useQuery({ queryKey: ["staff-tasks", status], queryFn: () => rpc<StaffTask[]>("staff_task_list", { p_status: status, p_limit: 100 }) });
+  return useQuery({ queryKey: ["staff-tasks", status], queryFn: () => rpc<StaffTask[]>("staff_task_board", { p_status: status, p_limit: 100 }) });
 }
 
 function invalidateTasks(qc: ReturnType<typeof useQueryClient>) {
   void qc.invalidateQueries({ queryKey: ["staff-tasks"] });
+  void qc.invalidateQueries({ queryKey: ["staff-pending-tasks"] });
   void qc.invalidateQueries({ queryKey: ["staff-diary"] });
+  void qc.invalidateQueries({ queryKey: ["staff-coordinator-landing"] });
+}
+
+export type PendingTask = {
+  id: string; title: string; notes: string | null; priority: string; due_at: string | null; overdue: boolean;
+  assigned_by_name: string | null; business_name: string | null;
+};
+export function useMyPendingTasks(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-pending-tasks"], enabled, queryFn: () => rpc<PendingTask[]>("staff_my_pending_tasks") });
+}
+export function useRespondTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { taskId: string; accept: boolean; reason: string }) =>
+      rpc<void>("staff_respond_task", { p_task_id: i.taskId, p_accept: i.accept, p_reason: i.reason || null }),
+    onSuccess: () => invalidateTasks(qc),
+  });
+}
+export function useCreateAssignedTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { title: string; notes: string; priority: string; dueAt: string | null; assignee: string; leadId?: string | null }) =>
+      rpc<string>("staff_create_assigned_task", {
+        p_title: i.title, p_notes: i.notes || null, p_priority: i.priority, p_due_at: i.dueAt, p_assignee: i.assignee, p_lead_id: i.leadId ?? null,
+      }),
+    onSuccess: () => invalidateTasks(qc),
+  });
+}
+export function useAssignTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { taskId: string; assignee: string; note: string }) =>
+      rpc<void>("staff_assign_task", { p_task_id: i.taskId, p_assignee: i.assignee, p_note: i.note || null }),
+    onSuccess: () => invalidateTasks(qc),
+  });
 }
 
 export function useCreateStaffTask() {
@@ -634,3 +676,52 @@ export type CoordinatorKpi = {
 export function useCoordinatorKpis(enabled: boolean) {
   return useQuery({ queryKey: ["staff-coordinator-kpis"], enabled, queryFn: () => rpc<{ days: number; kpis: CoordinatorKpi[] }>("staff_coordinator_kpis", { p_days: 30 }) });
 }
+
+// ---- Documents approved while the Director is away (Administrator batch 2) --------------------
+// An audited record and a notice to the Director only: it does not verify the file.
+export type AbsenceApproval = { id: string; approved_by_name: string; approved_role: string; away_note: string; created_at: string };
+export function useAbsenceApprovals(leadId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ["staff-absence-approvals", leadId], enabled: enabled && !!leadId,
+    queryFn: () => rpc<AbsenceApproval[]>("staff_absence_approvals", { p_lead_id: leadId }),
+  });
+}
+export function useApproveInAbsence(leadId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (note: string) => rpc<string>("staff_approve_documents_in_absence", { p_lead_id: leadId, p_away_note: note }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-absence-approvals", leadId] }); },
+  });
+}
+
+// ---- Outbound-lead routing (Administrator batch 2) ---------------------------------------------
+export type OutboundStatus = "with_coordinator" | "assigned" | "new_leads" | "with_administrator" | "with_director" | "director_received";
+export const OUTBOUND_STATUS_LABEL: Record<OutboundStatus, string> = {
+  with_coordinator: "With the Sales Coordinator", assigned: "Given to a team member", new_leads: "New Leads",
+  with_administrator: "With the Administrator", with_director: "With the Director", director_received: "Director has it",
+};
+export type OutboundRoute = {
+  id: string; lead_id: string; business_name: string; status: OutboundStatus; assigned_name: string | null;
+  started_by_name: string; created_at: string; updated_at: string;
+  history: { at: string; who: string; role: string; from: OutboundStatus | null; to: OutboundStatus; note: string | null }[];
+};
+export function useOutboundRoutes(openOnly: boolean) {
+  return useQuery({ queryKey: ["staff-outbound-routes", openOnly], queryFn: () => rpc<OutboundRoute[]>("staff_outbound_routes", { p_open_only: openOnly }) });
+}
+export function useOutboundTeamMembers(enabled: boolean) {
+  return useQuery({
+    queryKey: ["staff-outbound-team"], enabled, staleTime: 5 * 60_000,
+    queryFn: () => rpc<{ profile_id: string; full_name: string; member_role: string }[]>("staff_outbound_team_members"),
+  });
+}
+function useOutboundMutation<T>(fn: string, toArgs: (i: T) => Record<string, unknown>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: T) => rpc<unknown>(fn, toArgs(i)),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-outbound-routes"] }); },
+  });
+}
+export const useStartOutboundRoute = () => useOutboundMutation<{ leadId: string; note: string }>(
+  "staff_start_outbound_route", (i) => ({ p_lead_id: i.leadId, p_note: i.note || null }));
+export const useMoveOutboundRoute = () => useOutboundMutation<{ routeId: string; to: OutboundStatus; note: string; assignedProfile?: string | null }>(
+  "staff_move_outbound_route", (i) => ({ p_route_id: i.routeId, p_to: i.to, p_note: i.note || null, p_assigned_profile: i.assignedProfile ?? null }));

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
+import { AbsenceApprovalPanel } from "@/components/staff/AbsenceApprovalPanel";
 import { Field, card, errorText, primaryButton, selectClass } from "@/components/staff/StaffShell";
 import { type ChecklistRow, useDocumentChecklist, useIntakeQueue, useRecordReceipt } from "@/hooks/useStaffDesk";
 
@@ -103,6 +104,8 @@ export default function StaffDocumentTrackerPage() {
             <Field label="Note (optional)"><Input maxLength={120} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. March statement" /></Field>
             <div className="md:col-span-3"><button type="submit" disabled={record.isPending || !checklist.data?.length} className={primaryButton}>Record receipt</button></div>
           </form>
+
+          <AbsenceApprovalPanel leadId={leadId} workflowStatus={selected?.workflow_status} />
         </>
       ) : null}
     </>

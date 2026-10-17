@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { toast } from "sonner";
+import { PendingTasksPanel } from "@/components/staff/PendingTasksPanel";
 import { QualifyingAndKpis } from "@/components/staff/QualifyingAndKpis";
 import { card, errorText } from "@/components/staff/StaffShell";
 import { isStaffManager, useCompleteDocumentChaser, useCoordinatorLanding, useDocumentChasers, useStaffRole } from "@/hooks/useStaffDesk";
@@ -40,6 +41,7 @@ export default function StaffHomePage() {
         <h1 className="text-2xl font-bold text-brand-navy">Home</h1>
         <p className="text-sm text-muted-foreground">Where the files stand and what needs you first.</p>
       </div>
+      <PendingTasksPanel />
       {landing.error ? <p role="alert" className="text-sm text-red-600">{errorText(landing.error)}</p> : null}
       {d ? (
         <>
