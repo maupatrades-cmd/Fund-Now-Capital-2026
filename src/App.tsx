@@ -19,6 +19,7 @@ import StaffNewLeadPage from "@/pages/staff/StaffNewLeadPage";
 import StaffDocumentTrackerPage from "@/pages/staff/StaffDocumentTrackerPage";
 import StaffDiaryPage from "@/pages/staff/StaffDiaryPage";
 import StaffTasksPage from "@/pages/staff/StaffTasksPage";
+import StaffOutboundPage from "@/pages/staff/StaffOutboundPage";
 import StaffQueuePage from "@/pages/staff/StaffQueuePage";
 import StaffAnswerDeskPage from "@/pages/staff/StaffAnswerDeskPage";
 import StaffHomePage, { StaffIndex } from "@/pages/staff/StaffHomePage";
@@ -237,6 +238,7 @@ function AppRoutes() {
         <Route path="documents" element={<StaffDocumentTrackerPage />} />
         <Route path="diary" element={<StaffDiaryPage />} />
         <Route path="tasks" element={<StaffTasksPage />} />
+        <Route path="outbound" element={<StaffOutboundPage />} />
         <Route path="queue" element={<StaffQueuePage />} />
         <Route path="home" element={<StaffHomePage />} />
         <Route path="answers" element={<StaffAnswerDeskPage />} />

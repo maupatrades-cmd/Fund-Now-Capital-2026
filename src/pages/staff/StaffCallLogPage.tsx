@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
+import { PendingTasksPanel } from "@/components/staff/PendingTasksPanel";
 import { Field, SAFE_TEXT_NOTE, card, errorText, primaryButton, selectClass, textareaClass } from "@/components/staff/StaffShell";
 import {
   CALLER_KINDS, CALL_OUTCOMES, CALL_TOPICS, useAcknowledgeHandover, useCallTasks, useLogCall, useStaffCalls, useStaffHandovers, useWriteHandover,
@@ -40,6 +41,8 @@ export default function StaffCallLogPage() {
         <h1 className="text-2xl font-bold text-brand-navy">Call log</h1>
         <p className="text-sm text-muted-foreground">Log every call. Calls cannot be edited; log a correction if something was wrong.</p>
       </div>
+
+      <PendingTasksPanel />
 
       <form onSubmit={submit} className={`${card} grid gap-4 md:grid-cols-2`}>
         <Field label="Direction">
