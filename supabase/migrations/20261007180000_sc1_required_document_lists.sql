@@ -19,7 +19,9 @@ declare
   r record;
 begin
   select p.id into v_owner from public.profiles p where p.role::text = 'owner' order by p.created_at limit 1;
-  if v_owner is null then raise exception 'No owner profile found; cannot seed the draft rules'; end if;
+  -- Review fix (17 Oct): a fresh database (db reset, preview branch) has no owner yet, so skip the
+  -- draft seed instead of failing the replay. Live already ran this with an owner; behaviour there is unchanged.
+  if v_owner is null then raise notice 'No owner profile found; SC1 draft rules not seeded'; return; end if;
 
   for r in
     select * from (values

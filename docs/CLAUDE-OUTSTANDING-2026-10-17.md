@@ -9,16 +9,15 @@ and deployment. Coordinate before touching shared role helpers, audit functions,
 
 ## A. Launch blockers (people cannot load and work until these are done)
 
-1. **Merge the consolidated staff branch** `claude/zealous-lamport-89vd2j` (PRs #283–#295 + review fixes 2) into
-   main so the staff screens deploy. PR not opened yet — waiting on the owner.
-2. **Apply `20261017090000_staff_review_fixes_2.sql` live** after that merge (tested in rolled-back transactions only).
-3. **Catalogue cut-over (Codex findings 1 + 5).** The Complete gate still reads the old 5-product
-   `document_requirement_rules`; the owner's Confirm screen only confirms the new 24-type catalogue, so no file can
-   reach Complete. Needed: gate + checklist + receipts on catalogue codes, per-file pinned list versions
-   (including the included list), entity-type adjustments. **Waiting on owner choice:** add all 24 funding types
-   everywhere (client side too, tell Codex) or staff intake only.
-4. **`external_intake_safe_projection` not applied live** (drops a partner/agent row policy; the migration tool times
-   out on the destructive-statement confirmation). Owner to run it in the SQL editor or confirm a retry.
+1. ~~Merge the consolidated staff branch~~ — **done**: PR #297 merged 17 Oct.
+2. ~~Apply `staff_review_fixes_2` live~~ — **done** 17 Oct, verified.
+3. **Catalogue cut-over (Codex findings 1 + 5) + Qodo's six #297 findings** — built in PR #298, tested on the live schema
+   in rolled-back transactions. Owner chose all 24 funding types everywhere (client side too). After merge apply, in
+   order: `20261017100000_staff_review_fixes_3.sql`, `20261017110000_doc_catalogue_cutover.sql`. **Tell Codex:** 17 new
+   rows in `funding_product_catalog`, `funding_product_catalog.doc_list_code`, and `client_form_responses` product CHECK
+   replaced by an FK to the catalogue.
+4. **`external_intake_safe_projection` not applied live.** The Supabase tool hangs on any `DROP POLICY` / `DROP FUNCTION`
+   (it waits for a confirmation it never receives), so the owner runs that file in the SQL editor.
 
 ## B. Owner set-up after merge (owner actions, Claude guides)
 

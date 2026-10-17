@@ -50,8 +50,19 @@ export function useConfirmDocList() {
 export function useEditDocItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { list: string; doc: string; level: DocLevel | null }) =>
-      rpc<number>("owner_edit_doc_item", { p_list: v.list, p_doc: v.doc, p_level: v.level }),
+    mutationFn: (v: { list: string; doc: string; level: DocLevel | null; condition?: string | null }) =>
+      rpc<number>("owner_edit_doc_item", { p_list: v.list, p_doc: v.doc, p_level: v.level, p_condition: v.condition ?? null }),
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["doc-lists-overview"] }); void qc.invalidateQueries({ queryKey: ["doc-list-detail"] }); },
+  });
+}
+
+// Condition wording on a document an entity type adds or swaps in (entity rules are not versioned;
+// each change is kept in the audit trail).
+export function useEditEntityCondition() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { entity: string; doc: string; condition: string }) =>
+      rpc<void>("owner_edit_entity_doc_condition", { p_entity: v.entity, p_doc: v.doc, p_condition: v.condition }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["doc-list-detail"] }); },
   });
 }

@@ -220,8 +220,10 @@ export function useRegisterIntake() {
   });
 }
 
+// One document on the file's confirmed catalogue list, at the versions the file was pinned to.
 export type ChecklistRow = {
-  document_type: string; requirement: string; received: boolean; received_count: number;
+  doc_code: string; title: string; requirement: "required" | "conditional" | "optional" | "required_later";
+  condition_text: string | null; received: boolean; received_count: number;
   last_received_at: string | null; flagged_suspicious: boolean;
 };
 
@@ -236,10 +238,9 @@ export function useDocumentChecklist(leadId: string | null) {
 export function useRecordReceipt(leadId: string | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (i: { documentType: string; via: string; label: string }) =>
-      rpc<{ receipt_id: string }>("staff_record_document_receipt", {
-        p_lead_id: leadId, p_document_type: i.documentType, p_received_via: i.via,
-        p_file_label: i.label || null, p_original_filename: null, p_sha256: null,
+    mutationFn: (i: { docCode: string; via: string; label: string }) =>
+      rpc<{ receipt_id: string }>("staff_record_catalogue_receipt", {
+        p_lead_id: leadId, p_doc_code: i.docCode, p_received_via: i.via, p_file_label: i.label || null,
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["staff-doc-checklist", leadId] });
@@ -554,7 +555,8 @@ export function useCompleteDocumentChaser() {
 export type IntakeDetail = {
   lead_id: string; workflow_status: string; archived_at: string | null; archive_reason_code: string | null;
   assignee_name: string | null; missing_documents: string[]; open_review_flags: number;
-  receipts: { receipt_id: string; document_type: string; received_via: string; received_at: string; flagged_suspicious: boolean }[];
+  // document_type carries the catalogue title for catalogue receipts (doc_code set).
+  receipts: { receipt_id: string; document_type: string; doc_code: string | null; received_via: string; received_at: string; flagged_suspicious: boolean }[];
   history: { at: string; event: string; actor_role: string | null; actor_name: string | null; reason: string | null; to: string | null }[];
 };
 export function useIntakeDetail(leadId: string, enabled: boolean) {
