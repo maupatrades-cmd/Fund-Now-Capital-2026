@@ -167,7 +167,7 @@ export default function StaffTasksPage() {
                   <select className={`${selectClass} max-w-xs`} aria-label="Give this task to" value={reassignTo[t.id] ?? ""}
                     onChange={(e) => setReassignTo({ ...reassignTo, [t.id]: e.target.value })}>
                     <option value="">{t.acceptance === "declined" ? "Give to someone else..." : "Give to a person..."}</option>
-                    {staffPeople.filter((p) => p.profile_id !== t.assigned_to || t.acceptance === "declined").map((p) => (
+                    {staffPeople.filter((p) => p.profile_id !== t.assigned_to).map((p) => (
                       <option key={p.profile_id} value={p.profile_id}>{p.full_name} ({ROLE_NAME[p.staff_role]})</option>
                     ))}
                   </select>

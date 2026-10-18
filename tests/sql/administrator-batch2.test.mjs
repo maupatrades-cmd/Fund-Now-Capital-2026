@@ -95,6 +95,7 @@ test('Administrator batch 2: task assignment, absence approvals and outbound-lea
       "create or replace function public.intake_required_docs_missing(p_lead_id uuid) returns text[] language sql stable as $$ select case when exists (select 1 from public.test_missing_docs m where m.lead_id = p_lead_id) then array['bank_statement'] else '{}'::text[] end $$;",
     ].join('\n'));
     await db.exec(await mig('20261018121000_administrator_batch2.sql'));
+    await db.exec(await mig('20261018130000_administrator_batch2_review_fixes.sql'));
 
     await as(U.owner);
     for (const [who, ref] of [[U.coordinator, 'SC-01'], [U.switchboard, 'SA-01'], [U.admin, 'AD-01'], [U.sb2, 'SA-02']]) {
@@ -144,6 +145,14 @@ test('Administrator batch 2: task assignment, absence approvals and outbound-lea
     await as(U.coordinator);
     await rejects(() => q("select public.staff_respond_task($1,false,'busy')", [t2]), /at least 10/);
     await q("select public.staff_respond_task($1,false,'I am on leave on Friday afternoon')", [t2]);
+    // Review fix 6: a declined task leaves the decliner's board and authority.
+    assert.equal((await q('select * from public.staff_task_board()')).filter((t) => t.id === t2).length, 0, 'the decliner no longer has the task');
+    await rejects(() => q("select public.staff_close_task($1,'done',null)", [t2]), /Only the person this task was given to/, '42501');
+    await rejects(() => q("select public.staff_route_task($1,'switchboard','Passing it on')", [t2]), /only route/, '42501');
+    // Review fix 1: a colleague on the same desk cannot close a task given to someone else.
+    await as(U.sb2);
+    await rejects(() => q("select public.staff_close_task($1,'done',null)", [t1]), /Only the person this task was given to/, '42501');
+    await rejects(() => q("select public.staff_close_task($1,'cancelled',null)", [t1]), /Only whoever gave this task/, '42501');
     await db.exec('reset role;');
     assert.equal((await notices(U.admin, 'STAFF_TASK_DECLINED')).length, 1, 'the giver is told about the decline');
     await as(U.admin);
@@ -154,6 +163,12 @@ test('Administrator batch 2: task assignment, absence approvals and outbound-lea
     assert.equal(board[t2].given_by_me, true);
     await q("select public.staff_assign_task($1,$2,'Please take this one')", [t2, U.switchboard]);
     assert.equal((await q('select * from public.staff_task_board()')).find((t) => t.id === t2).acceptance, 'pending', 'a reassigned task waits for a new answer');
+    // Review fixes 4 and 5: a waiting task cannot be forwarded the old way, and it sorts first for its person.
+    await as(U.switchboard);
+    await rejects(() => q("select public.staff_route_task($1,'coordinator','Passing it on')", [t2]), /waiting for its person/);
+    assert.equal((await q('select * from public.staff_task_board()'))[0].id, t2, 'tasks waiting for your answer come first');
+    await q("select public.staff_close_task($1,'done','Called Alpha')", [t1]);
+    await as(U.admin);
     await as(U.owner);
     assert.ok((await q('select * from public.staff_task_board()')).some((t) => t.id === t2), 'the Founder sees every task');
 
@@ -189,6 +204,11 @@ test('Administrator batch 2: task assignment, absence approvals and outbound-lea
     await rejects(() => q("select public.staff_move_outbound_route($1,'assigned','Agent recognised the client')", [rA]), /Choose the agent/);
     await rejects(() => q("select public.staff_move_outbound_route($1,'assigned','Agent recognised the client',$2)", [rA, U.switchboard]), /Choose the agent/);
     await q("select public.staff_move_outbound_route($1,'assigned','Agent recognised the client',$2)", [rA, U.agent]);
+    await db.exec('reset role;');
+    const agentNotice = await notices(U.agent, 'OUTBOUND_LEAD_ROUTED');
+    assert.equal(agentNotice.length, 1, 'review fix 2: the team member is told the lead is theirs');
+    assert.ok(!agentNotice[0].body_text.includes('recognised'), 'the internal staff note is not shown to them');
+    await as(U.coordinator);
     await rejects(() => q("select public.staff_move_outbound_route($1,'new_leads','x')", [rC]), /who you checked with/);
     await q("select public.staff_move_outbound_route($1,'new_leads','Asked all Team Leaders, nobody knows it')", [rC]);
     await q("select public.staff_move_outbound_route($1,'with_administrator')", [rC]);

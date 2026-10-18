@@ -36,6 +36,8 @@ function RouteRow({ r, role }: { r: OutboundRoute; role: StaffRole | null | unde
   const [person, setPerson] = useState("");
   const go = (to: OutboundStatus) => {
     if (to === "assigned" && !person) { toast.error("Choose the team member the lead belongs to."); return; }
+    // The database requires a note (who you checked with) for these two steps.
+    if ((to === "assigned" || to === "new_leads") && note.trim().length < 3) { toast.error("Say who you checked with in the note."); return; }
     move.mutate({ routeId: r.id, to, note, assignedProfile: to === "assigned" ? person : null }, {
       onSuccess: () => { toast.success(OUTBOUND_STATUS_LABEL[to]); setNote(""); setPerson(""); },
       onError: (e) => toast.error(errorText(e)),
@@ -55,7 +57,7 @@ function RouteRow({ r, role }: { r: OutboundRoute; role: StaffRole | null | unde
       </ol>
       {steps.length ? (
         <div className="flex flex-wrap items-center gap-2">
-          <Input className="max-w-xs" maxLength={500} aria-label="Note" placeholder="Note (who you checked with)" value={note} onChange={(e) => setNote(e.target.value)} />
+          <Input className="max-w-xs" maxLength={500} aria-label="Note" placeholder={steps.includes("assigned") || steps.includes("new_leads") ? "Who you checked with (required)" : "Note (optional)"} value={note} onChange={(e) => setNote(e.target.value)} />
           {steps.includes("assigned") ? (
             <select className={`${selectClass} max-w-xs`} aria-label="Team member" value={person} onChange={(e) => setPerson(e.target.value)}>
               <option value="">Team member...</option>
@@ -75,11 +77,13 @@ export default function StaffOutboundPage() {
   const { data: role } = useStaffRole();
   const [openOnly, setOpenOnly] = useState(true);
   const routes = useOutboundRoutes(openOnly);
+  // Any lead with a route (open or finished) cannot start another one.
+  const allRoutes = useOutboundRoutes(false);
   const queue = useIntakeQueue(null, false);
   const start = useStartOutboundRoute();
   const [leadId, setLeadId] = useState("");
   const [note, setNote] = useState("");
-  const routed = new Set((routes.data ?? []).map((r) => r.lead_id));
+  const routed = new Set((allRoutes.data ?? []).map((r) => r.lead_id));
 
   return (
     <>

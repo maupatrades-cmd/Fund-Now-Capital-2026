@@ -171,7 +171,7 @@ test('Administrator role, booking windows, approvals, notices and meeting notes 
     await as(U.coordinator);
     const priv = await create({ title: 'Private chat', vis: 'private', s: sast(TUE, 13, 45), e: sast(TUE, 13, 59) }).catch(() => null);
     await as(U.admin);
-    const diary = Object.fromEntries((await q('select * from public.staff_calendar_diary($1,$2,$3)', [founder, sast(TUE - 1, 0), sast(WED + 1, 0)])).map((r) => [r.display_title, r]));
+    const diary = Object.fromEntries((await q('select * from public.staff_calendar_diary($1,$2,$3)', [founder, sast(Math.min(TUE, WED) - 1, 0), sast(Math.max(TUE, WED) + 1, 0)])).map((r) => [r.display_title, r]));
     assert.ok(diary['Coordinator call'], 'Administrator sees the real title of a Busy booking');
     assert.ok(diary['Founder evening']);
     if (priv) assert.ok(diary.Private, 'Private stays Private');
