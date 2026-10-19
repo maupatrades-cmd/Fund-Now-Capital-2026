@@ -83,7 +83,8 @@ test('Administrator role, booking windows, approvals, notices and meeting notes 
       '20261007093000_submission_intake_core.sql', '20261007094000_submission_intake_rpcs.sql', '20261007100000_switchboard_operations.sql',
       '20261007101000_staff_intake_lookups.sql', '20261007102000_calendar_delegation.sql',
       '20261010051353_calendar_notice_revision_guard.sql', '20261007210000_sc4_founder_open_slots.sql',
-      '20261007211000_sc4_time_request_categories.sql', '20261018091000_administrator_batch1.sql']) {
+      '20261007211000_sc4_time_request_categories.sql', '20261018091000_administrator_batch1.sql',
+      '20261019070000_founder_admin_check_fix.sql']) {
       await db.exec(await mig(f));
     }
 
@@ -231,6 +232,12 @@ test('Administrator role, booking windows, approvals, notices and meeting notes 
     await rejects(() => q("select public.staff_add_meeting_note($1,'Trying to write')", [ev]), /Founder or the Administrator/, '42501');
     await rejects(() => q('select * from public.staff_meeting_notes($1)', [ev]), /Founder or the Administrator/, '42501');
     await rejects(() => q('select * from public.calendar_meeting_notes'), /permission denied/);
+    // Security fix (19 Oct): someone who is not staff at all is refused too (the old check let NULL through).
+    await as(U.partner);
+    await rejects(() => q('select * from public.staff_meeting_notes($1)', [ev]), /Founder or the Administrator/, '42501');
+    await rejects(() => q("select public.staff_add_meeting_note($1,'Partner trying to write')", [ev]), /Founder or the Administrator/, '42501');
+    await rejects(() => q("select public.owner_decide_time_request($1,false,'Partner trying to decide')", [important]), /Founder or the Administrator/, '42501');
+    await as(U.coordinator);
     await as(U.owner);
     const list = await q('select * from public.staff_meeting_notes($1)', [ev]);
     assert.equal(list.length, 1);

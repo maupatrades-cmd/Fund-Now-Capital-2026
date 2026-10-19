@@ -96,6 +96,7 @@ test('Administrator batch 2: task assignment, absence approvals and outbound-lea
     ].join('\n'));
     await db.exec(await mig('20261018121000_administrator_batch2.sql'));
     await db.exec(await mig('20261018130000_administrator_batch2_review_fixes.sql'));
+    await db.exec(await mig('20261019070000_founder_admin_check_fix.sql'));
 
     await as(U.owner);
     for (const [who, ref] of [[U.coordinator, 'SC-01'], [U.switchboard, 'SA-01'], [U.admin, 'AD-01'], [U.sb2, 'SA-02']]) {
@@ -118,6 +119,8 @@ test('Administrator batch 2: task assignment, absence approvals and outbound-lea
 
     // ---- 1. Tasks: assign, accept, decline -----------------------------------------------------
     await as(U.coordinator);
+    await rejects(() => q("select public.staff_create_assigned_task('Call the bank','',null,null,$1)", [U.switchboard]), /Founder or the Administrator/, '42501');
+    await as(U.partner);
     await rejects(() => q("select public.staff_create_assigned_task('Call the bank','',null,null,$1)", [U.switchboard]), /Founder or the Administrator/, '42501');
     await as(U.admin);
     await rejects(() => q("select public.staff_create_assigned_task('Call the bank','',null,null,$1)", [U.agent]), /enabled Sales Coordinator or Switchboard/);
