@@ -21,6 +21,8 @@ import StaffDiaryPage from "@/pages/staff/StaffDiaryPage";
 import StaffTeamDiaryPage from "./pages/staff/StaffTeamDiaryPage";
 import StaffNoticesPage from "./pages/staff/StaffNoticesPage";
 import StaffMessagesPage from "./pages/staff/StaffMessagesPage";
+import StaffReportsPage from "./pages/staff/StaffReportsPage";
+import StaffComplaintsPage from "./pages/staff/StaffComplaintsPage";
 import PortalCommsPage from "./pages/portal/PortalCommsPage";
 import MyAppointmentsPage from "./pages/portal/MyAppointmentsPage";
 import StaffTasksPage from "@/pages/staff/StaffTasksPage";
@@ -247,6 +249,8 @@ function AppRoutes() {
         <Route path="team-diary" element={<StaffTeamDiaryPage />} />
         <Route path="notices" element={<StaffNoticesPage />} />
         <Route path="messages" element={<StaffMessagesPage />} />
+        <Route path="reports" element={<StaffReportsPage />} />
+        <Route path="complaints" element={<StaffComplaintsPage />} />
         <Route path="tasks" element={<StaffTasksPage />} />
         <Route path="outbound" element={<StaffOutboundPage />} />
         <Route path="queue" element={<StaffQueuePage />} />
