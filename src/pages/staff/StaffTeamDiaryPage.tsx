@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
-import { Field, SAFE_TEXT_NOTE, StaffShell, card, errorText, primaryButton, selectClass, textareaClass } from "@/components/staff/StaffShell";
+import { Field, SAFE_TEXT_NOTE, card, errorText, primaryButton, selectClass, textareaClass } from "@/components/staff/StaffShell";
 import { TeamAppointmentsList, sastToIso } from "@/components/team-diary/TeamAppointmentsList";
 import { useBookTeamAppointment, useTeamAppointments, useTeamDiaryMembers } from "@/hooks/useTeamDiary";
 
@@ -27,8 +27,7 @@ export default function StaffTeamDiaryPage() {
     && f.reason.trim().length >= 10 && f.start && f.end;
 
   return (
-    <StaffShell>
-      <div className="space-y-5">
+    <div className="space-y-5">
         <section className={`${card} space-y-4`}>
           <div>
             <h1 className="text-lg font-bold text-brand-navy">Team diary</h1>
@@ -79,7 +78,6 @@ export default function StaffTeamDiaryPage() {
           {list.error ? <p role="alert" className="text-sm text-red-600">{errorText(list.error)}</p> : null}
           {list.data ? <TeamAppointmentsList rows={list.data} showMember /> : <p className="text-sm text-muted-foreground">Loading…</p>}
         </section>
-      </div>
-    </StaffShell>
+    </div>
   );
 }

@@ -20,6 +20,7 @@ import ContractorDocumentChasePage from "./contractor/DocumentChasePage";
 import ClientInvitationsPage from "./ClientInvitationsPage";
 import PortalBookingPage from "./portal/PortalBookingPage";
 import MyAppointmentsPage from "./portal/MyAppointmentsPage";
+import PortalCommsPage from "./portal/PortalCommsPage";
 import QualifiedRewardsPage from "./QualifiedRewardsPage";
 import PortalShell from "@/components/portal/PortalShell";
 import RoleDocumentTasksPage from "./portal/RoleDocumentTasksPage";
@@ -77,6 +78,7 @@ export default function ContractorGate() {
         <Route path="client-invitations" element={<ClientInvitationsPage />} />
         <Route path="calendar" element={<PortalBookingPage portal="contractor" />} />
         <Route path="appointments" element={<MyAppointmentsPage portal="contractor" />} />
+        <Route path="notices" element={<PortalCommsPage portal="contractor" page="notices" />} />
         <Route path="rewards" element={<PortalShell portal="contractor"><QualifiedRewardsPage /></PortalShell>} />
         <Route path="badges" element={<ContractorBadgesPage />} />
         <Route path="training" element={<ContractorTrainingPage />} />
