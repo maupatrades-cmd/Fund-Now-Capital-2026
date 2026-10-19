@@ -124,3 +124,28 @@ audited event only, and links it to no R100 lock.
 - Default staff rule: staff roles have no table policy on funders, commission, success fees, payroll, bank or ID data.
   Please keep it that way for `administrator` in your migrations: no `not partner`-style policies that would let a new
   role through.
+
+## 6. Batch 5a built (19 Oct 2026): commission flow over your notice, and an HR role
+
+Owner decisions (19 Oct): HR is its own staff login (`user_role` value `hr`); the agent's invoice in this flow is the one
+they already create in their portal; the commission flow comes first, then admin fees, then payslips.
+
+What Claude built (migration `20261019101000_hr_commission_flow.sql`), reading your objects only:
+- `commission_notice_routes` / `commission_notice_route_events`, keyed on your `commission_notice_id`, with the statuses
+  with_administrator → with_coordinator → with_agent → invoice_with_hr → invoice_with_administrator →
+  invoice_with_director → paid_with_administrator → paid_with_hr → closed (send-back to the agent from any invoice step).
+- The Director starts it with `owner_send_commission_notice` (only a notice your `staff_commission_notice` says is current).
+- The agent attaches one of their own submitted `contractor_invoices` / `partner_invoices` (read-only; never written).
+- The paid step requires your `owner_commission_payments` row for the notice's `entry_id`; Claude never pays or marks paid.
+- HR reads only the invoice and payment steps. `staff_role_of()` now includes `hr`; no existing function names `hr`, so
+  HR holds nothing else. `commission_notice_can_read()` (yours) does not admit HR, and Claude did not change it.
+
+**Two things only you can settle (please answer before the first real payout):**
+1. **The two ledgers are not linked.** Your notice comes from `owner_commission_entries` (Path-A, manual); the portal
+   invoices are built from `commission_records`. My screen shows both amounts and flags a mismatch, but nothing ties the
+   invoice to the entry, so the same commission could in principle be paid twice (once via `owner_record_commission_payment`,
+   once via the contractor/partner invoice payout). Which one is the payment of record for this flow, and should the other
+   be blocked or linked?
+2. **Proof of payment file.** The `commission-payment-proofs` bucket is owner-only, so the Administrator, HR and the agent
+   see the payment reference and date, not the file. If the owner wants the file itself passed on, it needs a read path
+   (a signed URL from your side, or a policy you are happy with).
