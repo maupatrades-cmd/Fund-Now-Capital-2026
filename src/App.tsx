@@ -23,6 +23,8 @@ import StaffNoticesPage from "./pages/staff/StaffNoticesPage";
 import StaffMessagesPage from "./pages/staff/StaffMessagesPage";
 import StaffReportsPage from "./pages/staff/StaffReportsPage";
 import StaffComplaintsPage from "./pages/staff/StaffComplaintsPage";
+import StaffCommissionsPage from "./pages/staff/StaffCommissionsPage";
+import PortalCommissionsPage from "./pages/portal/PortalCommissionsPage";
 import PortalCommsPage from "./pages/portal/PortalCommsPage";
 import MyAppointmentsPage from "./pages/portal/MyAppointmentsPage";
 import StaffTasksPage from "@/pages/staff/StaffTasksPage";
@@ -218,6 +220,7 @@ function AppRoutes() {
         <Route path="calendar" element={<PortalBookingPage portal="partner" />} />
         <Route path="appointments" element={<MyAppointmentsPage portal="partner" />} />
         <Route path="notices" element={<PortalCommsPage portal="partner" page="notices" />} />
+        <Route path="commissions" element={<PortalCommissionsPage portal="partner" />} />
         <Route path="rewards" element={<PortalShell portal="partner"><QualifiedRewardsPage /></PortalShell>} />
         <Route path="statements" element={<PartnerStatementsPage />} />
         <Route path="invoices" element={<PartnerInvoicesPage />} />
@@ -251,6 +254,7 @@ function AppRoutes() {
         <Route path="messages" element={<StaffMessagesPage />} />
         <Route path="reports" element={<StaffReportsPage />} />
         <Route path="complaints" element={<StaffComplaintsPage />} />
+        <Route path="commissions" element={<StaffCommissionsPage />} />
         <Route path="tasks" element={<StaffTasksPage />} />
         <Route path="outbound" element={<StaffOutboundPage />} />
         <Route path="queue" element={<StaffQueuePage />} />

@@ -119,5 +119,6 @@ export default function StaffHomePage() {
 export function StaffIndex({ callLog }: { callLog: ReactElement }) {
   const { data: role, isLoading } = useStaffRole();
   if (isLoading) return null;
+  if (role === "hr") return <Navigate to="/staff/commissions" replace />;
   return role === "coordinator" || role === "administrator" ? <Navigate to="/staff/home" replace /> : callLog;
 }

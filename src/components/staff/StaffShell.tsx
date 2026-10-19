@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, ListChecks, LogOut, PhoneCall, ClipboardList, Route as RouteIcon } from "lucide-react";
+import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ListChecks, LogOut, PhoneCall, ClipboardList, Route as RouteIcon } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -7,7 +7,7 @@ import { useSession } from "@/lib/useSession";
 import { canDecideTimeRequests, isStaffManager, useStaffRole } from "@/hooks/useStaffDesk";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
-type Item = { to: string; label: string; icon: typeof PhoneCall; end: boolean; managerOnly?: boolean; founderAdminOnly?: boolean };
+type Item = { to: string; label: string; icon: typeof PhoneCall; end: boolean; managerOnly?: boolean; founderAdminOnly?: boolean; hr?: boolean; noSwitchboard?: boolean };
 
 const navigation: Item[] = [
   { to: "/staff/home", label: "Home", icon: LayoutDashboard, end: false, managerOnly: true },
@@ -16,10 +16,11 @@ const navigation: Item[] = [
   { to: "/staff/documents", label: "Document tracker", icon: BookOpenCheck, end: false },
   { to: "/staff/diary", label: "Diary", icon: CalendarDays, end: false },
   { to: "/staff/team-diary", label: "Team diary", icon: CalendarCheck, end: false },
-  { to: "/staff/messages", label: "Messages", icon: MessagesSquare, end: false },
-  { to: "/staff/notices", label: "Notices", icon: Megaphone, end: false },
+  { to: "/staff/messages", label: "Messages", icon: MessagesSquare, end: false, hr: true },
+  { to: "/staff/notices", label: "Notices", icon: Megaphone, end: false, hr: true },
   { to: "/staff/tasks", label: "Tasks", icon: ListChecks, end: false },
   { to: "/staff/reports", label: "Reports", icon: BarChart3, end: false, founderAdminOnly: true },
+  { to: "/staff/commissions", label: "Commission flow", icon: HandCoins, end: false, hr: true, noSwitchboard: true },
   { to: "/staff/complaints", label: "Complaints", icon: MessageSquareWarning, end: false },
   { to: "/staff/outbound", label: "Outbound leads", icon: RouteIcon, end: false },
   { to: "/staff/answers", label: "Answer desk", icon: MessageSquareReply, end: false, managerOnly: true },
@@ -29,8 +30,11 @@ const navigation: Item[] = [
 export function StaffShell({ children }: { children: ReactNode }) {
   const session = useSession();
   const { data: role } = useStaffRole();
-  const items = navigation.filter((i) => (!i.managerOnly || isStaffManager(role)) && (!i.founderAdminOnly || canDecideTimeRequests(role)));
-  const roleLabel = role === "administrator" ? "Administrator" : role === "coordinator" ? "Sales Coordinator" : role === "switchboard" ? "Switchboard" : "Staff";
+  // HR sees only the pages marked for it (messages, notices, the commission flow); every other page refuses HR anyway.
+  const items = role === "hr" ? navigation.filter((i) => i.hr)
+    : navigation.filter((i) => (!i.managerOnly || isStaffManager(role)) && (!i.founderAdminOnly || canDecideTimeRequests(role))
+      && (!i.noSwitchboard || role !== "switchboard"));
+  const roleLabel = role === "administrator" ? "Administrator" : role === "coordinator" ? "Sales Coordinator" : role === "switchboard" ? "Switchboard" : role === "hr" ? "HR" : "Staff";
 
   return (
     <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[250px_minmax(0,1fr)]">
