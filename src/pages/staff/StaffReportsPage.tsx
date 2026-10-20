@@ -153,7 +153,7 @@ function FilesView({ day }: { day: string | null }) {
         <Stat label="Files opened this week" value={r.files_opened_week} />
         <Stat label="Documents complete this month" value={r.documents_complete_month} />
         <Stat label="Documents complete this week" value={r.documents_complete_week} />
-        <Stat label="Admin fees paid" value={r.admin_fees_paid.not_tracked ? "Not tracked yet" : "—"} />
+        <Stat label="Admin fees paid this month" value={r.admin_fees_paid.not_tracked ? "Not tracked yet" : `${r.admin_fees_paid.month ?? 0} (week: ${r.admin_fees_paid.week ?? 0})`} />
       </div>
       {r.admin_fees_paid.not_tracked ? <p className="text-xs text-muted-foreground">{r.admin_fees_paid.note}</p> : null}
       <div className="grid gap-5 sm:grid-cols-2">

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ListChecks, LogOut, PhoneCall, ClipboardList, Route as RouteIcon } from "lucide-react";
+import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, ListChecks, LogOut, PhoneCall, ClipboardList, Route as RouteIcon } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -20,6 +20,7 @@ const navigation: Item[] = [
   { to: "/staff/notices", label: "Notices", icon: Megaphone, end: false, hr: true },
   { to: "/staff/tasks", label: "Tasks", icon: ListChecks, end: false },
   { to: "/staff/reports", label: "Reports", icon: BarChart3, end: false, founderAdminOnly: true },
+  { to: "/staff/admin-fees", label: "Admin fees", icon: ReceiptText, end: false, founderAdminOnly: true },
   { to: "/staff/commissions", label: "Commission flow", icon: HandCoins, end: false, hr: true, noSwitchboard: true },
   { to: "/staff/complaints", label: "Complaints", icon: MessageSquareWarning, end: false },
   { to: "/staff/outbound", label: "Outbound leads", icon: RouteIcon, end: false },
@@ -37,8 +38,8 @@ export function StaffShell({ children }: { children: ReactNode }) {
   const roleLabel = role === "administrator" ? "Administrator" : role === "coordinator" ? "Sales Coordinator" : role === "switchboard" ? "Switchboard" : role === "hr" ? "HR" : "Staff";
 
   return (
-    <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[250px_minmax(0,1fr)]">
-      <aside className="sticky top-0 hidden h-screen min-h-0 flex-col overflow-hidden bg-brand-navy text-white lg:flex">
+    <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[250px_minmax(0,1fr)] print:block print:bg-white">
+      <aside className="sticky top-0 hidden h-screen print:hidden min-h-0 flex-col overflow-hidden bg-brand-navy text-white lg:flex">
         <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
           <img src="/brand-mark.png" alt="" className="h-10 w-10 object-contain" />
           <div className="leading-tight">
@@ -68,7 +69,7 @@ export function StaffShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="min-w-0">
-        <header className="sticky top-0 z-20 border-b border-border bg-white/95 backdrop-blur">
+        <header className="sticky top-0 z-20 print:hidden border-b border-border bg-white/95 backdrop-blur">
           <div className="flex min-h-16 items-center gap-3 px-4 sm:px-6 lg:px-8">
             <img src="/brand-mark.png" alt="Fund Now Capital" className="h-9 w-9 object-contain lg:hidden" />
             <div className="min-w-0">

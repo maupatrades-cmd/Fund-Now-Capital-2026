@@ -37,7 +37,8 @@ export type FilesProgress = {
   day: string; month: string; week_start: string; target: number;
   files_opened_month: number; files_opened_week: number; working_days_left: number; files_needed_per_day: number | null;
   documents_complete_month: number; documents_complete_week: number;
-  admin_fees_paid: { not_tracked: boolean; note: string };
+  // Counts of admin-fee invoices fully paid (receipt issued); older reports carried a not-tracked note.
+  admin_fees_paid: { not_tracked: boolean; note?: string; month?: number; week?: number };
   files_in_progress: Record<string, number>;
   deals_in_progress: Record<string, number>;
 };
