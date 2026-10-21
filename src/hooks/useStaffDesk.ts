@@ -6,7 +6,8 @@ import { supabase } from "@/lib/supabase";
 // hooks only shape requests and responses. Money, bank, ID contents, funder
 // identity and stored documents are not reachable from here by design.
 
-export type StaffRole = "owner" | "administrator" | "coordinator" | "switchboard" | "hr";
+export type StaffRole = "owner" | "administrator" | "coordinator" | "switchboard" | "hr" | "field_supervisor" | "field_consultant";
+export const isFieldRole = (role: StaffRole | null | undefined) => role === "field_supervisor" || role === "field_consultant";
 
 // The Administrator (Second-in-Charge) carries the Coordinator's authority (the database enforces it in
 // intake_require_actor); screens that were Coordinator + Owner open for the Administrator too.

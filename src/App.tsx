@@ -25,6 +25,8 @@ import StaffReportsPage from "./pages/staff/StaffReportsPage";
 import StaffComplaintsPage from "./pages/staff/StaffComplaintsPage";
 import StaffCommissionsPage from "./pages/staff/StaffCommissionsPage";
 import StaffAdminFeesPage from "./pages/staff/StaffAdminFeesPage";
+import StaffMyDayPage from "./pages/staff/StaffMyDayPage";
+import StaffTargetsPage from "./pages/staff/StaffTargetsPage";
 import StaffAdminFeeDocumentPage from "./pages/staff/StaffAdminFeeDocumentPage";
 import StaffPayrollPage from "./pages/staff/StaffPayrollPage";
 import StaffPayslipsPage from "./pages/staff/StaffPayslipsPage";
@@ -261,6 +263,8 @@ function AppRoutes() {
         <Route path="complaints" element={<StaffComplaintsPage />} />
         <Route path="commissions" element={<StaffCommissionsPage />} />
         <Route path="admin-fees" element={<StaffAdminFeesPage />} />
+        <Route path="me" element={<StaffMyDayPage />} />
+        <Route path="targets" element={<StaffTargetsPage />} />
         <Route path="admin-fees/:invoiceId" element={<StaffAdminFeeDocumentPage />} />
         <Route path="payroll" element={<StaffPayrollPage />} />
         <Route path="payslips" element={<StaffPayslipsPage />} />

@@ -4,6 +4,7 @@ import { Link, Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import { PendingTasksPanel } from "@/components/staff/PendingTasksPanel";
 import { QualifyingAndKpis } from "@/components/staff/QualifyingAndKpis";
+import { MyTargetsPanel } from "@/components/staff/MyTargetsPanel";
 import { card, errorText } from "@/components/staff/StaffShell";
 import { isStaffManager, useCompleteDocumentChaser, useCoordinatorLanding, useDocumentChasers, useStaffRole } from "@/hooks/useStaffDesk";
 
@@ -42,6 +43,7 @@ export default function StaffHomePage() {
         <p className="text-sm text-muted-foreground">Where the files stand and what needs you first.</p>
       </div>
       <PendingTasksPanel />
+      {role !== "owner" ? <MyTargetsPanel /> : null}
       {landing.error ? <p role="alert" className="text-sm text-red-600">{errorText(landing.error)}</p> : null}
       {d ? (
         <>
@@ -119,6 +121,7 @@ export default function StaffHomePage() {
 export function StaffIndex({ callLog }: { callLog: ReactElement }) {
   const { data: role, isLoading } = useStaffRole();
   if (isLoading) return null;
-  if (role === "hr") return <Navigate to="/staff/commissions" replace />;
+  // HR and the field roles land on "My day"; Reception keeps the call log as its first screen.
+  if (role === "hr" || role === "field_supervisor" || role === "field_consultant") return <Navigate to="/staff/me" replace />;
   return role === "coordinator" || role === "administrator" ? <Navigate to="/staff/home" replace /> : callLog;
 }
