@@ -149,3 +149,13 @@ What Claude built (migration `20261019101000_hr_commission_flow.sql`), reading y
 2. **Proof of payment file.** The `commission-payment-proofs` bucket is owner-only, so the Administrator, HR and the agent
    see the payment reference and date, not the file. If the owner wants the file itself passed on, it needs a read path
    (a signed URL from your side, or a policy you are happy with).
+
+## 7. Ownership change (owner, 21 Oct 2026): pay logic moves to Claude Code
+
+The owner has moved the incentives engine, the payroll cycle (including payslips), the R100 reward logic and the whole
+commission and agent-invoice chain to **Claude Code**, so the pay logic lives in one place and nothing can be paid
+twice. **Codex: please stop work on these areas** and do not open new pull requests that touch them, including
+`calculate_commission`, `commission_records`, `owner_commission_*`, `commission_notice_snapshots`,
+`owner_commission_payments`, `qualified_reward_*`, contractor and partner invoices, and the payment-route guard.
+Your existing work stays live and Claude maintains it from here. The questions in §6 are answered in
+`docs/FNC-LAUNCH-PLAN-2026-11-09.md` §3 (decision 2: the agent's invoice is the payable record, linked to the notice).
