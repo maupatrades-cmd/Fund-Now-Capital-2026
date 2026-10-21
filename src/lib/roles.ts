@@ -3,7 +3,7 @@
 // bounces in the gates can never disagree.
 //
 // Mirrors the live `public.user_role` enum on profiles.role.
-// switchboard / coordinator / administrator / hr are the staff roles. Holding one grants nothing
+// switchboard / coordinator / administrator / hr / field_supervisor / field_consultant are the staff roles. Holding one grants nothing
 // until the owner enables the person (staff_access); they land on /staff,
 // where StaffGate shows a waiting card until the owner enables them.
 export type UserRole =
@@ -15,14 +15,17 @@ export type UserRole =
   | "switchboard"
   | "coordinator"
   | "administrator"
-  | "hr";
+  | "hr"
+  | "field_supervisor"
+  | "field_consultant";
 
 export function roleHome(role: string | null | undefined): string {
   if (role === "partner") return "/partner";
   if (role === "contractor") return "/contractor";
   if (role === "client") return "/client";
   if (role === "lead_referrer") return "/lead-referrer";
-  if (role === "switchboard" || role === "coordinator" || role === "administrator" || role === "hr") return "/staff";
+  if (role === "switchboard" || role === "coordinator" || role === "administrator" || role === "hr"
+    || role === "field_supervisor" || role === "field_consultant") return "/staff";
   // Owner keeps the current behaviour. An unknown/missing role also lands on
   // /dashboard, where OwnerGate shows its access-restricted card — the same
   // dead end a non-owner gets today.
