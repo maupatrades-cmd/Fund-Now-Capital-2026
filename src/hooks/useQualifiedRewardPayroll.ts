@@ -23,6 +23,20 @@ export type QualifiedRewardRow = {
 
 const KEY = ["qualified-reward-payroll"] as const;
 
+// Whether the signed-in person can be paid yet: R100 is not payable before the Agent Code (after a cleared iFacts check).
+export function useMyRewardGate() {
+  const uid = useSession()?.user.id;
+  return useQuery({
+    queryKey: ["my-reward-gate", uid],
+    enabled: Boolean(uid),
+    queryFn: async (): Promise<{ cleared: boolean; agent_code: string | null }> => {
+      const { data, error } = await supabase.rpc("my_reward_gate");
+      if (error) throw error;
+      return data as { cleared: boolean; agent_code: string | null };
+    },
+  });
+}
+
 export function useQualifiedRewardPayroll() {
   const uid = useSession()?.user.id;
   return useQuery({
@@ -94,5 +108,33 @@ export function useMarkQualifiedRewardBatchPaid() {
       return data;
     },
     onSuccess: () => client.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+// Agent Codes (issued by the Director once iFacts has cleared). R100 lines are only scheduled for cleared agents.
+export type AgentClearance = { profile_id: string; full_name: string | null; role: string; agent_code: string; ifacts_cleared_on: string; set_at: string };
+export function useAgentClearances(enabled: boolean) {
+  return useQuery({
+    queryKey: ["agent-clearances"],
+    enabled,
+    queryFn: async (): Promise<AgentClearance[]> => {
+      const { data, error } = await supabase.rpc("agent_clearances_list");
+      if (error) throw error;
+      return (data ?? []) as AgentClearance[];
+    },
+  });
+}
+export function useIssueAgentCode() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ profileId, agentCode, clearedOn }: { profileId: string; agentCode: string; clearedOn: string }) => {
+      const { data, error } = await supabase.rpc("owner_issue_agent_code", {
+        p_profile: profileId, p_agent_code: agentCode, p_ifacts_cleared_on: clearedOn,
+      });
+      if (error) throw error;
+      if (!data) throw new Error("The Agent Code was not saved");
+      return data as string;
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: ["agent-clearances"] }),
   });
 }
