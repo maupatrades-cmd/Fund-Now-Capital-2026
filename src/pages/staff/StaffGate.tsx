@@ -14,7 +14,8 @@ export default function StaffGate() {
   if (isLoading || staffRole.isLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-muted-foreground">Loading...</div>;
   }
-  if (profileRole !== "switchboard" && profileRole !== "coordinator" && profileRole !== "administrator" && profileRole !== "hr" && profileRole !== "owner") {
+  if (profileRole !== "switchboard" && profileRole !== "coordinator" && profileRole !== "administrator" && profileRole !== "hr"
+    && profileRole !== "field_supervisor" && profileRole !== "field_consultant" && profileRole !== "owner") {
     return <Navigate to="/" replace />;
   }
   if (!staffRole.data) {

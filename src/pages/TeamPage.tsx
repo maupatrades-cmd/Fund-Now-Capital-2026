@@ -324,7 +324,7 @@ function TeamTable({
               </td>
               <td className="px-4 py-3">
                 <Badge className={statusBadgeClass(m.is_active)}>{m.is_active ? "Active" : "Deactivated"}</Badge>
-                {(m.role === "switchboard" || m.role === "coordinator" || m.role === "administrator" || m.role === "hr") && <StaffAccessToggle member={m} />}
+                {(m.role === "switchboard" || m.role === "coordinator" || m.role === "administrator" || m.role === "hr" || m.role === "field_supervisor" || m.role === "field_consultant") && <StaffAccessToggle member={m} />}
               </td>
               <td className="px-4 py-3 text-muted-foreground">{formatJoined(m.created_at)}</td>
               <td className="px-4 py-3 text-right">
@@ -555,10 +555,11 @@ function MenuItem({
 
 const inviteSchema = z
   .object({
-    full_name: z.string().trim().min(1, "Full name is required."),
+    // At least 2 characters: a sub-agent's name becomes their network display name, which the database requires to be 2+.
+    full_name: z.string().trim().min(2, "Enter the full name (at least 2 characters)."),
     email: z.string().trim().email("Enter a valid email address."),
     phone: z.string().trim().min(1, "Phone is required."),
-    role: z.enum(["partner", "contractor", "lead_referrer", "sub_agent", "switchboard", "coordinator", "administrator", "hr"]),
+    role: z.enum(["partner", "contractor", "lead_referrer", "sub_agent", "switchboard", "coordinator", "administrator", "hr", "field_supervisor", "field_consultant"]),
     parent_partner_id: z.string(),
     invite_method: z.enum(["magic_link", "temp_password"]),
     temp_password: z.string(),
@@ -733,7 +734,7 @@ function InviteDialog({
                 ? "Contractors are FNC's direct team, with their own portal."
                 : role === "sub_agent"
                   ? "A sub-agent is a lead referrer connected to one selected partner."
-                  : role === "switchboard" || role === "coordinator" || role === "administrator" || role === "hr"
+                  : role === "switchboard" || role === "coordinator" || role === "administrator" || role === "hr" || role === "field_supervisor" || role === "field_consultant"
                     ? "Staff accounts have no access until you switch them on after checking their signed contract."
                     : "A direct lead referrer is connected to Fund Now Capital, not to a partner."}
           </p>
