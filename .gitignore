@@ -30,3 +30,4 @@ lerna-debug.log*
 *.sln
 *.sw?
 *.local
+.claude/worktrees/

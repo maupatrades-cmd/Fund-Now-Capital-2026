@@ -400,7 +400,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // ---- create the Auth user ------------------------------------------------
   // Creating requires the full record.
-  if (!fullName) return json({ error: "Full name is required" }, 400);
+  // 2+ characters: a sub-agent's name is also their partner-network display name (partner_lead_referrers needs 2–160),
+  // so a shorter name would create the login and then fail the network link.
+  if (fullName.length < 2) return json({ error: "Enter the full name (at least 2 characters)" }, 400);
   if (!phone) return json({ error: "Phone is required" }, 400);
 
   const createArgs: {
