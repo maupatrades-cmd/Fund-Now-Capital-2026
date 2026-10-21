@@ -1,10 +1,11 @@
 import { CalendarClock, CircleCheck, Coins, LockKeyhole } from "lucide-react";
 import { Link } from "react-router-dom";
 import { formatZAR } from "@/lib/format";
-import { useQualifiedRewardPayroll } from "@/hooks/useQualifiedRewardPayroll";
+import { useMyRewardGate, useQualifiedRewardPayroll } from "@/hooks/useQualifiedRewardPayroll";
 
 export function QualifiedRewardSummary({ href }: { href: string }) {
   const query = useQualifiedRewardPayroll();
+  const gate = useMyRewardGate();
   const rows = query.data ?? [];
   const locked = rows.filter((row) => row.current_status === "locked").length;
   const pending = rows.filter((row) => ["scheduled", "held", "released", "carried_forward"].includes(row.current_status)).length;
@@ -15,15 +16,16 @@ export function QualifiedRewardSummary({ href }: { href: string }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 font-semibold text-brand-navy"><Coins className="h-5 w-5 text-brand-teal" />R100 qualification rewards</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Separate from commission. Locked once only after approved full documents reach a funder.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Separate from commission. Earned once when FNC verifies a complete file (documents approved), at most once per client every 6 months, and paid by the 15th of the following month.</p>
         </div>
         <Link to={href} className="text-sm font-semibold text-brand-teal hover:underline">View reward history</Link>
       </div>
+      {gate.data && !gate.data.cleared ? <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Rewards are paid once your iFacts check has cleared and your Agent Code is issued.</p> : null}
       {query.isLoading ? <p className="mt-4 text-sm text-muted-foreground">Loading rewards…</p> : null}
       {query.isError ? <p className="mt-4 text-sm text-red-700">Rewards are temporarily unavailable.</p> : null}
       {!query.isLoading && !query.isError ? (
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <Stat icon={LockKeyhole} label="Locked" value={formatZAR(locked * 100)} />
+          <Stat icon={LockKeyhole} label="Earned" value={formatZAR(locked * 100)} />
           <Stat icon={CalendarClock} label="Pending" value={formatZAR(pending * 100)} />
           <Stat icon={CircleCheck} label="Paid" value={formatZAR(paid * 100)} />
         </div>

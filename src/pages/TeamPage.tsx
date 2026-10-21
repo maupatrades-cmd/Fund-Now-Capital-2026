@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   TrendingUp,
 } from "lucide-react";
+import { useAgentClearances, useIssueAgentCode } from "@/hooks/useQualifiedRewardPayroll";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -325,6 +326,7 @@ function TeamTable({
               <td className="px-4 py-3">
                 <Badge className={statusBadgeClass(m.is_active)}>{m.is_active ? "Active" : "Deactivated"}</Badge>
                 {(m.role === "switchboard" || m.role === "coordinator" || m.role === "administrator" || m.role === "hr") && <StaffAccessToggle member={m} />}
+                {(m.role === "partner" || m.role === "contractor" || m.role === "lead_referrer") && <AgentCodeControl member={m} />}
               </td>
               <td className="px-4 py-3 text-muted-foreground">{formatJoined(m.created_at)}</td>
               <td className="px-4 py-3 text-right">
@@ -345,6 +347,28 @@ function TeamTable({
 
 // Owner switches a staff member's workspace on or off. Off by default: the role
 // alone grants nothing until the Owner has checked the signed contract.
+// Agent Code (launch plan §4): issued by the Director once iFacts has cleared. No R100 or commission is paid before it.
+function AgentCodeControl({ member }: { member: TeamMember }) {
+  const { data: codes } = useAgentClearances(true);
+  const issue = useIssueAgentCode();
+  const code = codes?.find((c) => c.profile_id === member.id);
+  if (code) return <span className="mt-1 block text-xs text-muted-foreground">Agent Code {code.agent_code} · iFacts cleared {code.ifacts_cleared_on}</span>;
+  const run = () => {
+    const agentCode = window.prompt("Agent Code to issue (letters, numbers or dashes):");
+    if (!agentCode || !agentCode.trim()) return;
+    const clearedOn = window.prompt("Date iFacts cleared (YYYY-MM-DD):", new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" }));
+    if (!clearedOn || !/^\d{4}-\d{2}-\d{2}$/.test(clearedOn.trim())) return;
+    issue.mutate({ profileId: member.id, agentCode: agentCode.trim(), clearedOn: clearedOn.trim() }, {
+      onSuccess: (c) => toast.success(`Agent Code ${c} issued`), onError: (e) => toast.error(e instanceof Error ? e.message : "Could not issue the Agent Code"),
+    });
+  };
+  return (
+    <button type="button" onClick={run} disabled={issue.isPending} className="mt-1 block text-xs font-semibold text-brand-teal underline disabled:opacity-50">
+      No Agent Code yet · issue after iFacts clears
+    </button>
+  );
+}
+
 function StaffAccessToggle({ member }: { member: TeamMember }) {
   const { data: access } = useStaffAccessList();
   const setAccess = useSetStaffAccess();
