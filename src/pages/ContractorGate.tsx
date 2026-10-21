@@ -80,6 +80,7 @@ export default function ContractorGate() {
         <Route path="calendar" element={<PortalBookingPage portal="contractor" />} />
         <Route path="appointments" element={<MyAppointmentsPage portal="contractor" />} />
         <Route path="notices" element={<PortalCommsPage portal="contractor" page="notices" />} />
+        <Route path="messages" element={<PortalCommsPage portal="contractor" page="messages" />} />
         <Route path="commissions" element={<PortalCommissionsPage portal="contractor" />} />
         <Route path="rewards" element={<PortalShell portal="contractor"><QualifiedRewardsPage /></PortalShell>} />
         <Route path="badges" element={<ContractorBadgesPage />} />
