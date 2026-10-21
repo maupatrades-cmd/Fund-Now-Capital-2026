@@ -23,6 +23,7 @@ import {
   Coins,
   ClipboardCheck,
   HandCoins,
+  MessagesSquare,
 } from "lucide-react";
 import { usePartnerPortalIdentity } from "@/hooks/usePartnerPortalIdentity";
 import { usePortalDeals } from "@/hooks/usePortalDeals";
@@ -61,6 +62,8 @@ function navItems(portal: PortalKind) {
     { to: `${base}/calendar`, label: "Book the Owner", icon: CalendarDays, end: false },
     { to: `${base}/appointments`, label: "My appointments", icon: CalendarCheck, end: false },
     { to: `${base}/notices`, label: "Notices", icon: Megaphone, end: false },
+    // Messages to the Sales Coordinator (the single contact point); the Director is copied automatically.
+    { to: `${base}/messages`, label: "Messages", icon: MessagesSquare, end: false },
     { to: `${base}/commissions`, label: "Commission notices", icon: HandCoins, end: false },
     { to: `${base}/rewards`, label: "R100 rewards", icon: Coins, end: false },
     ...(portal === "contractor"
@@ -88,6 +91,7 @@ function partnerPageMeta(pathname: string) {
   if (pathname.endsWith("/calendar")) return ["Owner calendar", "Request a privacy-safe appointment"] as const;
   if (pathname.endsWith("/appointments")) return ["My appointments", "Client meetings booked for you"] as const;
   if (pathname.endsWith("/notices")) return ["Notices", "Notices from Fund Now Capital"] as const;
+  if (pathname.endsWith("/messages")) return ["Messages", "Write to the Sales Coordinator"] as const;
   if (pathname.endsWith("/commissions")) return ["Commission notices", "Your commission and where your invoice is"] as const;
   if (pathname.endsWith("/rewards")) return ["R100 rewards", "Track qualified-submission reward payouts"] as const;
   if (pathname.includes("/invoices")) return ["Invoices", "Manage your partner invoices"] as const;

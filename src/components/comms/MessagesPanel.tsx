@@ -38,7 +38,7 @@ function Compose({ onSent }: { onSent: (threadId: string) => void }) {
             </label>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground">Anything to or from the Sales Coordinator is copied to the Director automatically.</p>
+        <p className="text-xs text-muted-foreground">Anything to or from the Sales Coordinator, and every message from an agent, sub-agent or Team Leader, is copied to the Director automatically.</p>
       </fieldset>
       <label className="block space-y-1 text-sm font-semibold text-brand-navy">Subject
         <Input maxLength={160} value={subject} onChange={(e) => setSubject(e.target.value)} />

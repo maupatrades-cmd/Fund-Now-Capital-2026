@@ -227,6 +227,7 @@ function AppRoutes() {
         <Route path="calendar" element={<PortalBookingPage portal="partner" />} />
         <Route path="appointments" element={<MyAppointmentsPage portal="partner" />} />
         <Route path="notices" element={<PortalCommsPage portal="partner" page="notices" />} />
+        <Route path="messages" element={<PortalCommsPage portal="partner" page="messages" />} />
         <Route path="commissions" element={<PortalCommissionsPage portal="partner" />} />
         <Route path="rewards" element={<PortalShell portal="partner"><QualifiedRewardsPage /></PortalShell>} />
         <Route path="statements" element={<PartnerStatementsPage />} />
