@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon } from "lucide-react";
+import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -7,7 +7,7 @@ import { useSession } from "@/lib/useSession";
 import { canDecideTimeRequests, isFieldRole, isStaffManager, useStaffRole } from "@/hooks/useStaffDesk";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
-type Item = { to: string; label: string; icon: typeof PhoneCall; end: boolean; managerOnly?: boolean; founderAdminOnly?: boolean; hr?: boolean; field?: boolean; noSwitchboard?: boolean; ownerOnly?: boolean; personal?: boolean };
+type Item = { to: string; label: string; icon: typeof PhoneCall; end: boolean; managerOnly?: boolean; founderAdminOnly?: boolean; hr?: boolean; field?: boolean; noSwitchboard?: boolean; ownerOnly?: boolean; notOwner?: boolean; personal?: boolean };
 
 const navigation: Item[] = [
   { to: "/staff/home", label: "Home", icon: LayoutDashboard, end: false, managerOnly: true },
@@ -24,6 +24,8 @@ const navigation: Item[] = [
   { to: "/staff/reports", label: "Reports", icon: BarChart3, end: false, founderAdminOnly: true },
   { to: "/staff/admin-fees", label: "Admin fees", icon: ReceiptText, end: false, founderAdminOnly: true },
   { to: "/staff/commissions", label: "Commission flow", icon: HandCoins, end: false, hr: true, noSwitchboard: true },
+  { to: "/staff/payroll", label: "Payroll", icon: Wallet, end: false, hr: true, founderAdminOnly: true },
+  { to: "/staff/payslips", label: "My payslips", icon: FileText, end: false, hr: true, notOwner: true },
   { to: "/staff/complaints", label: "Complaints", icon: MessageSquareWarning, end: false },
   { to: "/staff/outbound", label: "Outbound leads", icon: RouteIcon, end: false },
   { to: "/staff/answers", label: "Answer desk", icon: MessageSquareReply, end: false, managerOnly: true },
@@ -33,12 +35,13 @@ const navigation: Item[] = [
 export function StaffShell({ children }: { children: ReactNode }) {
   const session = useSession();
   const { data: role } = useStaffRole();
-  // HR and the field roles see only the pages marked for them; every other page refuses them anyway. "My day" is for the
-  // roles without the Coordinator's Home page; the all-roles targets screen is the Director's.
+  // HR and the field roles see only the pages marked for them (HR: messages, notices, the commission flow, payroll,
+  // own payslips, My day); every other page refuses them anyway. "My day" is for the roles without the Coordinator's
+  // Home page; the all-roles targets screen is the Director's.
   const items = role === "hr" ? navigation.filter((i) => i.hr)
     : isFieldRole(role) ? navigation.filter((i) => i.field)
     : navigation.filter((i) => (!i.managerOnly || isStaffManager(role)) && (!i.founderAdminOnly || canDecideTimeRequests(role))
-      && (!i.noSwitchboard || role !== "switchboard") && (!i.ownerOnly || role === "owner")
+      && (!i.noSwitchboard || role !== "switchboard") && (!i.ownerOnly || role === "owner") && (!i.notOwner || role !== "owner")
       && (!i.personal || role === "switchboard"));
   const roleLabel = role === "administrator" ? "Administrator" : role === "coordinator" ? "Sales Coordinator" : role === "switchboard" ? "Switchboard" : role === "hr" ? "HR"
     : role === "field_supervisor" ? "Field Supervisor" : role === "field_consultant" ? "Field consultant" : "Staff";
