@@ -52,6 +52,8 @@ const ROLE_LABEL: Record<string, string> = {
   coordinator: "Sales Coordinator",
   administrator: "Administrator",
   hr: "HR",
+  field_supervisor: "Field Supervisor",
+  field_consultant: "Field consultant",
 };
 
 function json(body: unknown, status = 200): Response {
@@ -258,13 +260,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // full_name + phone are required only when CREATING a new user (below). A
   // resend to an existing member needs just email + role + method.
   if (!isEmail(email)) return json({ error: "A valid email is required" }, 400);
-  // switchboard / coordinator / administrator / hr are staff roles: the profile is created with no
+  // switchboard / coordinator / administrator / hr / field_supervisor / field_consultant are staff roles: the profile is created with no
   // operational authority until the owner enables it (staff_access).
   if (
     role !== "partner" && role !== "contractor" && role !== "lead_referrer" &&
-    role !== "switchboard" && role !== "coordinator" && role !== "administrator" && role !== "hr"
+    role !== "switchboard" && role !== "coordinator" && role !== "administrator" && role !== "hr" &&
+    role !== "field_supervisor" && role !== "field_consultant"
   ) {
-    return json({ error: "Role must be Partner, Contractor, Lead Referrer, Sub-agent, Switchboard Assistant, Sales Coordinator, Administrator or HR" }, 400);
+    return json({ error: "Role must be Partner, Contractor, Lead Referrer, Sub-agent, Switchboard Assistant, Sales Coordinator, Administrator, HR, Field Supervisor or field consultant" }, 400);
   }
   if (requestedRole === "sub_agent" && !parentPartnerId) {
     return json({ error: "A parent partner is required for a sub-agent" }, 400);
@@ -400,7 +403,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // ---- create the Auth user ------------------------------------------------
   // Creating requires the full record.
-  if (!fullName) return json({ error: "Full name is required" }, 400);
+  // 2+ characters: a sub-agent's name is also their partner-network display name (partner_lead_referrers needs 2–160),
+  // so a shorter name would create the login and then fail the network link.
+  if (fullName.length < 2) return json({ error: "Enter the full name (at least 2 characters)" }, 400);
   if (!phone) return json({ error: "Phone is required" }, 400);
 
   const createArgs: {
