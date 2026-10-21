@@ -555,7 +555,8 @@ function MenuItem({
 
 const inviteSchema = z
   .object({
-    full_name: z.string().trim().min(1, "Full name is required."),
+    // At least 2 characters: a sub-agent's name becomes their network display name, which the database requires to be 2+.
+    full_name: z.string().trim().min(2, "Enter the full name (at least 2 characters)."),
     email: z.string().trim().email("Enter a valid email address."),
     phone: z.string().trim().min(1, "Phone is required."),
     role: z.enum(["partner", "contractor", "lead_referrer", "sub_agent", "switchboard", "coordinator", "administrator", "hr"]),
