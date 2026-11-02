@@ -57,6 +57,18 @@ Until the payroll cycle is live, pay runs on a spreadsheet; the first cycle clos
    **Commission Picker estimator**: she fills in the amount, sees the estimate, and the final commission is set (locked)
    at the end. (Answers the two open questions in CLAUDE.md "Open decisions" #3.)
 
+6. **Agent Code (30 Oct):** HR marks four onboarding items received in the CRM (signed contract, certified ID, bank
+   letter, iFacts consent). Once all four are in and iFacts has cleared, the **Sales Coordinator** issues the Agent Code.
+   The CEO can override (logged with a reason).
+7. **Client identity (30 Oct):** companies by **CIPC registration number**; sole proprietors and individuals without
+   one by **SA ID number**. Duplicates are blocked on either (protects agents' leads; non-circumvention).
+8. **R100 before an Agent Code (30 Oct):** held as **pending**, paid in the first pay run after the code is issued;
+   **forfeited** if no code is issued within **30 days of the submission**.
+9. **Start date (2 Nov):** all staff start on **Wednesday 4 November 2026**. First-month salary is pro-rata by working
+   days: monthly amount / working days in the month x days worked (4 Nov start = **19 of November's 21** working days).
+10. **Team Leaders** remain DRA-01 contract agents (12% of the net fee on team deals, Part E targets), not salaried
+    staff, unless the owner says otherwise (asked 30 Oct, no answer yet).
+
 ## 4. Contract terms the CRM must enforce
 
 Each agent record stores its **contract type** and is paid on **its own contract's schedule** (signed contracts set
@@ -65,7 +77,7 @@ their own pay dates until amended in writing).
 | Term | Sub-agent (FNC-SAA-01, Bright Destiny) | Direct agent (FNC-DRA-01) | Team Leader | Field Supervisor / consultant | Office staff |
 |---|---|---|---|---|---|
 | Per submission or lead | R100 per Complete Submission once FNC confirms it (Verified); max one per client per 6 months | Same | Own submissions as an agent | R100 (supervisor) / R150 (consultant) per lead marked Ready for sale | Sales Coordinator R25 per closed file |
-| Commission | Only on **approved deals of R1M+**: **40%** of FNC's Net Fee Received (R1M–R4.99M), **50%** (R5M–R9.99M), **65%** (R10M+). Below R1M: R100 submission fee only. One pool shared with the Principal Referral Partner | **40%** of Net Fee Received on every closed deal, no minimum; in a team **28% member + 12% Team Leader** | 12% of net fee on team deals | 2% / 2.3% on closed field deals (base still to confirm) | Switchboard 0.05% of FNC revenue per office deal |
+| Commission | Only on **approved deals of R1M+**: **40%** of FNC's Net Fee Received (R1M–R4.99M), **50%** (R5M–R9.99M), **65%** (R10M+). Below R1M: R100 submission fee only. One pool shared with the Principal Referral Partner | **40%** of Net Fee Received on every closed deal, no minimum; in a team **28% member + 12% Team Leader** | 12% of net fee on team deals | 2% / 2.3% of FNC's fee received on closed field deals | Switchboard 0.05% of FNC revenue per office deal |
 | Retainer or allowance | Tier 1 R2,000 (R1M+ deal), Tier 2 R5,000 (R5M+), Tier 3 R20,000 (R10M+), 3 months each, grace month on step-down from Tier 2 and 3. One tier at a time | Weekly bonus R1,000 (5 complete submissions in a week, different clients); activity allowance R4,500 for the first 2 months with 4 qualifying weeks; Tier 1 R10,000 (R5M closed in 3 months), Tier 2 R15,000 (R20M+), 3 months each, no grace month. One retainer or allowance per month | Basic R6,000–R25,000 by level (employee) | Field Supervisor R4,500 activity allowance | Salaries: Office Administrator R7,500, Sales Coordinator R6,000, Switchboard R5,000 allowance |
 | When paid | Submission fees and retainers by the 15th of the following month; commission within 14 days of FNC's cleared fee | Same as sub-agent | Staff cycle (27th) | Staff cycle | Salary 27th (current month); incentives one month in arrears |
 | Not payable | Before Agent Code is issued; fraud or breach; unpaid or clawed-back fee | Same | — | Before verification | — |
@@ -74,9 +86,10 @@ their own pay dates until amended in writing).
 Further rules: commission and tiers are calculated on FNC's **Net Fee Received**; earners never see the fee itself.
 Advances, overpayments and clawbacks are set off against the next amounts due.
 
-**Still open (owner):** agent payment dates: **Option A** per contract (fees and retainers by the 15th, commission within
-14 days of FNC's cleared fee) or **Option B** the staff 27th cycle once contract amendments are signed. Until the owner
-chooses, build for Option A, because it is what the signed contracts say.
+**Decided (30 Oct): agent pay dates follow the signed contracts** (Option A: sub-agents' fees and retainers by the 15th,
+commission within 14 days of FNC's cleared fee; direct agents per DRA-01). Staff (Office Administrator, Sales
+Coordinator, Switchboard, HR, Field Supervisor, field consultants) are paid on the 27th cycle. The pay schedule is a
+**setting per contract type**, so agents can move to the 27th when contracts are renewed.
 
 ## 5. Payroll cycle (staff, and agents once on the 27th cycle)
 
@@ -110,8 +123,12 @@ chooses, build for Option A, because it is what the signed contracts say.
 
 Staff never see funders, FNC's fee, net profit or the pool size; each person sees only their own rand amounts.
 
-**Still open (owner):** (a) the base for the 2% / 2.3% field commission (FNC's fee or the funded amount); (b) how
-performance splits the bonus pool (for example by leads, files or closed deals handled).
+**Decided (30 Oct):** (a) the 2% / 2.3% field commission and the Switchboard 0.05% are calculated on **FNC's fee or
+revenue actually received** on the closed deal, never the client's loan amount; payable only once the client's payment
+has cleared in FNC's account by the 6th. (b) Bonus pool: everyone shares it, including contracted field agents.
+**Still open:** split **equally** among everyone active that month (staff on payroll plus agents with at least one
+complete submission), as the 30 Oct answer says, or **by performance** as recorded on 21 Oct. Asked 30 Oct; the first
+pool is not paid before the December cycle, so this does not block the launch.
 
 ## 7. Targets per role (shown on landing pages against month-to-date)
 
