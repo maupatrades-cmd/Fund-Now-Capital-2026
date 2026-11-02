@@ -156,6 +156,7 @@ test('HR checklist gates the Sales Coordinator\'s Agent Code; the Director overr
 
     // ---- 2. The Sales Coordinator cannot issue before the checklist is complete ---------------------------------------
     await rejects(() => issue(U.coordinator, U.sub, 'FNC-SA-001'), /HR has not yet marked/);
+    await rejects(() => issue(U.admin, U.sub, 'FNC-SA-001'), /HR has not yet marked/);
     for (const item of ['signed_contract', 'certified_id', 'bank_letter']) await mark(U.hr, item);
     await rejects(() => mark(U.hr, 'bank_letter'), /Nothing to change/);
     await mark(U.hr, 'ifacts_consent', true, null, 'Consent form signed at the office');
@@ -163,6 +164,7 @@ test('HR checklist gates the Sales Coordinator\'s Agent Code; the Director overr
     await rejects(() => issue(U.coordinator, U.sub, 'FNC-SA-001'), /HR has not yet marked/);
     await mark(U.owner, 'ifacts_cleared', true, today);
     assert.equal(await notices(U.coordinator, 'AGENT_ONBOARDING_READY'), 1, 'the Coordinator is told once it is ready');
+    assert.equal(await notices(U.admin, 'AGENT_ONBOARDING_READY'), 1, 'the Office Administrator is told too');
     // A tick taken back makes it not ready again; ticking it again tells the Coordinator again.
     await mark(U.hr, 'bank_letter', false, null, 'Wrong bank letter, waiting for the right one');
     await rejects(() => issue(U.coordinator, U.sub, 'FNC-SA-001'), /HR has not yet marked/);
@@ -182,8 +184,8 @@ test('HR checklist gates the Sales Coordinator\'s Agent Code; the Director overr
     }
 
     // ---- 4. The Sales Coordinator issues it, with HR's iFacts date; the checklist then closes --------------------------
-    await rejects(() => issue(U.switchboard, U.sub, 'FNC-SA-001'), /Sales Coordinator or the Director/, '42501');
-    await rejects(() => issue(U.hr, U.sub, 'FNC-SA-001'), /Sales Coordinator or the Director/, '42501');
+    await rejects(() => issue(U.switchboard, U.sub, 'FNC-SA-001'), /Sales Coordinator, the Office Administrator or the Director/, '42501');
+    await rejects(() => issue(U.hr, U.sub, 'FNC-SA-001'), /Sales Coordinator, the Office Administrator or the Director/, '42501');
     assert.equal((await issue(U.coordinator, U.sub, 'fnc-sa-001'))[0].c, 'FNC-SA-001');
     await rejects(() => issue(U.coordinator, U.sub, 'FNC-SA-002'), /already has an Agent Code/);
     await rejects(() => mark(U.hr, 'signed_contract', false), /checklist is closed/);

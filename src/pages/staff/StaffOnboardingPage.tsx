@@ -108,7 +108,7 @@ export default function StaffOnboardingPage() {
       <div>
         <h1 className="text-2xl font-bold text-brand-navy">Agent onboarding</h1>
         <p className="text-sm text-muted-foreground">
-          HR ticks the four documents and the date iFacts cleared. The Sales Coordinator then issues the Agent Code. No R100 or commission is paid
+          HR ticks the four documents and the date iFacts cleared. The Sales Coordinator or the Office Administrator then issues the Agent Code. No R100 or commission is paid
           before the Agent Code, and an R100 is forfeited if the code is not issued within 30 days of the submission.
         </p>
         {role === "hr" || role === "owner" ? <p className="mt-1 text-xs text-muted-foreground">{SAFE_TEXT_NOTE}</p> : null}
@@ -127,7 +127,7 @@ export default function StaffOnboardingPage() {
         {q.data && rows.length === 0 ? <p className="text-sm text-muted-foreground">{filter === "open" ? "Everyone has an Agent Code." : "No agents yet."}</p> : null}
         <ul className="divide-y divide-border">
           {rows.map((r) => (
-            <AgentRow key={r.profile_id} r={r} canMark={role === "hr" || role === "owner"} canIssue={role === "coordinator"} isOwner={role === "owner"} />
+            <AgentRow key={r.profile_id} r={r} canMark={role === "hr" || role === "owner"} canIssue={role === "coordinator" || role === "administrator"} isOwner={role === "owner"} />
           ))}
         </ul>
       </section>

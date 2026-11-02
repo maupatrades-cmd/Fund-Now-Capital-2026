@@ -108,7 +108,7 @@ begin
   if v_now_ready and not v_was_ready then
     for v_coord in
       select p.id from public.profiles p join public.staff_access s on s.profile_id = p.id and s.staff_role = p.role
-       where p.role::text = 'coordinator' and p.is_active and s.access_enabled
+       where p.role::text in ('coordinator', 'administrator') and p.is_active and s.access_enabled
     loop
       perform public.staff_notify(v_coord, 'AGENT_ONBOARDING_READY', 'Agent Code can be issued',
         coalesce(v_name, 'An agent') || ' has all four onboarding documents and a cleared iFacts check.',
@@ -122,7 +122,7 @@ revoke all on function public.hr_mark_onboarding_item(uuid, text, boolean, date,
 grant execute on function public.hr_mark_onboarding_item(uuid, text, boolean, date, text) to authenticated;
 
 -- 2. Issuing the Agent Code ----------------------------------------------------------------------------------------------
--- The Sales Coordinator: only when the checklist is complete, using the iFacts date HR recorded. The Director: always;
+-- The Sales Coordinator or the Office Administrator (owner, 2 Nov): only when the checklist is complete, using the iFacts date HR recorded. The Director: always;
 -- with an incomplete checklist it is an override and needs a reason. The iFacts date is still required either way,
 -- because the contracts make nothing payable before iFacts clears.
 create or replace function public.staff_issue_agent_code(
@@ -134,8 +134,8 @@ declare
   v_staff text := public.staff_role_of(); v_state jsonb; v_ready boolean; v_date date;
   v_reason text := nullif(btrim(coalesce(p_override_reason, '')), ''); v_override boolean := false;
 begin
-  if not (v_owner or coalesce(v_staff = 'coordinator', false)) then
-    raise exception 'Only the Sales Coordinator or the Director issues an Agent Code' using errcode = '42501';
+  if not (v_owner or coalesce(v_staff in ('coordinator', 'administrator'), false)) then
+    raise exception 'Only the Sales Coordinator, the Office Administrator or the Director issues an Agent Code' using errcode = '42501';
   end if;
   select p.role::text into v_role from public.profiles p where p.id = p_profile and p.is_active;
   if v_role is null or v_role not in ('partner', 'contractor', 'lead_referrer') then
