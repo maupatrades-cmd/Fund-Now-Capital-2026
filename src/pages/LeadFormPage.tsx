@@ -311,6 +311,7 @@ function LeadForm({
         cipc_number: strOrNull(v.cipc_number),
         contact_email: strOrNull(v.contact_email),
         contact_cell: cell,
+        contact_id_number: strOrNull(v.contact_id_number),
         exclude_lead_id: excludeLeadId,
       });
     } catch (e) {
@@ -519,20 +520,23 @@ function LeadForm({
           </Field>
         </Fieldset>
 
-        {/* Hard block: an exact CIPC match against an existing lead. */}
+        {/* Hard block: an exact CIPC match against an existing lead, or (no CIPC) the
+            same SA ID number as an open lead. */}
         {blockMatch && (
           <div className="flex items-start gap-3 rounded-xl border border-red-300 bg-red-50 p-4 text-sm">
             <Ban className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
             <div className="space-y-1">
               <p className="font-semibold text-red-800">
-                A lead already exists for this CIPC number — {blockMatch.business_name}.
+                A lead already exists for this {blockMatch.match_kind === "sa_id" ? "ID number" : "CIPC number"} — {blockMatch.business_name}.
               </p>
               <p className="text-red-700">
-                A CIPC number is a unique legal identifier, so this is the same business.{" "}
+                {blockMatch.match_kind === "sa_id"
+                  ? "Without a CIPC number, the business owner's ID number identifies the client, so this is the same client."
+                  : "A CIPC number is a unique legal identifier, so this is the same business."}{" "}
                 <Link to={`/leads/${blockMatch.entity_id}`} className="font-medium underline">
                   Open the existing lead
                 </Link>{" "}
-                instead, or correct the CIPC number to continue.
+                instead, or correct the {blockMatch.match_kind === "sa_id" ? "ID number" : "CIPC number"} to continue.
               </p>
             </div>
           </div>
@@ -627,6 +631,8 @@ function matchLabel(m: LeadDuplicate): string {
   switch (m.match_kind) {
     case "cipc":
       return `same CIPC number (${where})`;
+    case "sa_id":
+      return `same ID number (${where})`;
     case "name":
       return `similar business name (${where})`;
     case "email":
