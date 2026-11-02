@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon } from "lucide-react";
+import { BadgeCheck, BookOpenCheck,MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -24,6 +24,7 @@ const navigation: Item[] = [
   { to: "/staff/reports", label: "Reports", icon: BarChart3, end: false, founderAdminOnly: true },
   { to: "/staff/admin-fees", label: "Admin fees", icon: ReceiptText, end: false, founderAdminOnly: true },
   { to: "/staff/commissions", label: "Commission flow", icon: HandCoins, end: false, hr: true, noSwitchboard: true },
+  { to: "/staff/onboarding", label: "Agent onboarding", icon: BadgeCheck, end: false, hr: true, noSwitchboard: true },
   { to: "/staff/payroll", label: "Payroll", icon: Wallet, end: false, hr: true, founderAdminOnly: true },
   { to: "/staff/payslips", label: "My payslips", icon: FileText, end: false, hr: true, notOwner: true },
   { to: "/staff/complaints", label: "Complaints", icon: MessageSquareWarning, end: false },
