@@ -25,7 +25,7 @@ const navigation: Item[] = [
   { to: "/staff/admin-fees", label: "Admin fees", icon: ReceiptText, end: false, founderAdminOnly: true },
   { to: "/staff/commissions", label: "Commission flow", icon: HandCoins, end: false, hr: true, noSwitchboard: true },
   { to: "/staff/payroll", label: "Payroll", icon: Wallet, end: false, hr: true, founderAdminOnly: true },
-  { to: "/staff/payslips", label: "My payslips", icon: FileText, end: false, hr: true, notOwner: true },
+  { to: "/staff/payslips", label: "My payslips", icon: FileText, end: false, hr: true, field: true, notOwner: true },
   { to: "/staff/complaints", label: "Complaints", icon: MessageSquareWarning, end: false },
   { to: "/staff/outbound", label: "Outbound leads", icon: RouteIcon, end: false },
   { to: "/staff/field-leads", label: "Field leads", icon: MapPin, end: false, managerOnly: true, field: true },
@@ -37,7 +37,7 @@ export function StaffShell({ children }: { children: ReactNode }) {
   const session = useSession();
   const { data: role } = useStaffRole();
   // HR and the field roles see only the pages marked for them (HR: messages, notices, the commission flow, payroll,
-  // own payslips, My day); every other page refuses them anyway. "My day" is for the roles without the Coordinator's
+  // own payslips, My day; field roles: My day, notices, own payslips); every other page refuses them anyway. "My day" is for the roles without the Coordinator's
   // Home page; the all-roles targets screen is the Director's.
   const items = role === "hr" ? navigation.filter((i) => i.hr)
     : isFieldRole(role) ? navigation.filter((i) => i.field)

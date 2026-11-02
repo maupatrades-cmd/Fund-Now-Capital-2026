@@ -114,9 +114,11 @@ export type LeadFilters = {
 };
 
 // One candidate match from find_lead_duplicates (B2.3). severity 'block' is the
-// CIPC-vs-lead hard stop (the server rejects it too); 'warn' is advisory.
+// CIPC-vs-lead hard stop, or for a lead with no CIPC the SA-ID-vs-open-lead stop
+// (the server rejects both too); 'warn' is advisory. The ID number itself is
+// never returned, only match_kind 'sa_id'.
 export type LeadDuplicate = {
-  match_kind: "cipc" | "name" | "email" | "cell";
+  match_kind: "cipc" | "sa_id" | "name" | "email" | "cell";
   severity: "block" | "warn";
   entity: "lead" | "client";
   entity_id: string;
@@ -129,6 +131,7 @@ export type DuplicateCheckArgs = {
   cipc_number?: string | null;
   contact_email?: string | null;
   contact_cell?: string | null; // already normalised (0XXXXXXXXX)
+  contact_id_number?: string | null; // matched only when the lead has no CIPC
   exclude_lead_id?: string | null;
 };
 
@@ -233,6 +236,7 @@ export function useCheckLeadDuplicates() {
         p_email: args.contact_email ?? null,
         p_cell: args.contact_cell ?? null,
         p_exclude_lead_id: args.exclude_lead_id ?? null,
+        p_id_number: args.contact_id_number ?? null,
       });
       if (error) throw error;
       return (data ?? []) as LeadDuplicate[];
@@ -324,7 +328,7 @@ export function useLeadRequiredDocsMissing(leadId: string | undefined, enabled =
   });
 }
 
-// The jsonb audit shape qualify_lead returns (B5.2). match_kind is 'cipc'/'name'
+// The jsonb audit shape qualify_lead returns (B5.2). match_kind is 'cipc'/'sa_id'/'name'
 // when the lead re-pointed onto an existing client, null for a genuinely new
 // client, 'idempotent' on a re-qualify. The migrated counts show the re-point
 // triggers actually fired.
@@ -334,7 +338,7 @@ export type QualifyResult = {
   client_id: string;
   client_business_name: string | null;
   matched_existing: boolean;
-  match_kind: "cipc" | "name" | "idempotent" | null;
+  match_kind: "cipc" | "sa_id" | "name" | "idempotent" | null;
   stakeholder_count_migrated: number;
   document_count_migrated: number;
   story_count_migrated: number;
