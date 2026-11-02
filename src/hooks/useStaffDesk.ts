@@ -235,8 +235,8 @@ export type IntakeLookups = {
   partner_agents: { profile_id: string; name: string; organisation_id: string }[];
 };
 
-export function useIntakeLookups() {
-  return useQuery({ queryKey: ["staff-intake-lookups"], staleTime: 5 * 60_000, queryFn: () => rpc<IntakeLookups>("staff_intake_lookups") });
+export function useIntakeLookups(enabled = true) {
+  return useQuery({ queryKey: ["staff-intake-lookups"], enabled, staleTime: 5 * 60_000, queryFn: () => rpc<IntakeLookups>("staff_intake_lookups") });
 }
 
 export type RegisterIntakeInput = {
