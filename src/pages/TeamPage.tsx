@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -347,13 +347,15 @@ function TeamTable({
 
 // Owner switches a staff member's workspace on or off. Off by default: the role
 // alone grants nothing until the Owner has checked the signed contract.
-// Agent Code (launch plan §4): issued by the Director once iFacts has cleared. No R100 or commission is paid before it.
+// Agent Code (launch plan §3/§4): HR's checklist then the Sales Coordinator, on the Agent onboarding page. From here the
+// Director issues it directly (an override, logged). No R100 or commission is paid before it.
 function AgentCodeControl({ member }: { member: TeamMember }) {
   const { data: codes } = useAgentClearances(true);
   const issue = useIssueAgentCode();
   const code = codes?.find((c) => c.profile_id === member.id);
   if (code) return <span className="mt-1 block text-xs text-muted-foreground">Agent Code {code.agent_code} · iFacts cleared {code.ifacts_cleared_on}</span>;
   const run = () => {
+    if (!window.confirm("Normally HR ticks the onboarding documents and the Sales Coordinator issues the code on the Agent onboarding page. Issue it yourself now as a Director override?")) return;
     const agentCode = window.prompt("Agent Code to issue (letters, numbers or dashes):");
     if (!agentCode || !agentCode.trim()) return;
     const clearedOn = window.prompt("Date iFacts cleared (YYYY-MM-DD):", new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" }));
@@ -363,9 +365,11 @@ function AgentCodeControl({ member }: { member: TeamMember }) {
     });
   };
   return (
-    <button type="button" onClick={run} disabled={issue.isPending} className="mt-1 block text-xs font-semibold text-brand-teal underline disabled:opacity-50">
-      No Agent Code yet · issue after iFacts clears
-    </button>
+    <span className="mt-1 block text-xs">
+      <Link to="/staff/onboarding" className="font-semibold text-brand-teal underline">No Agent Code yet · onboarding checklist</Link>
+      {" · "}
+      <button type="button" onClick={run} disabled={issue.isPending} className="text-muted-foreground underline disabled:opacity-50">issue now (override)</button>
+    </span>
   );
 }
 

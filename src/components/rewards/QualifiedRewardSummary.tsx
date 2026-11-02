@@ -10,6 +10,7 @@ export function QualifiedRewardSummary({ href }: { href: string }) {
   const locked = rows.filter((row) => row.current_status === "locked").length;
   const pending = rows.filter((row) => ["scheduled", "held", "released", "carried_forward"].includes(row.current_status)).length;
   const paid = rows.filter((row) => row.current_status === "paid").length;
+  const forfeited = rows.filter((row) => row.current_status === "forfeited").length;
 
   return (
     <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
@@ -20,7 +21,7 @@ export function QualifiedRewardSummary({ href }: { href: string }) {
         </div>
         <Link to={href} className="text-sm font-semibold text-brand-teal hover:underline">View reward history</Link>
       </div>
-      {gate.data && !gate.data.cleared ? <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Rewards are paid once your iFacts check has cleared and your Agent Code is issued.</p> : null}
+      {gate.data && !gate.data.cleared ? <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Rewards are paid once your iFacts check has cleared and your Agent Code is issued. A reward is forfeited if no Agent Code is issued within 30 days of the submission.</p> : null}
       {query.isLoading ? <p className="mt-4 text-sm text-muted-foreground">Loading rewards…</p> : null}
       {query.isError ? <p className="mt-4 text-sm text-red-700">Rewards are temporarily unavailable.</p> : null}
       {!query.isLoading && !query.isError ? (
@@ -30,6 +31,7 @@ export function QualifiedRewardSummary({ href }: { href: string }) {
           <Stat icon={CircleCheck} label="Paid" value={formatZAR(paid * 100)} />
         </div>
       ) : null}
+      {forfeited > 0 ? <p className="mt-3 text-xs text-muted-foreground">{forfeited} {forfeited === 1 ? "reward was" : "rewards were"} forfeited: no Agent Code within 30 days of the submission.</p> : null}
     </section>
   );
 }
