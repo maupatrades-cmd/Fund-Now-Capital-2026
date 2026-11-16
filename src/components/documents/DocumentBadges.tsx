@@ -22,6 +22,8 @@ const SOURCE_META: Record<UploadSource, { label: string; className: string }> = 
   partner: { label: "Partner", className: "bg-brand-teal/10 text-brand-teal ring-brand-teal/20" },
   client: { label: "Client", className: "bg-green-100 text-green-800 ring-green-600/20" },
   funder: { label: "Funder", className: "bg-amber-100 text-amber-800 ring-amber-600/20" },
+  contractor: { label: "Agent", className: "bg-brand-teal/10 text-brand-teal ring-brand-teal/20" },
+  lead_referrer: { label: "Sub-agent", className: "bg-brand-teal/10 text-brand-teal ring-brand-teal/20" },
 };
 
 // Who uploaded the document (audit-truth upload_source), visually differentiated.
