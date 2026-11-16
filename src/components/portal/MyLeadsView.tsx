@@ -14,6 +14,7 @@ import {
   usePortalLeads,
   leadStatus,
   STATUS_BADGE,
+  type LeadSubmitterKind,
 } from "@/hooks/usePortalLeads";
 import type { PortalKind } from "@/components/portal/PortalShell";
 
@@ -22,27 +23,33 @@ import type { PortalKind } from "@/components/portal/PortalShell";
  * status derived from the owner's qualification stage. A submitter can attach
  * documents after creation to recover from a partial-success upload. RLS
  * guarantees a partner/contractor can act only on their own attributed leads.
+ * The attach dialog is shared with the sub-agent portal's leads page.
  */
-export default function MyLeadsView({ portal }: { portal: PortalKind }) {
-  const { data, isLoading, isError, error, refetch } = usePortalLeads(portal);
-  const attach = useAttachLeadDocuments(portal);
+export function AttachLeadDocumentsModal({
+  leadId,
+  submitter,
+  onClose,
+}: {
+  leadId: string;
+  submitter: LeadSubmitterKind;
+  onClose: () => void;
+}) {
+  const attach = useAttachLeadDocuments(submitter);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [targetLeadId, setTargetLeadId] = useState<string | null>(null);
+  const targetLeadId = leadId;
   const [files, setFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   // Documents already stored on the open lead, so a re-attach never duplicates a
   // file that succeeded on a previous submission or attempt. Attaching is blocked
   // until this resolves (signaturesReady) so the dedup guard can't be bypassed
   // by a still-loading or errored query — the mutation itself does no dedup.
-  const signaturesQuery = useLeadDocumentSignatures(targetLeadId, portal);
+  const signaturesQuery = useLeadDocumentSignatures(targetLeadId, submitter);
   const existingSignatures = signaturesQuery.data;
   const signaturesReady = signaturesQuery.isSuccess;
 
   const closeAttach = () => {
     if (attach.isPending) return;
-    setTargetLeadId(null);
-    setFiles([]);
-    setFileError(null);
+    onClose();
   };
 
   const chooseFiles = (incoming: FileList | null) => {
@@ -111,10 +118,103 @@ export default function MyLeadsView({ portal }: { portal: PortalKind }) {
       );
       return;
     }
-    setTargetLeadId(null);
-    setFiles([]);
-    setFileError(null);
+    onClose();
   };
+
+  return (
+    <Modal title="Attach lead documents" onClose={closeAttach} maxWidth="max-w-lg">
+      <p className="text-sm text-muted-foreground">
+        Add paperwork that was missed or failed during submission. Up to 10MB per file. Files
+        already attached to this lead are skipped automatically.
+      </p>
+
+      {signaturesQuery.isLoading && (
+        <p className="text-xs text-muted-foreground">
+          Checking which documents are already attached…
+        </p>
+      )}
+      {signaturesQuery.isError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+          Couldn't check which documents are already attached, so attaching is paused to avoid
+          duplicates.{" "}
+          <button
+            type="button"
+            onClick={() => void signaturesQuery.refetch()}
+            className="font-medium underline"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={attach.isPending || !signaturesReady}
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-slate-50 px-4 py-5 text-sm font-medium text-brand-navy hover:border-brand-teal hover:bg-brand-teal/5 disabled:opacity-50"
+      >
+        <Paperclip className="h-4 w-4 text-brand-teal" /> Choose files
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(event) => chooseFiles(event.target.files)}
+      />
+      {fileError && <p className="text-xs text-red-600">{fileError}</p>}
+
+      {files.length > 0 && (
+        <ul className="max-h-48 space-y-2 overflow-y-auto">
+          {files.map((file, index) => (
+            <li
+              key={`${file.name}-${file.size}-${file.lastModified}`}
+              className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
+            >
+              <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="min-w-0 flex-1 truncate text-brand-navy">{file.name}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {formatFileSize(file.size)}
+              </span>
+              <button
+                type="button"
+                onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
+                disabled={attach.isPending}
+                className="rounded p-1 text-muted-foreground hover:bg-slate-100 hover:text-red-600"
+                aria-label={`Remove ${file.name}`}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={closeAttach}
+          disabled={attach.isPending}
+          className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-brand-navy disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => void uploadFiles()}
+          disabled={files.length === 0 || attach.isPending || !signaturesReady}
+          className="rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          {attach.isPending ? "Attaching…" : `Attach${files.length > 0 ? ` (${files.length})` : ""}`}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+export default function MyLeadsView({ portal }: { portal: PortalKind }) {
+  const { data, isLoading, isError, error, refetch } = usePortalLeads(portal);
+  const [targetLeadId, setTargetLeadId] = useState<string | null>(null);
 
   const submitCta = (
     <Link
@@ -196,11 +296,7 @@ export default function MyLeadsView({ portal }: { portal: PortalKind }) {
                     <td className="px-4 py-3">
                       <button
                         type="button"
-                        onClick={() => {
-                          setTargetLeadId(row.id);
-                          setFiles([]);
-                          setFileError(null);
-                        }}
+                        onClick={() => setTargetLeadId(row.id)}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-brand-navy hover:bg-slate-50"
                       >
                         <FileUp className="h-3.5 w-3.5" /> Attach
@@ -215,93 +311,7 @@ export default function MyLeadsView({ portal }: { portal: PortalKind }) {
       )}
 
       {targetLeadId && (
-        <Modal title="Attach lead documents" onClose={closeAttach} maxWidth="max-w-lg">
-          <p className="text-sm text-muted-foreground">
-            Add paperwork that was missed or failed during submission. Up to 10MB per file. Files
-            already attached to this lead are skipped automatically.
-          </p>
-
-          {signaturesQuery.isLoading && (
-            <p className="text-xs text-muted-foreground">
-              Checking which documents are already attached…
-            </p>
-          )}
-          {signaturesQuery.isError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
-              Couldn't check which documents are already attached, so attaching is paused to avoid
-              duplicates.{" "}
-              <button
-                type="button"
-                onClick={() => void signaturesQuery.refetch()}
-                className="font-medium underline"
-              >
-                Retry
-              </button>
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={attach.isPending || !signaturesReady}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-slate-50 px-4 py-5 text-sm font-medium text-brand-navy hover:border-brand-teal hover:bg-brand-teal/5 disabled:opacity-50"
-          >
-            <Paperclip className="h-4 w-4 text-brand-teal" /> Choose files
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(event) => chooseFiles(event.target.files)}
-          />
-          {fileError && <p className="text-xs text-red-600">{fileError}</p>}
-
-          {files.length > 0 && (
-            <ul className="max-h-48 space-y-2 overflow-y-auto">
-              {files.map((file, index) => (
-                <li
-                  key={`${file.name}-${file.size}-${file.lastModified}`}
-                  className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
-                >
-                  <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-brand-navy">{file.name}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatFileSize(file.size)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
-                    disabled={attach.isPending}
-                    className="rounded p-1 text-muted-foreground hover:bg-slate-100 hover:text-red-600"
-                    aria-label={`Remove ${file.name}`}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={closeAttach}
-              disabled={attach.isPending}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-brand-navy disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void uploadFiles()}
-              disabled={files.length === 0 || attach.isPending || !signaturesReady}
-              className="rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              {attach.isPending ? "Attaching…" : `Attach${files.length > 0 ? ` (${files.length})` : ""}`}
-            </button>
-          </div>
-        </Modal>
+        <AttachLeadDocumentsModal key={targetLeadId} leadId={targetLeadId} submitter={portal} onClose={() => setTargetLeadId(null)} />
       )}
     </div>
   );

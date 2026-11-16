@@ -4,10 +4,19 @@ import { useSession } from "@/lib/useSession";
 import type { PortalKind } from "@/components/portal/PortalShell";
 
 // Documents submitted through the portal are attached to the lead with an honest
-// provenance (upload_source = 'partner' | 'contractor') and left as type 'other'
+// provenance (upload_source = 'partner' | 'contractor' | 'lead_referrer') and left as type 'other'
 // — the owner re-classifies during qualification. 'other' is not period-scoped,
 // so it never trips the period_start/end CHECK.
 const BUCKET = "documents";
+
+// Who can attach documents to a lead they submitted: the two portals plus the sub-agent (lead_referrer) portal, which
+// only attaches here (it submits leads through lead_referrer_submit_lead). Each maps to its honest upload_source.
+export type LeadSubmitterKind = PortalKind | "lead-referrer";
+const UPLOAD_SOURCE: Record<LeadSubmitterKind, "partner" | "contractor" | "lead_referrer"> = {
+  partner: "partner",
+  contractor: "contractor",
+  "lead-referrer": "lead_referrer",
+};
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB per file
 
 // ---- Submission ------------------------------------------------------------
@@ -39,7 +48,7 @@ function safeName(name: string): string {
 // object — the submitter DELETE storage policy (own uploads under own leads)
 // makes this rollback effective, not a silent no-op — logging only a NON-PII
 // trace (never the path/filename).
-async function attachFile(leadId: string, file: File, source: PortalKind): Promise<void> {
+async function attachFile(leadId: string, file: File, source: LeadSubmitterKind): Promise<void> {
   const documentId = crypto.randomUUID();
   const path = `leads/${leadId}/${documentId}/${safeName(file.name)}`;
 
@@ -56,7 +65,7 @@ async function attachFile(leadId: string, file: File, source: PortalKind): Promi
       filename: file.name,
       storage_path: path,
       document_type: "other",
-      upload_source: source,
+      upload_source: UPLOAD_SOURCE[source],
       file_size_bytes: file.size,
       mime_type: file.type || null,
     })
@@ -144,7 +153,7 @@ export function docSignature(name: string, size: number | null | undefined): str
 // name+size signatures. RLS (documents_lead_submitter_read) scopes this to the
 // caller's own lead and to non-PII 'other'-type rows — exactly the documents a
 // submitter can re-upload — so the recovery dialog can dedup against them.
-export function useLeadDocumentSignatures(leadId: string | null, portal: PortalKind) {
+export function useLeadDocumentSignatures(leadId: string | null, portal: LeadSubmitterKind) {
   return useQuery({
     queryKey: ["portal-lead-documents", portal, leadId],
     enabled: !!leadId,
@@ -178,7 +187,7 @@ export type AttachLeadDocumentsResult = {
 // this mutation only retries document attachment and can never duplicate the
 // lead or its owner notification. Database and Storage RLS remain authoritative:
 // the signed-in submitter can attach files only to a lead attributed to them.
-export function useAttachLeadDocuments(portal: PortalKind) {
+export function useAttachLeadDocuments(portal: LeadSubmitterKind) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ leadId, files }: AttachLeadDocumentsInput): Promise<AttachLeadDocumentsResult> => {
