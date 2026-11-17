@@ -128,6 +128,7 @@ test('HR checklist gates the Sales Coordinator\'s Agent Code; the Director overr
     ].join('\n'));
     await db.exec(await mig('20261102090000_agent_code_enums.sql'));
     await db.exec(await mig('20261102100000_agent_code_onboarding.sql'));
+    await db.exec(await mig('20261117100000_admin_marks_onboarding.sql'));
     await db.exec(`insert into public.profiles(id,email,full_name,role) values ('${U.hr}','hr@example.test','Sam HR','hr');
       insert into public.staff_access(profile_id, staff_role, access_enabled, contract_reference) values ('${U.hr}','hr',true,'HR-01');`);
 
@@ -143,10 +144,10 @@ test('HR checklist gates the Sales Coordinator\'s Agent Code; the Director overr
     await db.exec('reset role;');
     const today = (await one('select public.current_sast_date()::text as d')).d;
 
-    // ---- 1. Only HR or the Director ticks the checklist ----------------------------------------------------------------
-    await rejects(() => mark(U.coordinator, 'signed_contract'), /Only HR or the Director/, '42501');
-    await rejects(() => mark(U.switchboard, 'signed_contract'), /Only HR or the Director/, '42501');
-    await rejects(() => mark(U.sub, 'signed_contract'), /Only HR or the Director/, '42501');
+    // ---- 1. Only HR, the Office Administrator or the Director ticks the checklist ----------------------------------------------------------------
+    await rejects(() => mark(U.coordinator, 'signed_contract'), /Only HR, the Office Administrator or the Director/, '42501');
+    await rejects(() => mark(U.switchboard, 'signed_contract'), /Only HR, the Office Administrator or the Director/, '42501');
+    await rejects(() => mark(U.sub, 'signed_contract'), /Only HR, the Office Administrator or the Director/, '42501');
     await as(U.hr);
     await rejects(() => q("select public.hr_mark_onboarding_item($1,'signed_contract',true)", [U.coordinator]), /active agents/);
     await rejects(() => mark(U.hr, 'passport'), /Unknown onboarding item/);
@@ -159,7 +160,8 @@ test('HR checklist gates the Sales Coordinator\'s Agent Code; the Director overr
     await rejects(() => issue(U.admin, U.sub, 'FNC-SA-001'), /HR has not yet marked/);
     for (const item of ['signed_contract', 'certified_id', 'bank_letter']) await mark(U.hr, item);
     await rejects(() => mark(U.hr, 'bank_letter'), /Nothing to change/);
-    await mark(U.hr, 'ifacts_consent', true, null, 'Consent form signed at the office');
+    // The Office Administrator may tick items too (owner, 17 Nov).
+    await mark(U.admin, 'ifacts_consent', true, null, 'Consent form signed at the office');
     assert.equal(await notices(U.coordinator, 'AGENT_ONBOARDING_READY'), 0, 'not ready until iFacts clears');
     await rejects(() => issue(U.coordinator, U.sub, 'FNC-SA-001'), /HR has not yet marked/);
     await mark(U.owner, 'ifacts_cleared', true, today);
@@ -168,7 +170,7 @@ test('HR checklist gates the Sales Coordinator\'s Agent Code; the Director overr
     // A tick taken back makes it not ready again; ticking it again tells the Coordinator again.
     await mark(U.hr, 'bank_letter', false, null, 'Wrong bank letter, waiting for the right one');
     await rejects(() => issue(U.coordinator, U.sub, 'FNC-SA-001'), /HR has not yet marked/);
-    await mark(U.hr, 'bank_letter');
+    await mark(U.admin, 'bank_letter');
     assert.equal(await notices(U.coordinator, 'AGENT_ONBOARDING_READY'), 2);
 
     // ---- 3. Who sees the list ------------------------------------------------------------------------------------------
