@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { card, errorText, Field, primaryButton, selectClass } from "@/components/staff/StaffShell";
 import { useStaffRole } from "@/hooks/useStaffDesk";
+import { ScannedFormsTab } from "@/components/forms/ScannedFormsTab";
 import {
   useAgentFile, useRevealAgentSensitive, useSaveAgentBank, useSaveAgentDetails,
   type AgentFile, type AgentSensitive, type BankAccountType, type VatStatus,
@@ -11,7 +12,8 @@ import {
 
 // Agent file (owner, 17 Nov 2026): the Office Administrator, HR and the Director capture an agent's details and bank
 // details on the agent's behalf. Numbers are typed here but always read back masked; only HR and the Director can
-// reveal them (POPIA). Scanned documents live in the separate scanned-forms feature (placeholder below).
+// reveal them (POPIA). Scanned documents come from the scanned-forms feature (its tab is mounted below); an uploaded
+// Bank Confirmation Letter becomes the agent's proof of banking.
 const ROLE_LABEL: Record<AgentFile["role"], string> = { partner: "Partner / Team Leader", contractor: "Direct agent", lead_referrer: "Sub-agent" };
 const STATUS_LABEL: Record<NonNullable<AgentFile["bank"]>["verification_status"], string> = {
   incomplete: "Incomplete", pending_verification: "Waiting for the Director to verify", verified: "Verified", rejected: "Rejected",
@@ -195,10 +197,8 @@ export default function StaffAgentFilePage() {
       <DetailsForm key={`d-${f.details_updated_at ?? ""}`} f={f} />
       <BankForm key={`b-${f.bank?.updated_at ?? ""}`} f={f} />
       {f.can_view_sensitive ? <FullNumbers profileId={f.profile_id} /> : null}
-      {/* Placeholder: the "Scan & upload paper forms" feature fills this section (agent onboarding documents included). */}
-      <section className={card} aria-labelledby="scanned-forms-heading" data-placeholder="scanned-forms">
-        <h2 id="scanned-forms-heading" className="text-lg font-bold text-brand-navy">Scanned forms</h2>
-        <p className="mt-2 text-sm text-muted-foreground">Scanning and uploading this agent's signed contract, certified ID, bank letter and iFacts consent is coming here soon.</p>
+      <section className={card}>
+        <ScannedFormsTab subject={{ kind: "person", id: f.profile_id, name: f.full_name ?? undefined }} />
       </section>
     </div>
   );
