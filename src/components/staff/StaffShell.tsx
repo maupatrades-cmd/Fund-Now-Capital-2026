@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon, MapPin, BadgeCheck } from "lucide-react";
+import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon, MapPin, BadgeCheck, FolderOpen } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -27,6 +27,8 @@ const navigation: Item[] = [
   { to: "/staff/onboarding", label: "Agent onboarding", icon: BadgeCheck, end: false, hr: true, noSwitchboard: true },
   { to: "/staff/payroll", label: "Payroll", icon: Wallet, end: false, hr: true, founderAdminOnly: true },
   { to: "/staff/payslips", label: "My payslips", icon: FileText, end: false, hr: true, field: true, notOwner: true },
+  // Every staff role has some forms it may upload or see; the database decides which.
+  { to: "/staff/forms", label: "Forms library", icon: FolderOpen, end: false, hr: true, field: true },
   { to: "/staff/complaints", label: "Complaints", icon: MessageSquareWarning, end: false },
   { to: "/staff/outbound", label: "Outbound leads", icon: RouteIcon, end: false },
   { to: "/staff/field-leads", label: "Field leads", icon: MapPin, end: false, managerOnly: true, field: true },
