@@ -20,7 +20,7 @@ const navigation: Item[] = [
   { to: "/staff/team-diary", label: "Team diary", icon: CalendarCheck, end: false },
   { to: "/staff/messages", label: "Messages", icon: MessagesSquare, end: false, hr: true },
   { to: "/staff/notices", label: "Notices", icon: Megaphone, end: false, hr: true, field: true },
-  { to: "/staff/tasks", label: "Tasks", icon: ListChecks, end: false },
+  { to: "/staff/tasks", label: "Tasks", icon: ListChecks, end: false, hr: true, field: true },
   { to: "/staff/reports", label: "Reports", icon: BarChart3, end: false, founderAdminOnly: true },
   { to: "/staff/admin-fees", label: "Admin fees", icon: ReceiptText, end: false, founderAdminOnly: true },
   { to: "/staff/commissions", label: "Commission flow", icon: HandCoins, end: false, hr: true, noSwitchboard: true },

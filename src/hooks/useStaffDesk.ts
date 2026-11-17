@@ -123,9 +123,11 @@ export function useAcknowledgeHandover() {
 
 // ---- Tasks ---------------------------------------------------------------
 export type RouteTo = "switchboard" | "coordinator" | "owner";
+// Where a task sits: a desk (RouteTo) or, once given to a person, that person's role (Important tasks, 17 Nov).
+export type TaskRoute = RouteTo | "administrator" | "hr" | "field_supervisor" | "field_consultant";
 export type StaffTask = {
   id: string; title: string; notes: string | null; task_kind: string; priority: string; status: string;
-  due_at: string | null; route_to: RouteTo; assigned_to: string | null; assigned_name: string | null; lead_id: string | null;
+  due_at: string | null; route_to: TaskRoute; assigned_to: string | null; assigned_name: string | null; lead_id: string | null;
   business_name: string | null; created_by_name: string; created_role: string; created_at: string; overdue: boolean;
   // Administrator batch 2: a task given to a named person waits for their answer.
   acceptance: "pending" | "accepted" | "declined" | null; assigned_by_name: string | null;
@@ -142,6 +144,7 @@ export function useStaffTasks(status: "open" | "done" | "cancelled" | null = "op
 function invalidateTasks(qc: ReturnType<typeof useQueryClient>) {
   void qc.invalidateQueries({ queryKey: ["staff-tasks"] });
   void qc.invalidateQueries({ queryKey: ["staff-pending-tasks"] });
+  void qc.invalidateQueries({ queryKey: ["staff-important-tasks"] });
   void qc.invalidateQueries({ queryKey: ["staff-diary"] });
   void qc.invalidateQueries({ queryKey: ["staff-coordinator-landing"] });
 }
@@ -152,6 +155,22 @@ export type PendingTask = {
 };
 export function useMyPendingTasks(enabled: boolean) {
   return useQuery({ queryKey: ["staff-pending-tasks"], enabled, queryFn: () => rpc<PendingTask[]>("staff_my_pending_tasks") });
+}
+// The caller's open Important tasks (from the Director), for the landing-page banner, until they are done.
+export type ImportantTask = {
+  id: string; title: string; notes: string | null; due_at: string | null; overdue: boolean;
+  acceptance: "pending" | "accepted"; assigned_by_name: string | null; business_name: string | null;
+};
+export function useMyImportantTasks(enabled: boolean) {
+  return useQuery({ queryKey: ["staff-important-tasks"], enabled, queryFn: () => rpc<ImportantTask[]>("staff_my_important_tasks") });
+}
+export function useAskTaskQuestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { taskId: string; question: string }) =>
+      rpc<void>("staff_task_ask_question", { p_task_id: i.taskId, p_question: i.question }),
+    onSuccess: () => invalidateTasks(qc),
+  });
 }
 export function useRespondTask() {
   const qc = useQueryClient();
