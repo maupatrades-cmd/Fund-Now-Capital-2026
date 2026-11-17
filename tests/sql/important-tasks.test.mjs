@@ -113,6 +113,7 @@ test('Important tasks: the Director gives tasks to any office role and they cann
     // The live emit_in_app_notification also invokes the email Edge Function; here it only writes the in-app notice.
     await db.exec("create or replace function public.emit_in_app_notification(p_user_id uuid, p_event public.notification_event_type, p_title text, p_body text, p_link text, p_data jsonb) returns void language plpgsql security definer set search_path = '' as $$ begin if p_user_id is null then return; end if; insert into public.notifications (user_id, event_type, title, body_text, link_url, data, read_status) values (p_user_id, p_event, p_title, p_body, p_link, p_data, false); end $$;");
     await db.exec(await mig('20261117131000_important_tasks.sql'));
+    await db.exec(await mig('20261117140000_important_tasks_owner_cancel.sql'));
 
     await as(U.owner);
     for (const [who, ref] of [[U.coordinator, 'SC-01'], [U.switchboard, 'SA-01'], [U.admin, 'AD-01'], [U.fsup, 'FS-01'], [U.fcon, 'FC-01'], [U.hr, 'HR-01']]) {
@@ -176,7 +177,11 @@ test('Important tasks: the Director gives tasks to any office role and they cann
     await as(U.fsup);
     await rejects(() => q("select public.staff_close_task($1,'done',null)", [given.field_supervisor]), /after accepting it/, '42501');
     await rejects(() => q("select public.staff_close_task($1,'done',null)", [given.hr]), /after accepting it/, '42501');
+    // Only the Director cancels an Important task: not the Administrator, nor the person it was given to.
+    await as(U.admin);
+    await rejects(() => q("select public.staff_close_task($1,'cancelled','No longer needed')", [given.coordinator]), /Only the Director can cancel an Important task/, '42501');
     await as(U.hr);
+    await rejects(() => q("select public.staff_close_task($1,'cancelled',null)", [given.hr]), /Only the Director can cancel an Important task/, '42501');
     await q("select public.staff_close_task($1,'done','Register filed')", [given.hr]);
     assert.equal((await q('select * from public.staff_my_important_tasks()')).length, 0, 'the banner clears once done');
     // The Switchboard desk does not see a task given to the Coordinator; the Coordinator does not see HR's.
