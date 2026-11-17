@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { PendingTasksPanel } from "@/components/staff/PendingTasksPanel";
 import { QualifyingAndKpis } from "@/components/staff/QualifyingAndKpis";
 import { MyTargetsPanel } from "@/components/staff/MyTargetsPanel";
+import { MissingRegistersPanel } from "@/components/forms/MissingRegistersPanel";
 import { card, errorText } from "@/components/staff/StaffShell";
 import { isStaffManager, useCompleteDocumentChaser, useCoordinatorLanding, useDocumentChasers, useStaffRole } from "@/hooks/useStaffDesk";
 
@@ -44,6 +45,7 @@ export default function StaffHomePage() {
       </div>
       <PendingTasksPanel />
       {role !== "owner" ? <MyTargetsPanel /> : null}
+      <MissingRegistersPanel enabled={role === "administrator" || role === "owner"} />
       {landing.error ? <p role="alert" className="text-sm text-red-600">{errorText(landing.error)}</p> : null}
       {d ? (
         <>

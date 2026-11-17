@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { scannedProofUrl } from "@/hooks/useScannedForms";
 
 // Build 3.3 — owner-side payee verification data layer. Reads/writes go through
 // the Build 3.1 owner RPCs (owner-gated in-body). The detail RPC is the ONLY
@@ -105,6 +106,10 @@ export function useSetPayeeVerification() {
 }
 
 export async function getOwnerBankingProofUrl(path: string, expiresIn = 3600): Promise<string> {
+  // A bank letter the office scanned (FNC-AG-BANK) is referenced as "scanned-form:<id>" and opened through the
+  // scanned-forms log + ticket, not the payee-proofs bucket.
+  const scanned = await scannedProofUrl(path);
+  if (scanned) return scanned;
   const { data, error } = await supabase.storage.from(PROOF_BUCKET).createSignedUrl(path, expiresIn);
   if (error) throw error;
   return data.signedUrl;

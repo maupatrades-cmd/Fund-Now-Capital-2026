@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/useSession";
+import { SCANNED_PROOF_PREFIX } from "@/hooks/useScannedForms";
 import type { PortalKind } from "@/components/portal/PortalShell";
 
 // Build 3.2 — data layer for the partner/contractor payment-details surface.
@@ -78,6 +79,10 @@ export async function uploadBankingProof(uid: string, file: File): Promise<strin
 // Short-lived signed URL so the subject can view the proof they uploaded (their
 // own folder only — RLS enforces it).
 export async function getBankingProofUrl(path: string, expiresIn = 3600): Promise<string> {
+  // The office scanned this person's bank letter: it is kept with the office's scanned forms, not in their folder.
+  if (path.startsWith(SCANNED_PROOF_PREFIX)) {
+    throw new Error("Your bank letter was scanned by the Fund Now Capital office and is kept on file there.");
+  }
   const { data, error } = await supabase.storage.from(PROOF_BUCKET).createSignedUrl(path, expiresIn);
   if (error) throw error;
   return data.signedUrl;

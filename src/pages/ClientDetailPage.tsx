@@ -14,8 +14,9 @@ import { referredByMeta } from "@/lib/clients";
 import { formatZAR } from "@/lib/format";
 import { ActivityFeed } from "@/components/activity/ActivityFeed";
 import ClientPortalAccessPanel from "@/components/clients/ClientPortalAccessPanel";
+import { ScannedFormsTab } from "@/components/forms/ScannedFormsTab";
 
-type Tab = "overview" | "story" | "stakeholders" | "documents" | "calllog" | "notes" | "activity";
+type Tab = "overview" | "story" | "stakeholders" | "documents" | "forms" | "calllog" | "notes" | "activity";
 
 export default function ClientDetailPage() {
   const { id } = useParams();
@@ -78,6 +79,9 @@ export default function ClientDetailPage() {
         </TabButton>
         <TabButton active={tab === "documents"} onClick={() => setTab("documents")}>
           Documents
+        </TabButton>
+        <TabButton active={tab === "forms"} onClick={() => setTab("forms")}>
+          Scanned forms
         </TabButton>
         <TabButton active={tab === "calllog"} onClick={() => setTab("calllog")}>
           Call Log
@@ -144,6 +148,12 @@ export default function ClientDetailPage() {
       {tab === "documents" && (
         <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
           <DocumentsPanel entity={{ kind: "client", id: client.id }} referralPartnerId={client.referral_partner_id} />
+        </section>
+      )}
+
+      {tab === "forms" && (
+        <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+          <ScannedFormsTab subject={{ kind: "client", id: client.id, name: client.business_name ?? undefined }} />
         </section>
       )}
 

@@ -21,6 +21,7 @@ import { DealDocuments } from "@/components/deals/DealDocuments";
 import { DealDocumentRequirements } from "@/components/deals/DealDocumentRequirements";
 import { StageHistory } from "@/components/deals/StageHistory";
 import { ActivityFeed } from "@/components/activity/ActivityFeed";
+import { ScannedFormsTab } from "@/components/forms/ScannedFormsTab";
 import { ClientFundingOffers } from "@/components/deals/ClientFundingOffers";
 
 export default function DealDetailPage() {
@@ -302,6 +303,12 @@ export default function DealDetailPage() {
           <DealDocuments clientId={deal.client_id} />
         </section>
       </div>
+
+      {deal.client_id ? (
+        <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+          <ScannedFormsTab subject={{ kind: "deal", id: deal.id, clientId: deal.client_id }} />
+        </section>
+      ) : null}
 
       <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
         <StageHistory dealId={deal.id} />

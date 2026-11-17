@@ -327,6 +327,9 @@ function TeamTable({
                 <Badge className={statusBadgeClass(m.is_active)}>{m.is_active ? "Active" : "Deactivated"}</Badge>
                 {(m.role === "switchboard" || m.role === "coordinator" || m.role === "administrator" || m.role === "hr" || m.role === "field_supervisor" || m.role === "field_consultant") && <StaffAccessToggle member={m} />}
                 {(m.role === "partner" || m.role === "contractor" || m.role === "lead_referrer") && <AgentCodeControl member={m} />}
+                {m.role !== "client" ? (
+                  <Link to={`/staff/forms?person=${m.id}`} className="mt-1 block text-xs font-semibold text-brand-teal hover:underline">Scanned forms</Link>
+                ) : null}
               </td>
               <td className="px-4 py-3 text-muted-foreground">{formatJoined(m.created_at)}</td>
               <td className="px-4 py-3 text-right">
