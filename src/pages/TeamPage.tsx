@@ -469,7 +469,7 @@ function RowActions({
       if (res.email_sent === false) {
         toast.error(`Could not send the login email to ${member.email}. Please try again shortly.`);
       } else {
-        toast.success(`Login link re-sent to ${member.email}`);
+        toast.success(`Welcome email with a new password link sent to ${member.email}`);
       }
       if (res.audit_logged === false) onAuditWarning(auditWarn("Resending the invite", res.audit_failure_recorded === true));
     } catch (e) {
@@ -713,6 +713,10 @@ function InviteDialog({
         );
       }
       if (res.audit_logged === false) onAuditWarning(auditWarn("Inviting the person", res.audit_failure_recorded === true));
+      // The welcome email never carries the temporary password, so a failed send is only a warning here.
+      if (v.invite_method === "temp_password" && res.email_sent === false) {
+        toast.warning(`The welcome email to ${v.email.trim()} could not be sent. Give them the sign-in address with the password.`);
+      }
       if (v.invite_method === "temp_password" && res.temp_password) {
         onClose();
         onTempPassword(v.full_name.trim(), res.temp_password);

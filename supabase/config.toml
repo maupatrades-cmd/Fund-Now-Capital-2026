@@ -55,6 +55,14 @@ verify_jwt = false
 [functions.request-client-magic-link]
 verify_jwt = false
 
+# "Forgot password" (public, non-enumerating, throttled in password_reset_requests) and its last step, which
+# checks the caller's emailed-link session itself.
+[functions.request-password-reset]
+verify_jwt = false
+
+[functions.complete-password-reset]
+verify_jwt = false
+
 # Invitation endpoints handle browser preflight themselves. Creation validates
 # the caller JWT in-function; resolution deliberately accepts an opaque token.
 [functions.create-client-invitation]

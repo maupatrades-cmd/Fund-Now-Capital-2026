@@ -13,6 +13,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+// A password link (welcome email or "Forgot password") arrives with "type=recovery" in the URL hash. Read it before
+// the client consumes the hash, so the app can send the person to /reset-password even if Supabase redirected them
+// to the site root instead of the requested page.
+export const arrivedFromPasswordLink =
+  typeof window !== "undefined" && /(^|[#&])type=recovery(&|$)/.test(window.location.hash);
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
