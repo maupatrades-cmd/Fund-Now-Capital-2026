@@ -32,8 +32,29 @@ test("team invitations are owner-only and expose both supported delivery paths",
     'return json({ error: "Only the owner can invite people" }, 403)',
     'inviteMethod !== "magic_link" && inviteMethod !== "temp_password"',
     "service.auth.admin.generateLink",
-    "sendMagicLinkEmail",
+    "sendAccountEmail",
+    'kind: "welcome"',
   ], "owner-only invite edge function");
+});
+
+test("forgot password: public request page, non-enumerating throttled email, link-only password set", async () => {
+  const [app, auth, request, complete, shared] = await Promise.all([
+    source("src/App.tsx"),
+    source("src/pages/AuthPage.tsx"),
+    source("supabase/functions/request-password-reset/index.ts"),
+    source("supabase/functions/complete-password-reset/index.ts"),
+    source("supabase/functions/_shared/account-email.ts"),
+  ]);
+  includesAll(app, ['path="/forgot-password"', 'path="/reset-password"', 'publicPath !== "/reset-password"'], "password routes");
+  includesAll(auth, ['navigate("/forgot-password")'], "sign-in page forgot link");
+  includesAll(request, [
+    'type: "recovery"',
+    '.neq("role", "client")',
+    "password_reset_requests",
+    "If an account exists for this email, a reset link is on its way.",
+  ], "request-password-reset");
+  includesAll(complete, ['m === "recovery"', "must_change_password: false", "validPassword(newPassword)"], "complete-password-reset");
+  includesAll(shared, ["/fnc-logo.png", "/forgot-password"], "branded account email");
 });
 
 test("partner, contractor, lead-referrer and owner portals fail closed by role", async () => {

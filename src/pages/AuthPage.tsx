@@ -9,7 +9,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation, useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import { roleHome } from "@/lib/roles";
 import { supabase } from "@/lib/supabase";
 import { passwordChangeLocation, signingReturnPath } from "@/lib/signingReturnPath";
@@ -418,9 +417,9 @@ export default function AuthPage() {
               <button
                 type="button"
                 className="forgot"
-                onClick={() => toast("Password reset coming soon")}
+                onClick={() => navigate("/forgot-password")}
               >
-                Forgot?
+                Forgot password?
               </button>
             </div>
             <div className="input-wrap">

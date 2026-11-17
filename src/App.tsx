@@ -3,6 +3,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import AuthPage from "@/pages/AuthPage";
 import ChangePasswordPage from "@/pages/ChangePasswordPage";
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import PublicApplyPage from "@/pages/PublicApplyPage";
 import TermsViewPage from "@/pages/TermsViewPage";
 import SignAgreementPage from "@/pages/SignAgreementPage";
@@ -120,6 +122,7 @@ import { ConfettiProvider } from "@/lib/celebration/ConfettiProvider";
 import { useProfileRole } from "@/hooks/useProfileRole";
 import { roleHome } from "@/lib/roles";
 import { useSession } from "@/lib/useSession";
+import { arrivedFromPasswordLink } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import { passwordChangeLocation, signingReturnPath } from "@/lib/signingReturnPath";
 
@@ -140,6 +143,9 @@ function RoleLanding() {
   return <Navigate to={roleHome(role)} replace />;
 }
 
+// Redirect to /reset-password at most once per page load, so the person can still leave that page.
+let recoveryRedirected = false;
+
 function AppRoutes() {
   const session = useSession();
   const location = useLocation();
@@ -148,7 +154,12 @@ function AppRoutes() {
   // on the session read — render them immediately. React Router's location also
   // keeps the password-change gate in sync with navigation inside the app.
   const publicPath = location.pathname.replace(/\/+$/, "");
-  const onPublicRoute = publicPath === "/apply" || publicPath === "/terms/current";
+  const onPublicRoute = publicPath === "/apply" || publicPath === "/terms/current" || publicPath === "/forgot-password";
+  // A password link that landed anywhere but /reset-password still goes there first (see arrivedFromPasswordLink).
+  if (arrivedFromPasswordLink && publicPath !== "/reset-password" && !recoveryRedirected) {
+    recoveryRedirected = true;
+    return <Navigate to="/reset-password" replace />;
+  }
 
   // Brief loading state while we read the persisted session.
   if (session === undefined && !onPublicRoute) {
@@ -160,7 +171,7 @@ function AppRoutes() {
   }
 
   const mustChangePassword = session?.user.app_metadata?.must_change_password === true;
-  if (session && mustChangePassword && publicPath !== "/change-password" && !onPublicRoute) {
+  if (session && mustChangePassword && publicPath !== "/change-password" && publicPath !== "/reset-password" && !onPublicRoute) {
     const destination = passwordChangeLocation(location);
     return <Navigate to={destination.pathname} state={destination.state} replace />;
   }
@@ -171,6 +182,9 @@ function AppRoutes() {
         path="/"
         element={session ? <RoleLanding /> : <AuthPage />}
       />
+      {/* "Forgot password" (public) and the page every emailed password link lands on. */}
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route
         path="/change-password"
         element={session ? <ChangePasswordPage /> : <Navigate to={signingReturnPath(location) ?? "/"} replace />}

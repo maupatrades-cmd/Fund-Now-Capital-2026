@@ -580,7 +580,7 @@ export function renderEmail(m: EmailModel): { subject: string; html: string; tex
 
   <!-- Block A: gradient header -->
   <tr><td align="center" bgcolor="${NAVY}" style="background-color:${NAVY};background-image:linear-gradient(135deg,${NAVY} 0%,${TEAL} 100%);padding:32px 24px 28px;">
-    <img src="${logoWhite}" width="48" height="50" alt="Fund Now Capital" style="display:block;border:0;outline:none;text-decoration:none;height:auto;margin:0 auto 12px;">
+    <img src="${logoWhite}" width="48" height="48" alt="Fund Now Capital" style="display:block;border:0;outline:none;text-decoration:none;height:auto;margin:0 auto 12px;">
     <div style="font-family:${FONT};font-size:13px;font-weight:500;letter-spacing:0.5px;color:rgba(255,255,255,0.85);">${TAGLINE}</div>
   </td></tr>
 
@@ -599,7 +599,7 @@ export function renderEmail(m: EmailModel): { subject: string; html: string; tex
 
   <!-- Block D: footer -->
   <tr><td bgcolor="${FOOTER_BG}" style="background-color:${FOOTER_BG};padding:32px 32px 24px;">
-    <img src="${logoWhite}" width="32" height="33" alt="Fund Now Capital" style="display:block;border:0;outline:none;text-decoration:none;height:auto;margin:0 0 20px;">
+    <img src="${logoWhite}" width="32" height="32" alt="Fund Now Capital" style="display:block;border:0;outline:none;text-decoration:none;height:auto;margin:0 0 20px;">
     <div style="font-size:0;">${footerCols}</div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;"><tr>
       <td style="padding-top:16px;border-top:1px solid rgba(255,255,255,0.12);font-family:${FONT};font-size:11px;font-weight:400;line-height:1.5;color:rgba(255,255,255,0.5);">&copy; 2026 ${LEGAL_NAME} &middot; CIPC ${CIPC}</td>

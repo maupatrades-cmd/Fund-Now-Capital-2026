@@ -2,8 +2,9 @@
 //
 // Owner-only Edge Function that onboards a new person (partner or contractor)
 // into the CRM: creates the Supabase Auth user, fills in their profile, and
-// hands them login access — either a branded magic link (delivered via Resend)
-// or a temporary password (returned to the owner to share verbally).
+// hands them login access — either a branded welcome email carrying a password-setup link
+// (delivered via Resend) or a temporary password (returned to the owner to share verbally;
+// a welcome email still goes out, never containing the password).
 //
 // AUTH MODEL — why this differs from the send-notification-email pattern:
 //   send-notification-email is invoked server-to-server by the DB (pg_net) and
@@ -28,6 +29,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { renderAccountEmail, type AccountEmail } from "../_shared/account-email.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -107,39 +109,11 @@ type InviteBody = {
   parent_partner_id?: string | null;
 };
 
-// Send the branded magic-link email via the Resend REST API. Returns true on a
-// 2xx from Resend. Kept dependency-free (plain fetch) — the invite email is a
-// simple on-brand shell, not the bulletproof S16 notification template.
-async function sendMagicLinkEmail(to: string, fullName: string, role: string, link: string): Promise<boolean> {
+// Send a branded account email (welcome / password reset template in ../_shared/account-email.ts) via the Resend
+// REST API. Returns true on a 2xx from Resend.
+async function sendAccountEmail(to: string, email: AccountEmail): Promise<boolean> {
   if (!RESEND_API_KEY) return false;
-  const roleLabel = ROLE_LABEL[role] ?? role;
-  const greeting = fullName ? `Hi ${fullName},` : "Hi,";
-  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f1f5f9;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 0;">
-   <tr><td align="center">
-    <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">
-     <tr><td style="background:#1a3a52;padding:24px 32px;">
-       <div style="color:#ffffff;font-size:18px;font-weight:bold;">Fund Now <span style="color:#2da8b8;">Capital</span></div>
-       <div style="color:rgba(255,255,255,0.6);font-size:12px;margin-top:2px;">Many funders. More approvals.</div>
-     </td></tr>
-     <tr><td style="padding:32px;color:#1a3a52;font-size:15px;line-height:1.6;">
-       <p style="margin:0 0 12px;">${greeting}</p>
-       <p style="margin:0 0 12px;">You've been added to the Fund Now Capital CRM as a <strong>${roleLabel}</strong>. Use the button below to log in — no password needed.</p>
-       <p style="margin:24px 0;text-align:center;">
-         <a href="${link}" style="display:inline-block;background:#2da8b8;color:#ffffff;text-decoration:none;font-weight:bold;font-size:15px;padding:12px 28px;border-radius:8px;">Log in to Fund Now Capital</a>
-       </p>
-       <p style="margin:0 0 12px;color:#64748b;font-size:13px;">This login link is single-use and expires after a short time. If it has expired, ask Thapelo to resend your invite.</p>
-       <p style="margin:0 0 4px;color:#64748b;font-size:13px;">If the button doesn't work, copy and paste this link into your browser:</p>
-       <p style="margin:0;word-break:break-all;font-size:12px;"><a href="${link}" style="color:#2da8b8;">${link}</a></p>
-     </td></tr>
-     <tr><td style="background:#1a3a52;padding:16px 32px;color:rgba(255,255,255,0.45);font-size:11px;">© 2026 Fund Now Capital (Pty) Ltd</td></tr>
-    </table>
-   </td></tr>
-  </table></body></html>`;
-  const text =
-    `${greeting}\n\nYou've been added to the Fund Now Capital CRM as a ${roleLabel}.\n` +
-    `Log in using this single-use link (it expires after a short time):\n\n${link}\n\n` +
-    `If it has expired, ask Thapelo to resend your invite.\n\n— Fund Now Capital`;
+  const { subject, html, text } = renderAccountEmail(email, APP_BASE_URL);
 
   // Wrap the network call: a DNS/TLS/connection reject must NOT escape the
   // handler after the Auth user + profile were already created — it returns
@@ -149,14 +123,7 @@ async function sendMagicLinkEmail(to: string, fullName: string, role: string, li
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: FROM,
-        to: [to],
-        reply_to: REPLY_TO,
-        subject: "You've been invited to the Fund Now Capital CRM",
-        html,
-        text,
-      }),
+      body: JSON.stringify({ from: FROM, to: [to], reply_to: REPLY_TO, subject, html, text }),
     });
     if (!res.ok) console.error("Resend returned non-2xx:", res.status);
     return res.ok;
@@ -164,6 +131,17 @@ async function sendMagicLinkEmail(to: string, fullName: string, role: string, li
     console.error("Resend request failed:", (e as Error).message);
     return false;
   }
+}
+
+// The invite link is a single-use password-setup (recovery) link: the first click signs the person in on
+// /reset-password?welcome=1, where they choose a password, so they can sign in normally afterwards.
+async function welcomeLink(service: SupabaseClient, email: string): Promise<string | null> {
+  const { data, error } = await service.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: { redirectTo: `${APP_BASE_URL.replace(/\/$/, "")}/reset-password?welcome=1` },
+  });
+  return error ? null : data?.properties?.action_link ?? null;
 }
 
 // Result of an audit attempt: `ok` = the activity_logs row was written;
@@ -363,14 +341,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
     // Same email + same role = idempotent success (no duplicate created).
     if (inviteMethod === "magic_link") {
-      const { data: linkData, error: linkErr } = await service.auth.admin.generateLink({
-        type: "magiclink",
-        email,
-        options: { redirectTo: APP_BASE_URL },
+      const link = await welcomeLink(service, email);
+      if (!link) return json({ error: "Could not generate a login link" }, 500);
+      const sent = await sendAccountEmail(email, {
+        kind: "welcome", fullName, roleLabel: ROLE_LABEL[role] ?? role, actionUrl: link,
+        actionLabel: "Choose your password", tempPassword: false,
       });
-      const link = linkData?.properties?.action_link;
-      if (linkErr || !link) return json({ error: "Could not generate a login link" }, 500);
-      const sent = await sendMagicLinkEmail(email, fullName, role, link);
       const auditRes = await audit(
         service,
         callerInfo,
@@ -506,16 +482,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // ---- deliver access ------------------------------------------------------
+  // Every new person gets the branded welcome email. Magic link: it carries the password-setup link. Temporary
+  // password: it points to the sign-in page; the password itself is never emailed (the owner hands it over).
+  const roleLabel = ROLE_LABEL[requestedRole] ?? ROLE_LABEL[role] ?? role;
   let emailSent = false;
   if (inviteMethod === "magic_link") {
-    const { data: linkData, error: linkErr } = await service.auth.admin.generateLink({
-      type: "magiclink",
-      email,
-      options: { redirectTo: APP_BASE_URL },
+    const link = await welcomeLink(service, email);
+    if (!link) return json({ error: "User created but a login link could not be generated" }, 500);
+    emailSent = await sendAccountEmail(email, {
+      kind: "welcome", fullName, roleLabel, actionUrl: link, actionLabel: "Choose your password", tempPassword: false,
     });
-    const link = linkData?.properties?.action_link;
-    if (linkErr || !link) return json({ error: "User created but a login link could not be generated" }, 500);
-    emailSent = await sendMagicLinkEmail(email, fullName, role, link);
+  } else {
+    emailSent = await sendAccountEmail(email, {
+      kind: "welcome", fullName, roleLabel, actionUrl: `${APP_BASE_URL.replace(/\/$/, "")}/`, actionLabel: "Go to sign in",
+      tempPassword: true,
+    });
   }
 
   const auditRes = await audit(
@@ -542,7 +523,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     status: "created",
     user_id: userId,
     invite_method: inviteMethod,
-    email_sent: inviteMethod === "magic_link" ? emailSent : undefined,
+    email_sent: emailSent,
     temp_password: inviteMethod === "temp_password" ? tempPassword : undefined,
     phone_saved: phoneSaved,
     audit_logged: auditRes.ok,
