@@ -43,6 +43,7 @@ function BriefingView({ day }: { day: string | null }) {
         <Stat label="Files with the Director" value={b.urgent.files_with_founder} />
         <Stat label="Open tasks" value={b.tasks.open} />
         <Stat label="Waiting to be accepted" value={b.tasks.awaiting_acceptance} />
+        <Stat label="Important tasks overdue" value={b.tasks.important_overdue ?? 0} warn={(b.tasks.important_overdue ?? 0) > 0} />
         <Stat label="Diary requests to decide" value={b.time_requests_pending} />
         <Stat label="Callbacks due today" value={b.urgent.callbacks_due_today} />
       </div>
@@ -66,7 +67,7 @@ function BriefingView({ day }: { day: string | null }) {
                 <span className="block text-xs text-muted-foreground">{e.note} · {fmt(e.created_at)}</span></li>
             ))}
             {b.tasks.urgent.map((t, i) => (
-              <li key={`t${i}`} className="py-2">{t.priority === "high" ? <span className="rounded bg-amber-200 px-1.5 py-0.5 text-xs text-amber-900">High</span> : null} {t.title}
+              <li key={`t${i}`} className="py-2">{t.priority === "important" ? <span className="rounded bg-red-600 px-1.5 py-0.5 text-xs text-white">Important</span> : null}{t.priority === "high" ? <span className="rounded bg-amber-200 px-1.5 py-0.5 text-xs text-amber-900">High</span> : null} {t.title}
                 <span className="block text-xs text-muted-foreground">
                   {t.assignee ?? words(t.route_to)}{t.business_name ? ` · ${t.business_name}` : ""}{t.due_at ? ` · due ${fmt(t.due_at)}` : ""}
                 </span></li>

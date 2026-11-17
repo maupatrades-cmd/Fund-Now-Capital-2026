@@ -3,10 +3,11 @@ import { toast } from "sonner";
 import { FounderDecisionPanel } from "@/components/staff/FounderDecision";
 import { PendingTasksPanel } from "@/components/staff/PendingTasksPanel";
 import { Input } from "@/components/ui/input";
+import { useSession } from "@/lib/useSession";
 import { Field, SAFE_TEXT_NOTE, card, errorText, primaryButton, selectClass, textareaClass } from "@/components/staff/StaffShell";
 import {
-  canAssignTasks, useAssignTask, useAssignableStaff, useCloseStaffTask, useCreateAssignedTask, useCreateStaffTask, useRouteStaffTask,
-  useStaffRole, useStaffTasks, type RouteTo, type StaffTask,
+  canAssignTasks, useAskTaskQuestion, useAssignTask, useAssignableStaff, useCloseStaffTask, useCreateAssignedTask, useCreateStaffTask,
+  useRouteStaffTask, useStaffRole, useStaffTasks, type RouteTo, type StaffTask,
 } from "@/hooks/useStaffDesk";
 
 const KINDS = [
@@ -19,12 +20,28 @@ const ACCEPTANCE: Record<string, [string, string]> = {
   accepted: ["accepted", "bg-green-100 text-green-800"],
   declined: ["declined", "bg-red-100 text-red-800"],
 };
-const ROLE_NAME: Record<string, string> = { coordinator: "Sales Coordinator", switchboard: "Switchboard" };
+const ROLE_NAME: Record<string, string> = {
+  owner: "the Director", administrator: "Office Administrator", coordinator: "Sales Coordinator", switchboard: "Switchboard",
+  hr: "HR", field_supervisor: "Field Supervisor", field_consultant: "Field consultant",
+};
+const IMPORTANT_BADGE = "ml-2 rounded bg-red-600 px-1.5 py-0.5 text-xs text-white";
+
+// Where a task the caller gave stands now (the Director's "Tasks I gave" list).
+function givenState(t: StaffTask): [string, string] {
+  if (t.status === "done") return ["done", "bg-green-100 text-green-800"];
+  if (t.status === "cancelled") return ["cancelled", "bg-slate-100 text-slate-700"];
+  if (t.overdue) return ["overdue", "bg-red-100 text-red-800"];
+  if (t.acceptance === "pending") return ["waiting to be accepted", "bg-amber-100 text-amber-800"];
+  if (t.acceptance === "declined") return ["declined", "bg-red-100 text-red-800"];
+  return ["accepted, in progress", "bg-blue-100 text-blue-800"];
+}
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", dateStyle: "medium", timeStyle: "short" });
 
 export default function StaffTasksPage() {
   const { data: role } = useStaffRole();
+  const session = useSession();
+  const myId = session?.user.id;
   const [status, setStatus] = useState<"open" | "done">("open");
   const tasks = useStaffTasks(status);
   const create = useCreateStaffTask();
@@ -33,7 +50,13 @@ export default function StaffTasksPage() {
   const [form, setForm] = useState({ title: "", notes: "", kind: "general", priority: "normal", due: "", routeTo: "coordinator" as RouteTo });
   const assigner = canAssignTasks(role);
   const people = useAssignableStaff(assigner);
-  const staffPeople = (people.data ?? []).filter((p) => p.staff_role === "coordinator" || p.staff_role === "switchboard");
+  // Any enabled member of the office staff (Important tasks, 17 Nov); the database refuses giving one to yourself.
+  const staffPeople = (people.data ?? []).filter((p) => p.profile_id !== myId);
+  // HR and the field roles have no desk: they see and finish their own tasks only.
+  const hasDesk = role === "owner" || role === "administrator" || role === "coordinator" || role === "switchboard";
+  const given = useStaffTasks(assigner ? null : "open");
+  const ask = useAskTaskQuestion();
+  const [question, setQuestion] = useState<Record<string, string>>({});
   const createAssigned = useCreateAssignedTask();
   const assign = useAssignTask();
   const [give, setGive] = useState({ title: "", notes: "", priority: "normal", due: "", person: "" });
@@ -82,7 +105,7 @@ export default function StaffTasksPage() {
     <>
       <div>
         <h1 className="text-2xl font-bold text-brand-navy">Tasks</h1>
-        <p className="text-sm text-muted-foreground">Shared work between the desk, the Coordinator and the Owner. A founder decision always goes to the Owner.</p>
+        <p className="text-sm text-muted-foreground">Shared work between the desk, the Coordinator and the Owner. A founder decision always goes to the Owner. The Director and the Administrator can give a task to anyone in the office; an Important task from the Director cannot be declined.</p>
       </div>
 
       <PendingTasksPanel />
@@ -94,12 +117,13 @@ export default function StaffTasksPage() {
           <Field label="Give it to">
             <select className={selectClass} value={give.person} onChange={(e) => setGive({ ...give, person: e.target.value })}>
               <option value="">Choose a person...</option>
-              {staffPeople.map((p) => <option key={p.profile_id} value={p.profile_id}>{p.full_name} ({ROLE_NAME[p.staff_role]})</option>)}
+              {staffPeople.map((p) => <option key={p.profile_id} value={p.profile_id}>{p.full_name} ({ROLE_NAME[p.staff_role] ?? p.staff_role})</option>)}
             </select>
           </Field>
           <Field label="Priority">
             <select className={selectClass} value={give.priority} onChange={(e) => setGive({ ...give, priority: e.target.value })}>
               <option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option>
+              {role === "owner" ? <option value="important">Important — from the Director (cannot be declined)</option> : null}
             </select>
           </Field>
           <Field label="Due (optional)"><Input type="datetime-local" value={give.due} onChange={(e) => setGive({ ...give, due: e.target.value })} /></Field>
@@ -112,7 +136,32 @@ export default function StaffTasksPage() {
         </form>
       ) : null}
 
-      <form onSubmit={submit} className={`${card} grid gap-4 md:grid-cols-2`}>
+      {assigner ? (
+        <section className={card}>
+          <h2 className="mb-2 text-base font-bold text-brand-navy">Tasks I gave</h2>
+          {given.error ? <p role="alert" className="text-sm text-red-600">{errorText(given.error)}</p> : null}
+          <ul className="divide-y divide-border text-sm">
+            {(given.data ?? []).filter((t) => t.given_by_me).map((t) => {
+              const [label, cls] = givenState(t);
+              return (
+                <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <span>
+                    <span className="font-semibold text-brand-navy">{t.title}</span>
+                    {t.priority === "important" ? <span className={IMPORTANT_BADGE}>Important</span> : null}
+                    <span className="block text-xs text-muted-foreground">
+                      {t.assigned_name ?? "Someone"}{t.route_to ? ` (${ROLE_NAME[t.route_to] ?? t.route_to})` : ""}{t.due_at ? ` · due ${fmt(t.due_at)}` : ""}
+                    </span>
+                  </span>
+                  <span className={`rounded px-1.5 py-0.5 text-xs ${cls}`}>{label}</span>
+                </li>
+              );
+            })}
+            {given.data && given.data.filter((t) => t.given_by_me).length === 0 ? <li className="py-2 text-muted-foreground">You have not given any tasks yet.</li> : null}
+          </ul>
+        </section>
+      ) : null}
+
+      {hasDesk ? <form onSubmit={submit} className={`${card} grid gap-4 md:grid-cols-2`}>
         <Field label="Title"><Input required minLength={3} maxLength={160} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
         <Field label="Type">
           <select className={selectClass} value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
@@ -136,7 +185,7 @@ export default function StaffTasksPage() {
           </Field>
         </div>
         <div className="md:col-span-2"><button type="submit" disabled={create.isPending} className={primaryButton}>Create task</button></div>
-      </form>
+      </form> : null}
 
       <section className={card}>
         <div className="mb-3 flex items-center justify-between">
@@ -151,6 +200,7 @@ export default function StaffTasksPage() {
             <li key={t.id} className="space-y-1 py-3 text-sm">
               <p className="font-semibold text-brand-navy">
                 {t.title}
+                {t.priority === "important" ? <span className={IMPORTANT_BADGE}>Important — from the Director</span> : null}
                 {t.priority === "high" ? <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-800">high</span> : null}
                 {t.task_kind === "founder_decision" ? <span className="ml-2 rounded bg-violet-100 px-1.5 py-0.5 text-xs text-violet-800">founder decision</span> : null}
               </p>
@@ -168,7 +218,7 @@ export default function StaffTasksPage() {
                     onChange={(e) => setReassignTo({ ...reassignTo, [t.id]: e.target.value })}>
                     <option value="">{t.acceptance === "declined" ? "Give to someone else..." : "Give to a person..."}</option>
                     {staffPeople.filter((p) => p.profile_id !== t.assigned_to).map((p) => (
-                      <option key={p.profile_id} value={p.profile_id}>{p.full_name} ({ROLE_NAME[p.staff_role]})</option>
+                      <option key={p.profile_id} value={p.profile_id}>{p.full_name} ({ROLE_NAME[p.staff_role] ?? p.staff_role})</option>
                     ))}
                   </select>
                   <button type="button" className="text-xs font-semibold text-brand-teal underline" disabled={!reassignTo[t.id] || assign.isPending}
@@ -178,7 +228,7 @@ export default function StaffTasksPage() {
                 </div>
               ) : null}
               <p className={`text-xs ${t.overdue ? "text-red-600" : "text-muted-foreground"}`}>
-                With {t.route_to}{t.business_name ? ` · ${t.business_name}` : ""} · from {t.created_by_name}{t.due_at ? ` · due ${fmt(t.due_at)}` : ""}{t.overdue ? " · overdue" : ""}
+                With {t.assigned_name ?? ROLE_NAME[t.route_to] ?? t.route_to}{t.business_name ? ` · ${t.business_name}` : ""} · from {t.created_by_name}{t.due_at ? ` · due ${fmt(t.due_at)}` : ""}{t.overdue ? " · overdue" : ""}
               </p>
               {t.status === "open" ? (
                 <div className="flex flex-wrap gap-3 pt-1">
@@ -186,9 +236,20 @@ export default function StaffTasksPage() {
                     <button type="button" className="text-xs font-semibold text-green-700 underline"
                       onClick={() => close.mutate({ taskId: t.id, outcome: "done", note: "" }, { onError: (e) => toast.error(errorText(e)) })}>Mark done</button>
                   ) : null}
-                  {t.task_kind !== "founder_decision" ? targets.filter((x) => x !== t.route_to).map((to) => (
+                  {t.task_kind !== "founder_decision" && hasDesk ? targets.filter((x) => x !== t.route_to).map((to) => (
                     <button key={to} type="button" className="text-xs font-semibold text-brand-teal underline" onClick={() => doRoute(t, to)}>Send to {to}</button>
                   )) : null}
+                </div>
+              ) : null}
+              {t.status === "open" && t.priority === "important" && t.assigned_to === myId && t.acceptance === "accepted" ? (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <input className="h-9 max-w-xs rounded-md border border-input px-3 text-sm" maxLength={500} aria-label="Your question for the Director"
+                    placeholder="Ask the Director a question" value={question[t.id] ?? ""} onChange={(e) => setQuestion({ ...question, [t.id]: e.target.value })} />
+                  <button type="button" className="text-xs font-semibold text-brand-teal underline" disabled={ask.isPending || (question[t.id] ?? "").trim().length < 5}
+                    onClick={() => ask.mutate({ taskId: t.id, question: question[t.id] ?? "" }, {
+                      onSuccess: () => { toast.success("Question sent to the Director"); setQuestion({ ...question, [t.id]: "" }); },
+                      onError: (e) => toast.error(errorText(e)),
+                    })}>Ask a question</button>
                 </div>
               ) : null}
               {t.status === "open" && t.task_kind === "founder_decision" && role === "owner" ? <FounderDecisionPanel taskId={t.id} /> : null}

@@ -16,7 +16,7 @@ export type Briefing = {
   day: string;
   bookings: { starts_at: string; ends_at: string; category: string; title: string; business_name: string | null }[];
   time_requests_pending: number;
-  tasks: { open: number; overdue: number; awaiting_acceptance: number; founder_decisions: number; urgent: BriefingTask[] };
+  tasks: { open: number; overdue: number; awaiting_acceptance: number; founder_decisions: number; important_open?: number; important_overdue?: number; urgent: BriefingTask[] };
   urgent: {
     escalations_open: number; escalations: { title: string; note: string; created_at: string }[];
     complaints_unacknowledged: number; complaints_open: number; callbacks_due_today: number; files_with_founder: number;

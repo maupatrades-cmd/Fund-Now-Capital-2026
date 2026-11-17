@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { PendingTasksPanel } from "@/components/staff/PendingTasksPanel";
+import { ImportantTasksBanner } from "@/components/staff/ImportantTasksBanner";
 import { MyTargetsPanel } from "@/components/staff/MyTargetsPanel";
 import { MyFieldLeadsPanel } from "@/components/staff/MyFieldLeadsPanel";
 import { card } from "@/components/staff/StaffShell";
@@ -15,6 +16,7 @@ export default function StaffMyDayPage() {
         <h1 className="text-2xl font-bold text-brand-navy">My day</h1>
         <p className="text-sm text-muted-foreground">Tasks waiting for you and how this month is going.</p>
       </div>
+      <ImportantTasksBanner />
       <PendingTasksPanel />
       {isFieldRole(role) ? <MyFieldLeadsPanel supervisor={role === "field_supervisor"} /> : null}
       <MyTargetsPanel />
