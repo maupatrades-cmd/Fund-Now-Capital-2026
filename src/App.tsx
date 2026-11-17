@@ -41,6 +41,7 @@ import StaffTasksPage from "@/pages/staff/StaffTasksPage";
 import StaffOutboundPage from "@/pages/staff/StaffOutboundPage";
 import StaffFieldLeadsPage from "@/pages/staff/StaffFieldLeadsPage";
 import StaffQueuePage from "@/pages/staff/StaffQueuePage";
+import StaffAgentFilePage from "@/pages/staff/StaffAgentFilePage";
 import StaffAnswerDeskPage from "@/pages/staff/StaffAnswerDeskPage";
 import StaffHomePage, { StaffIndex } from "@/pages/staff/StaffHomePage";
 import PartnerHomePage from "@/pages/PartnerHomePage";
@@ -285,6 +286,7 @@ function AppRoutes() {
         <Route path="admin-fees/:invoiceId" element={<StaffAdminFeeDocumentPage />} />
         <Route path="payroll" element={<StaffPayrollPage />} />
         <Route path="onboarding" element={<StaffOnboardingPage />} />
+        <Route path="agents/:profileId" element={<StaffAgentFilePage />} />
         <Route path="payslips" element={<StaffPayslipsPage />} />
         <Route path="payslips/:payslipId" element={<StaffPayslipDocumentPage />} />
         <Route path="tasks" element={<StaffTasksPage />} />

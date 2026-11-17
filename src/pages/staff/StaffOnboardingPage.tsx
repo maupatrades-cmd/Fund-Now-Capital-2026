@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { card, errorText, primaryButton, SAFE_TEXT_NOTE } from "@/components/staff/StaffShell";
@@ -21,7 +22,7 @@ const DOCS: { item: Exclude<OnboardingItem, "ifacts_cleared">; label: string; at
 const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString("en-ZA", { timeZone: "Africa/Johannesburg", day: "numeric", month: "short" });
 
-function AgentRow({ r, canMark, canIssue, isOwner }: { r: AgentOnboardingRow; canMark: boolean; canIssue: boolean; isOwner: boolean }) {
+function AgentRow({ r, canMark, canIssue, isOwner, canOpenFile }: { r: AgentOnboardingRow; canMark: boolean; canIssue: boolean; isOwner: boolean; canOpenFile: boolean }) {
   const mark = useMarkOnboardingItem();
   const issue = useStaffIssueAgentCode();
   const [code, setCode] = useState("");
@@ -40,7 +41,8 @@ function AgentRow({ r, canMark, canIssue, isOwner }: { r: AgentOnboardingRow; ca
   return (
     <li className="space-y-3 py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="font-semibold text-brand-navy">{r.full_name ?? "Unnamed"} <span className="text-sm font-normal text-muted-foreground">· {ROLE_LABEL[r.role]}</span></p>
+        <p className="font-semibold text-brand-navy">{r.full_name ?? "Unnamed"} <span className="text-sm font-normal text-muted-foreground">· {ROLE_LABEL[r.role]}</span>
+          {canOpenFile ? <Link to={`/staff/agents/${r.profile_id}`} className="ml-2 text-sm font-semibold text-brand-teal hover:underline">Open agent file</Link> : null}</p>
         {closed
           ? <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">Agent Code {r.agent_code}</span>
           : <span className={`rounded-full px-3 py-1 text-xs font-semibold ${r.ready ? "bg-teal-50 text-brand-teal" : "bg-amber-50 text-amber-900"}`}>{r.ready ? "Ready for an Agent Code" : "Onboarding"}</span>}
@@ -127,7 +129,8 @@ export default function StaffOnboardingPage() {
         {q.data && rows.length === 0 ? <p className="text-sm text-muted-foreground">{filter === "open" ? "Everyone has an Agent Code." : "No agents yet."}</p> : null}
         <ul className="divide-y divide-border">
           {rows.map((r) => (
-            <AgentRow key={r.profile_id} r={r} canMark={role === "hr" || role === "administrator" || role === "owner"} canIssue={role === "coordinator" || role === "administrator"} isOwner={role === "owner"} />
+            <AgentRow key={r.profile_id} r={r} canMark={role === "hr" || role === "administrator" || role === "owner"} canIssue={role === "coordinator" || role === "administrator"} isOwner={role === "owner"}
+              canOpenFile={role === "owner" || role === "hr" || role === "administrator"} />
           ))}
         </ul>
       </section>
