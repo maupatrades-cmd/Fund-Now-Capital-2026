@@ -32,7 +32,7 @@ function AgentRow({ r, canMark, canIssue, isOwner, canOpenFile }: { r: AgentOnbo
   const onError = (e: unknown) => toast.error(errorText(e));
 
   const toggle = (item: OnboardingItem, received: boolean) => {
-    const note = received ? null : window.prompt("Why is this tick being taken back? (no ID or bank numbers)") ?? "";
+    const note = received ? null : window.prompt("Why is this tick being taken back?") ?? "";
     if (!received && !note?.trim()) return;
     mark.mutate({ profileId: r.profile_id, item, received, note }, { onSuccess: () => toast.success("Checklist updated"), onError });
   };

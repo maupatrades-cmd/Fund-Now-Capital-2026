@@ -8,7 +8,7 @@ import { useMsgContacts, useMsgThread, useMsgThreads, useReplyMessage, useSendMe
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", dateStyle: "medium", timeStyle: "short" });
 const box = "rounded-2xl border border-border bg-white p-5 shadow-sm";
 const area = "flex min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
-const SAFE = "Do not type ID numbers, bank account numbers or salary details. Numbers of 9 or more digits are rejected.";
+const SAFE = "";
 const err = (e: unknown) => (e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : "Something went wrong");
 
 function Compose({ onSent }: { onSent: (threadId: string) => void }) {
@@ -45,7 +45,7 @@ function Compose({ onSent }: { onSent: (threadId: string) => void }) {
       </label>
       <label className="block space-y-1 text-sm font-semibold text-brand-navy">Message
         <textarea className={area} maxLength={4000} value={body} onChange={(e) => setBody(e.target.value)} />
-        <span className="block text-xs font-normal text-muted-foreground">{SAFE}</span>
+        {SAFE ? <span className="block text-xs font-normal text-muted-foreground">{SAFE}</span> : null}
       </label>
       <button type="submit" className="rounded-lg bg-brand-teal px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
         disabled={!to.length || subject.trim().length < 2 || !body.trim() || send.isPending}>Send</button>

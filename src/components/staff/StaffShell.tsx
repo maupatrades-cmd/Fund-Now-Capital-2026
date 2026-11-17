@@ -146,8 +146,8 @@ export const card = "rounded-2xl border border-border bg-white p-5 shadow-sm";
 export function errorText(e: unknown): string {
   if (e && typeof e === "object" && "message" in e) {
     const msg = String((e as { message: unknown }).message);
-    // The database's POPIA text guard (staff_text_is_safe, *_safe_text_ck) rejects any run of 9+ digits; say so
-    // in plain words instead of showing the raw constraint name.
+    // The database's text guard (staff_text_is_safe, *_safe_text_ck) is switched off (owner, 17 Nov); if it is ever
+    // switched back on, say so in plain words instead of showing the raw constraint name.
     if (/_safe_text_ck/.test(msg)) {
       return "This text contains a long number (9 or more digits, e.g. a phone, ID or account number). Remove it, or write it without the digits, and try again.";
     }
@@ -157,4 +157,4 @@ export function errorText(e: unknown): string {
 }
 
 export const SAFE_TEXT_NOTE =
-  "Do not type ID numbers, bank account numbers, phone numbers or salary details. Numbers of 9 or more digits are rejected (spaces and dashes are ignored).";
+  "";
