@@ -3,13 +3,15 @@ import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Loader2, NotebookPen, Printer, Search } from "lucide-react";
 import { toast } from "sonner";
+import { useSession } from "@/lib/useSession";
 import {
   addDays, dailyLogKeys, fetchDailyLog, fetchDailyLogActivity, formatLongDay, formatSastTime, sastToday,
   useDailyLog, useDailyLogActivity, useDailyLogList, useSaveDailyLog,
   type DailyLogActivity, type DailyLogDraft, type DailyLogEntry,
 } from "@/hooks/useDailyLog";
 
-// Owner-only private journal (the whole route sits inside <OwnerGate>; the RPCs refuse anyone else too).
+// Private journal for the Director (/daily-log, inside <OwnerGate>) and for every enabled staff member
+// (/staff/daily-log, 20261118161000). Each person reads and writes only their own log; the RPCs refuse anyone else.
 // One entry per SAST day: three boxes, autosaved ~2 s after typing stops, beside what the CRM recorded that day.
 // Printing renders a clean A4 sheet (text, not inputs) through window.print(); no PDF library.
 
@@ -31,7 +33,12 @@ const preview = (e: DailyLogEntry) => [e.what_happened, e.what_i_did, e.notes_fo
 
 type PrintDay = { day: string; entry: DailyLogEntry; activity: DailyLogActivity[] };
 
-export default function DailyLogPage() {
+export default function DailyLogPage({ staff = false }: { staff?: boolean }) {
+  const session = useSession();
+  const meta = session?.user?.user_metadata as { full_name?: string } | undefined;
+  const writerName = meta?.full_name?.trim() || session?.user?.email || "";
+  // The printed sheet names whose log it is: the Director's, or the staff member's own.
+  const printLabel = staff ? `Private · Daily log of ${writerName}`.trim() : "Private · Director's daily log";
   const today = sastToday();
   const qc = useQueryClient();
   const [day, setDay] = useState(today);
@@ -163,7 +170,7 @@ export default function DailyLogPage() {
     <div className="mx-auto max-w-6xl space-y-6 pb-12">
       <header className="rounded-3xl bg-brand-navy px-5 py-6 text-white shadow-sm sm:px-7">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-teal">Private · only you can see this</p>
-        <h1 className="mt-2 flex items-center gap-2 text-2xl font-bold sm:text-3xl"><NotebookPen className="h-7 w-7" aria-hidden="true" /> Daily log</h1>
+        <h1 className="mt-2 flex items-center gap-2 text-2xl font-bold sm:text-3xl"><NotebookPen className="h-7 w-7" aria-hidden="true" /> {staff ? "My daily log" : "Daily log"}</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-white/70">Write down what happened and what you did each day. It saves by itself as you type.</p>
       </header>
 
@@ -250,7 +257,7 @@ export default function DailyLogPage() {
         </ul>
       </section>
 
-      {printDays ? createPortal(<PrintSheet days={printDays} />, document.body) : null}
+      {printDays ? createPortal(<PrintSheet days={printDays} label={printLabel} />, document.body) : null}
     </div>
   );
 }
@@ -265,7 +272,7 @@ function SaveStatus({ status, dirty, tooLong, onRetry }: { status: SaveState; di
 }
 
 // The printable sheet. While it exists, a print stylesheet hides the whole app (#root) and shows only this.
-function PrintSheet({ days }: { days: PrintDay[] }) {
+function PrintSheet({ days, label }: { days: PrintDay[]; label: string }) {
   const printedAt = new Date().toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", dateStyle: "long", timeStyle: "short" });
   return (
     <div className="daily-log-print">
@@ -283,7 +290,7 @@ function PrintSheet({ days }: { days: PrintDay[] }) {
         <section key={day} className="dl-day">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: "3px solid #2da8b8", paddingBottom: 8, marginBottom: 16 }}>
             <img src="/fnc-logo.png" alt="Fund Now Capital" style={{ height: 40 }} />
-            <span style={{ fontSize: 10, color: "#64748b" }}>Private · Director's daily log</span>
+            <span style={{ fontSize: 10, color: "#64748b" }}>{label}</span>
           </div>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: "#1a3a52", margin: "0 0 16px" }}>Daily log — {formatLongDay(day)}</h1>
           {[

@@ -297,6 +297,7 @@ function AppRoutes() {
         <Route path="payslips" element={<StaffPayslipsPage />} />
         <Route path="payslips/:payslipId" element={<StaffPayslipDocumentPage />} />
         <Route path="tasks" element={<StaffTasksPage />} />
+        <Route path="daily-log" element={<DailyLogPage staff />} />
         <Route path="materials" element={<StaffMaterialsRequestPage />} />
         <Route path="outbound" element={<StaffOutboundPage />} />
         <Route path="field-leads" element={<StaffFieldLeadsPage />} />
