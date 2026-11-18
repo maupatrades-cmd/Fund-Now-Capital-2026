@@ -86,3 +86,13 @@
     -moz-osx-font-smoothing: grayscale;
   }
 }
+
+/* Diary print (owner, 18 Nov 2026): when a page shows a .diary-print-sheet, printing shows only that sheet on A4. */
+@media print {
+  @page { size: A4; margin: 14mm; }
+  body:has(.diary-print-sheet) * { visibility: hidden; }
+  body:has(.diary-print-sheet) .diary-print-sheet,
+  body:has(.diary-print-sheet) .diary-print-sheet * { visibility: visible; }
+  body:has(.diary-print-sheet) .diary-print-sheet { position: absolute; inset: 0 auto auto 0; width: 100%; background: #fff; color: #0f172a; }
+  body:has(.diary-print-sheet) { background: #fff; }
+}

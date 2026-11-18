@@ -12,6 +12,7 @@ import {
   ListTodo,
   Loader2,
   Plus,
+  Printer,
   RotateCcw,
   Trash2,
   UserRound,
@@ -25,7 +26,9 @@ import {
   useDecideOwnerBooking,
   useOwnerCalendarOptions,
   useOwnerCalendarRange,
+  useOwnerFieldMeetings,
   usePublishOwnerAvailability,
+  type FieldMeetingLayerItem,
   type OwnerBooking,
   type OwnerCalendarEvent,
 } from "@/hooks/useOwnerCalendar";
@@ -34,6 +37,8 @@ import {
   calendarRange,
   CALENDAR_CATEGORIES,
   CATEGORY_LABELS,
+  EVENT_CATEGORIES,
+  EVENT_CATEGORY_LABELS,
   formatCalendarDay,
   formatCalendarTime,
   isPresentationTimeAllowed,
@@ -41,7 +46,10 @@ import {
   toLocalDateTimeInput,
   type CalendarCategory,
   type CalendarVisibility,
+  type EventCategory,
 } from "@/lib/ownerCalendar";
+import { DiaryPrintSheet, type DiaryPrintItem } from "@/components/calendar/DiaryPrintSheet";
+import { useSession } from "@/lib/useSession";
 
 type CalendarView = "day" | "week";
 
@@ -54,8 +62,11 @@ function defaultMeetingStart() {
   return date;
 }
 
-function categoryTone(category: CalendarCategory) {
+function categoryTone(category: EventCategory) {
   if (category === "urgent") return "bg-rose-50 text-rose-700 ring-rose-200";
+  if (category === "personal") return "bg-violet-50 text-violet-700 ring-violet-200";
+  if (category === "travel") return "bg-sky-50 text-sky-700 ring-sky-200";
+  if (category === "meeting" || category === "other") return "bg-slate-100 text-slate-700 ring-slate-200";
   if (category === "submission") return "bg-blue-50 text-blue-700 ring-blue-200";
   if (category === "submission_update") return "bg-amber-50 text-amber-800 ring-amber-200";
   return "bg-teal-50 text-teal-700 ring-teal-200";
@@ -70,7 +81,7 @@ function EventForm({ eventsSupported }: { eventsSupported: boolean }) {
   const createEvent = useCreateOwnerCalendarEvent();
   const initialStart = useMemo(defaultMeetingStart, []);
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<CalendarCategory>("consultation");
+  const [category, setCategory] = useState<EventCategory>("consultation");
   const [startsAt, setStartsAt] = useState(toLocalDateTimeInput(initialStart));
   const [endsAt, setEndsAt] = useState(toLocalDateTimeInput(new Date(initialStart.getTime() + 30 * 60_000)));
   const [visibleToPortals, setVisibleToPortals] = useState(false);
@@ -82,7 +93,8 @@ function EventForm({ eventsSupported }: { eventsSupported: boolean }) {
   const [notes, setNotes] = useState("");
   const [createTask, setCreateTask] = useState(true);
 
-  const visibility: CalendarVisibility = !visibleToPortals ? "private" : shareLabel ? "public" : "busy";
+  // A Personal event is always private (the server forces it too).
+  const visibility: CalendarVisibility = category === "personal" || !visibleToPortals ? "private" : shareLabel ? "public" : "busy";
   const deals = (options.data?.deals ?? []).filter((deal) => !clientId || deal.clientId === clientId);
 
   async function submit(event: FormEvent) {
@@ -143,8 +155,8 @@ function EventForm({ eventsSupported }: { eventsSupported: boolean }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-xs font-semibold text-slate-700">
           Category
-          <select className={`${fieldClass} mt-1`} value={category} onChange={(event) => setCategory(event.target.value as CalendarCategory)}>
-            {CALENDAR_CATEGORIES.map((value) => <option key={value} value={value}>{CATEGORY_LABELS[value]}</option>)}
+          <select className={`${fieldClass} mt-1`} value={category} onChange={(event) => setCategory(event.target.value as EventCategory)}>
+            {EVENT_CATEGORIES.map((value) => <option key={value} value={value}>{EVENT_CATEGORY_LABELS[value]}</option>)}
           </select>
         </label>
         <label className="flex min-h-11 items-center gap-3 self-end rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-brand-navy">
@@ -166,6 +178,11 @@ function EventForm({ eventsSupported }: { eventsSupported: boolean }) {
       </div>
       {category === "presentation" && <p className="text-xs text-slate-500">Presentation window: 14:00–20:00, Africa/Johannesburg. Every other category can use any available time.</p>}
 
+      {category === "personal" ? (
+        <p className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900">
+          <EyeOff className="h-4 w-4 shrink-0" aria-hidden="true" /> Personal events are always private. Anyone who manages your diary sees only “Busy”.
+        </p>
+      ) : (
       <fieldset className="rounded-xl border border-slate-200 p-3">
         <legend className="px-1 text-xs font-semibold text-slate-700">Portal visibility</legend>
         <button
@@ -188,6 +205,7 @@ function EventForm({ eventsSupported }: { eventsSupported: boolean }) {
           </div>
         )}
       </fieldset>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="block text-xs font-semibold text-slate-700">Client
@@ -341,7 +359,7 @@ function BookingInbox({ bookings }: { bookings: OwnerBooking[] }) {
   );
 }
 
-function Agenda({ days, events, slots, bookings }: { days: Date[]; events: OwnerCalendarEvent[]; slots: { id: string; starts_at: string; ends_at: string; is_open: boolean }[]; bookings: OwnerBooking[] }) {
+function Agenda({ days, events, slots, bookings, fieldMeetings }: { days: Date[]; events: OwnerCalendarEvent[]; slots: { id: string; starts_at: string; ends_at: string; is_open: boolean }[]; bookings: OwnerBooking[]; fieldMeetings: FieldMeetingLayerItem[] }) {
   const cancelEvent = useCancelOwnerCalendarEvent();
 
   async function cancel(event: OwnerCalendarEvent) {
@@ -361,9 +379,11 @@ function Agenda({ days, events, slots, bookings }: { days: Date[]; events: Owner
         const end = addCalendarDays(startOfCalendarDay(day), 1).getTime();
         const dayEvents = events.filter((event) => new Date(event.starts_at).getTime() >= start && new Date(event.starts_at).getTime() < end);
         const daySlots = slots.filter((slot) => new Date(slot.starts_at).getTime() >= start && new Date(slot.starts_at).getTime() < end);
+        const dayField = fieldMeetings.filter((m) => new Date(m.starts_at).getTime() >= start && new Date(m.starts_at).getTime() < end);
         const items = [
           ...dayEvents.map((event) => ({ kind: "event" as const, startsAt: event.starts_at, event })),
           ...daySlots.map((slot) => ({ kind: "slot" as const, startsAt: slot.starts_at, slot })),
+          ...dayField.map((meeting) => ({ kind: "field" as const, startsAt: meeting.starts_at, meeting })),
         ].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 
         return (
@@ -371,11 +391,19 @@ function Agenda({ days, events, slots, bookings }: { days: Date[]; events: Owner
             <h3 className="border-b border-slate-100 pb-2 text-sm font-bold text-brand-navy">{formatCalendarDay(day)}</h3>
             <div className="mt-3 space-y-2">
               {items.map((item) => {
+                if (item.kind === "field") {
+                  const m = item.meeting;
+                  return <article key={`field-${m.id}`} className="rounded-xl border-2 border-dashed border-brand-teal/60 bg-white p-2.5">
+                    <p className="text-xs font-bold text-brand-navy">{formatCalendarTime(m.starts_at)} · {m.owner_name}: {m.title}</p>
+                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-brand-teal">Field team · {m.meeting_kind === "client" ? "client meeting" : "internal"}</p>
+                    {m.business_name || m.location ? <p className="mt-1 text-[10px] text-slate-500">{[m.business_name, m.location].filter(Boolean).join(" · ")}</p> : null}
+                  </article>;
+                }
                 if (item.kind === "event") {
                   const event = item.event;
                   return <article key={`event-${event.id}`} className="rounded-xl border border-slate-200 p-2.5">
                     <div className="flex items-start justify-between gap-2"><p className="text-xs font-bold text-brand-navy">{formatCalendarTime(event.starts_at)} · {event.title}</p><button aria-label={`Cancel ${event.title}`} disabled={cancelEvent.isPending} onClick={() => void cancel(event)} className="rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button></div>
-                    <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset ${categoryTone(event.category)}`}>{CATEGORY_LABELS[event.category]}</span>
+                    <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset ${categoryTone(event.category)}`}>{EVENT_CATEGORY_LABELS[event.category] ?? event.category}</span>
                     <p className="mt-2 flex items-center gap-1 text-[10px] text-slate-500">{event.visibility === "public" ? <Eye className="h-3 w-3" /> : event.visibility === "busy" ? <Clock3 className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}{event.visibility === "public" ? "Public label" : event.visibility === "busy" ? "Busy only" : "Private"}</p>
                   </article>;
                 }
@@ -400,6 +428,31 @@ export default function OwnerCalendarPage() {
   const range = useMemo(() => calendarRange(anchor, view), [anchor, view]);
   const calendar = useOwnerCalendarRange(range.start, range.end);
   const days = useMemo(() => Array.from({ length: view === "week" ? 7 : 1 }, (_, index) => addCalendarDays(range.start, index)), [range.start, view]);
+  // Field team layer: off by default, remembered on this computer.
+  const [showField, setShowField] = useState(() => localStorage.getItem("fnc.calendar.showFieldMeetings") === "1");
+  const field = useOwnerFieldMeetings(range.start, range.end, showField);
+  const fieldMeetings = showField ? field.data ?? [] : [];
+  const session = useSession();
+  const printedBy = (session?.user?.user_metadata?.full_name as string | undefined) || session?.user?.email || "the Director";
+  const heading = `${formatCalendarDay(range.start, true)}${view === "week" ? ` – ${formatCalendarDay(addCalendarDays(range.end, -1), true)}` : ""}`;
+  const printItems: DiaryPrintItem[] = [
+    ...(calendar.data?.events ?? []).map((e) => ({
+      id: e.id, startsAt: e.starts_at, endsAt: e.ends_at, type: EVENT_CATEGORY_LABELS[e.category] ?? e.category, title: e.title,
+      link: [oneCalendarRelation(e.client)?.business_name, oneCalendarRelation(e.lead)?.business_name, oneCalendarRelation(e.deal)?.reference].filter(Boolean).join(" · ") || null,
+      notes: e.private_notes,
+    })),
+    ...fieldMeetings.map((m) => ({
+      id: `field-${m.id}`, startsAt: m.starts_at, endsAt: m.ends_at, type: "Field team", title: `${m.owner_name}: ${m.title}`,
+      link: m.business_name, place: m.location,
+    })),
+  ];
+
+  function toggleField() {
+    setShowField((value) => {
+      localStorage.setItem("fnc.calendar.showFieldMeetings", value ? "0" : "1");
+      return !value;
+    });
+  }
 
   function move(direction: number) {
     setAnchor((value) => addCalendarDays(value, direction * (view === "week" ? 7 : 1)));
@@ -431,14 +484,25 @@ export default function OwnerCalendarPage() {
               <button type="button" aria-label={`Next ${view}`} onClick={() => move(1)} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-slate-200 text-brand-navy hover:bg-slate-50"><ChevronRight className="h-4 w-4" /></button>
               <h2 id="agenda-heading" className="ml-1 text-sm font-bold text-brand-navy sm:text-base">{formatCalendarDay(range.start, true)}{view === "week" ? ` – ${formatCalendarDay(addCalendarDays(range.end, -1), true)}` : ""}</h2>
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+            <label className="flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-bold text-brand-navy">
+              <input type="checkbox" className="h-4 w-4 accent-brand-teal" checked={showField} onChange={toggleField} />
+              Show field team meetings
+            </label>
+            <button type="button" onClick={() => window.print()} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-bold text-brand-navy hover:bg-slate-50">
+              <Printer className="h-4 w-4" aria-hidden="true" /> Print / Save as PDF
+            </button>
             <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1" role="group" aria-label="Calendar view">
               {(["day", "week"] as const).map((value) => <button key={value} type="button" aria-pressed={view === value} onClick={() => setView(value)} className={`min-h-9 rounded-lg px-4 text-xs font-bold capitalize ${view === value ? "bg-white text-brand-navy shadow-sm" : "text-slate-500"}`}>{value}</button>)}
+            </div>
             </div>
           </div>
 
           {calendar.isLoading && <div className="flex min-h-64 items-center justify-center rounded-2xl border border-slate-200 bg-white"><Loader2 className="h-6 w-6 animate-spin text-brand-teal" /><span className="ml-2 text-sm text-slate-500">Loading calendar…</span></div>}
           {calendar.isError && <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800"><CircleAlert className="mr-2 inline h-4 w-4" />Could not load the Owner calendar. {describeError(calendar.error, "Please refresh.")}</div>}
-          {calendar.data && <Agenda days={days} events={calendar.data.events} slots={calendar.data.slots} bookings={calendar.data.bookings} />}
+          {showField && field.isError && <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">Could not load the field team meetings. {describeError(field.error, "Please refresh.")}</div>}
+          {calendar.data && <Agenda days={days} events={calendar.data.events} slots={calendar.data.slots} bookings={calendar.data.bookings} fieldMeetings={fieldMeetings} />}
+          {calendar.data && <DiaryPrintSheet heading={heading} items={printItems} printedBy={printedBy} />}
         </section>
 
         <aside className="space-y-5">

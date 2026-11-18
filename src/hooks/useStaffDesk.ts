@@ -357,12 +357,13 @@ export function useStaffDiary() {
 }
 
 // ---- Calendar (Batch 3) ----------------------------------------------------
-export type CalendarPermission = "view_availability" | "create" | "change_own" | "manage_others";
+export type CalendarPermission = "view_availability" | "create" | "change_own" | "manage_others" | "manage_diary";
 export const CALENDAR_PERMISSIONS: { value: CalendarPermission; label: string; help: string }[] = [
   { value: "view_availability", label: "View availability", help: "See busy and open blocks only" },
   { value: "create", label: "Create bookings", help: "Add bookings to this calendar" },
   { value: "change_own", label: "Change own bookings", help: "Reschedule or cancel bookings they created" },
   { value: "manage_others", label: "Manage others' bookings", help: "Reschedule or cancel anyone's booking on this calendar" },
+  { value: "manage_diary", label: "Manage my diary", help: "Add, change and cancel events in your diary for you (meetings, travel, calls…). Your Personal events show to them only as “Busy” and they can never change them" },
 ];
 export const BOOKING_CATEGORIES = [
   ["call", "Call"], ["consultation", "Consultation"], ["presentation", "Presentation"], ["paperwork_review", "Paperwork review"],

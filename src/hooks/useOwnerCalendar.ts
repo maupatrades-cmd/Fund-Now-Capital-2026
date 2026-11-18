@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invalidateActivity } from "@/hooks/useActivity";
 import { supabase } from "@/lib/supabase";
-import type { BookingStatus, CalendarCategory, CalendarVisibility } from "@/lib/ownerCalendar";
+import type { BookingStatus, CalendarCategory, CalendarVisibility, EventCategory } from "@/lib/ownerCalendar";
 
 export type OwnerCalendarEvent = {
   id: string;
   title: string;
   public_title: string | null;
-  category: CalendarCategory;
+  category: EventCategory;
   visibility: CalendarVisibility;
   starts_at: string;
   ends_at: string;
@@ -126,7 +126,7 @@ export type CreateOwnerCalendarEventInput = {
   title: string;
   startsAt: string;
   endsAt: string;
-  category: CalendarCategory;
+  category: EventCategory;
   visibility: CalendarVisibility;
   publicLabel?: string;
   clientId?: string;
@@ -209,6 +209,23 @@ export function useDecideOwnerBooking() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["owner-calendar"] });
       invalidateActivity(queryClient);
+    },
+  });
+}
+
+// The field team's scheduled meetings for the shown range (owner only; read-only layer on the Calendar page).
+export type FieldMeetingLayerItem = {
+  id: string; owner_profile_id: string; owner_name: string; title: string; meeting_kind: "client" | "internal";
+  starts_at: string; ends_at: string; location: string | null; business_name: string | null; status: string;
+};
+export function useOwnerFieldMeetings(start: Date, end: Date, enabled: boolean) {
+  return useQuery({
+    queryKey: ["owner-field-meetings", start.toISOString(), end.toISOString()],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("owner_field_meetings_range", { p_from: start.toISOString(), p_to: end.toISOString() });
+      if (error) throw error;
+      return (data ?? []) as FieldMeetingLayerItem[];
     },
   });
 }
