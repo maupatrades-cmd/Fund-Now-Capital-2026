@@ -24,6 +24,20 @@ export const CATEGORY_LABELS: Record<CalendarCategory, string> = {
   paperwork_review: "Paperwork review",
 };
 
+// Diary event types (owner, 18 Nov 2026): the booking types above plus four that are only for the Director's own
+// diary. They are never offered as booking types. A Personal event is always private (the server forces it).
+export const EVENT_CATEGORIES = [...CALENDAR_CATEGORIES, "meeting", "personal", "travel", "other"] as const;
+export type EventCategory = (typeof EVENT_CATEGORIES)[number];
+export const EVENT_CATEGORY_LABELS: Record<EventCategory, string> = {
+  ...CATEGORY_LABELS,
+  meeting: "Meeting",
+  personal: "Personal",
+  travel: "Travel",
+  other: "Other",
+};
+// What someone filling in the Director's diary for her may use: every type except Personal.
+export const DELEGATE_EVENT_CATEGORIES = EVENT_CATEGORIES.filter((c) => c !== "personal");
+
 export function calendarDayKey(value: Date | string) {
   const parts = new Intl.DateTimeFormat("en-ZA", {
     timeZone: OWNER_TIME_ZONE,
