@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon, MapPin, BadgeCheck, FolderOpen } from "lucide-react";
+import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, CalendarClock, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon, MapPin, BadgeCheck, FolderOpen } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -32,6 +32,8 @@ const navigation: Item[] = [
   { to: "/staff/complaints", label: "Complaints", icon: MessageSquareWarning, end: false },
   { to: "/staff/outbound", label: "Outbound leads", icon: RouteIcon, end: false },
   { to: "/staff/field-leads", label: "Field leads", icon: MapPin, end: false, managerOnly: true, field: true },
+  // Field diary: the field roles' own meetings; the Director and the Administrator open every field diary.
+  { to: "/staff/my-diary", label: "My diary", icon: CalendarClock, end: false, founderAdminOnly: true, field: true },
   { to: "/staff/answers", label: "Answer desk", icon: MessageSquareReply, end: false, managerOnly: true },
   { to: "/staff/queue", label: "Submission queue", icon: ClipboardList, end: false, managerOnly: true },
 ];

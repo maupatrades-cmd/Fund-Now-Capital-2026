@@ -3,6 +3,7 @@ import { PendingTasksPanel } from "@/components/staff/PendingTasksPanel";
 import { ImportantTasksBanner } from "@/components/staff/ImportantTasksBanner";
 import { MyTargetsPanel } from "@/components/staff/MyTargetsPanel";
 import { MyFieldLeadsPanel } from "@/components/staff/MyFieldLeadsPanel";
+import { TodaysMeetingsPanel } from "@/components/staff/TodaysMeetingsPanel";
 import { card } from "@/components/staff/StaffShell";
 import { isFieldRole, useStaffRole } from "@/hooks/useStaffDesk";
 
@@ -18,6 +19,7 @@ export default function StaffMyDayPage() {
       </div>
       <ImportantTasksBanner />
       <PendingTasksPanel />
+      {isFieldRole(role) ? <TodaysMeetingsPanel /> : null}
       {isFieldRole(role) ? <MyFieldLeadsPanel supervisor={role === "field_supervisor"} /> : null}
       <MyTargetsPanel />
       <section className={`${card} space-y-2 text-sm`}>
