@@ -134,8 +134,36 @@ export type StaffTask = {
   responded_at: string | null; decline_reason: string | null; given_by_me: boolean;
 };
 
-// Only the Founder and the Administrator give a task to a named person (the database enforces it).
+// Only the Founder and the Administrator re-give an existing task or cancel one somebody else gave (the database
+// enforces it).
 export const canAssignTasks = (role: StaffRole | null | undefined) => role === "owner" || role === "administrator";
+// Who creates a task for a named person (field team, 17 Nov): the Founder and the Administrator for anyone, the Sales
+// Coordinator for the Field Supervisor and field consultants, the Field Supervisor for field consultants. The
+// database checks each pair; staff_task_assignable_people lists only the allowed people.
+export const canGiveTasks = (role: StaffRole | null | undefined) =>
+  role === "owner" || role === "administrator" || role === "coordinator" || role === "field_supervisor";
+// The field team asks the office for marketing materials.
+export const canRequestMaterials = (role: StaffRole | null | undefined) =>
+  role === "field_supervisor" || role === "field_consultant";
+
+export type AssignablePerson = { profile_id: string; full_name: string; staff_role: string };
+export function useTaskAssignablePeople(enabled: boolean) {
+  return useQuery({
+    queryKey: ["staff-task-assignable"], enabled, staleTime: 5 * 60_000,
+    queryFn: () => rpc<AssignablePerson[]>("staff_task_assignable_people"),
+  });
+}
+
+export function useRequestMaterials() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { items: string; quantity: string; neededBy: string; area: string; note: string }) =>
+      rpc<string>("staff_request_materials", {
+        p_items: i.items, p_quantity: i.quantity, p_needed_by: i.neededBy, p_area: i.area || null, p_note: i.note || null,
+      }),
+    onSuccess: () => invalidateTasks(qc),
+  });
+}
 
 export function useStaffTasks(status: "open" | "done" | "cancelled" | null = "open") {
   return useQuery({ queryKey: ["staff-tasks", status], queryFn: () => rpc<StaffTask[]>("staff_task_board", { p_status: status, p_limit: 100 }) });
