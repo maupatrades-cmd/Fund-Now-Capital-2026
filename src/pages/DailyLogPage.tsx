@@ -65,19 +65,37 @@ export default function DailyLogPage() {
   const latest = useRef({ day, draft, dirty, tooLong });
   latest.current = { day, draft, dirty, tooLong };
 
-  const doSave = useCallback(async (d: string, value: DailyLogDraft) => {
+  // doSave must keep the SAME identity across renders: the leave-the-page effect below depends on it, and a new
+  // identity re-runs that effect's cleanup, which saves again (18 Nov: a save loop of 40+ saves a second). useMutation
+  // returns a new object every render, but its mutateAsync is stable, so read it through a ref. One save at a time:
+  // a request that arrives while one is in flight is remembered and sent once the first finishes.
+  const mutateRef = useRef(save.mutateAsync);
+  mutateRef.current = save.mutateAsync;
+  const inFlight = useRef(false);
+  const queued = useRef<{ d: string; value: DailyLogDraft } | null>(null);
+  const doSave = useCallback(async (d: string, value: DailyLogDraft): Promise<boolean> => {
+    if (inFlight.current) { queued.current = { d, value }; return true; }
+    inFlight.current = true;
     setStatus({ kind: "saving" });
     try {
-      const { savedAt } = await save.mutateAsync({ day: d, draft: value });
+      const { savedAt } = await mutateRef.current({ day: d, draft: value });
       if (latest.current.day === d) { setBaseline(value); setStatus({ kind: "saved", at: savedAt }); }
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not save";
       if (latest.current.day === d) setStatus({ kind: "error", message });
       toast.error(`Daily log not saved: ${message}`);
+      queued.current = null;
       return false;
+    } finally {
+      inFlight.current = false;
+      const next = queued.current;
+      queued.current = null;
+      if (next && !sameDraft(next.value, value)) void doSaveRef.current(next.d, next.value);
     }
-  }, [save]);
+  }, []);
+  const doSaveRef = useRef(doSave);
+  doSaveRef.current = doSave;
 
   // Autosave ~2 s after typing stops.
   useEffect(() => {
@@ -87,15 +105,16 @@ export default function DailyLogPage() {
   }, [draft, dirty, tooLong, day, doSave]);
 
   // Warn before closing the tab with unsaved text; save what is there when leaving the page inside the app.
+  // Runs once (mount/unmount only): the cleanup must never run after an ordinary save.
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => { if (latest.current.dirty) { e.preventDefault(); e.returnValue = ""; } };
     window.addEventListener("beforeunload", warn);
     return () => {
       window.removeEventListener("beforeunload", warn);
       const l = latest.current;
-      if (l.dirty && !l.tooLong) void doSave(l.day, l.draft);
+      if (l.dirty && !l.tooLong) void doSaveRef.current(l.day, l.draft);
     };
-  }, [doSave]);
+  }, []);
 
   async function goTo(next: string) {
     if (next > today || next === day) return;
