@@ -190,6 +190,36 @@ test('Launch priority 2: field logins, history role and targets are enforced by 
     assert.equal(audit.detail.invited_by_role, 'field_supervisor');
     assert.equal((await one('select access_enabled from public.staff_access where profile_id = $1', [U.fcon]))?.access_enabled ?? false, false,
       'the new consultant stays switched off until the Director enables them');
+    // ---- The Office Administrator adds agents (20261118150000/151000) ------------------------------------------------
+    await db.exec(await mig('20261118150000_agent_added_enum.sql'));
+    await db.exec(await mig('20261118151000_admin_add_agent.sql'));
+    await db.exec("insert into public.referral_partners(name) values ('Leader One'); insert into public.referral_partners(name, is_active) values ('Old Leader', false);");
+    await as(U.owner);
+    assert.equal((await one('select public.staff_inviter_role() as r')).r, 'owner');
+    await as(U.fsup);
+    assert.equal((await one('select public.staff_inviter_role() as r')).r, 'field_supervisor', 'the Field Supervisor branch is unchanged');
+    await as(U.admin);
+    assert.equal((await one('select public.staff_inviter_role() as r')).r, 'administrator');
+    for (const who of [U.adminOff, U.coordinator, U.switchboard, U.fcon, U.partner]) {
+      await as(who);
+      assert.equal((await one('select public.staff_inviter_role() as r')).r, null, 'a switched-off Administrator and other roles do not invite');
+      await rejects(() => q('select public.agent_added_notify($1)', [U.agent]), /permission/);
+      await rejects(() => q('select * from public.staff_team_leader_options()'), /permission/);
+    }
+    await as(U.fsup);
+    await rejects(() => q('select public.agent_added_notify($1)', [U.agent]), /permission/, '42501');
+    await as(U.admin);
+    assert.deepEqual((await q('select name from public.staff_team_leader_options()')).map((r) => r.name), ['Leader One'], 'active Team Leaders only');
+    await rejects(() => q('select public.agent_added_notify($1)', [U.fcon]), /Agent not found/);
+    await rejects(() => q('select public.agent_added_notify($1)', [U.coordinator]), /Agent not found/);
+    assert.equal((await one('select public.agent_added_notify($1) as n', [U.agent])).n, 1, 'the Director is told');
+    await db.exec('reset role;');
+    const toldAgent = await q("select user_id, link_url from public.notifications where event_type = 'AGENT_ADDED'");
+    assert.deepEqual(toldAgent.map((r) => r.user_id), [U.owner]);
+    assert.equal(toldAgent[0].link_url, `/staff/agents/${U.agent}`);
+    const agentAudit = await one("select actor_role, detail from public.staff_audit_events where event_type = 'agent_added'");
+    assert.equal(agentAudit.actor_role, 'administrator');
+    assert.equal(agentAudit.detail.invited_by_role, 'administrator');
   } finally {
     await db.close();
   }
