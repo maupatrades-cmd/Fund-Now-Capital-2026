@@ -5,11 +5,20 @@ import { Input } from "@/components/ui/input";
 import { Field, card, errorText, primaryButton, selectClass, textareaClass } from "@/components/staff/StaffShell";
 import { useIntakeLookups, useRegisterIntake, type RegisterIntakeResult } from "@/hooks/useStaffDesk";
 
-type Channel = "direct_agent" | "team" | "referral_partner";
+type Channel = "direct_agent" | "team" | "referral_partner" | "inhouse";
+type InhouseKind = "" | "employee" | "office" | "online";
+
+// Readable labels for the Fund Now Capital people list (the Director and staff with enabled access).
+const ROLE_LABEL: Record<string, string> = {
+  owner: "Director", administrator: "Office Administrator", coordinator: "Sales Coordinator", switchboard: "Switchboard",
+  hr: "HR", field_supervisor: "Field Supervisor", field_consultant: "Field consultant",
+};
 
 const blank = {
   businessName: "", contactName: "", contactCell: "", contactEmail: "", cipc: "", fundingType: "", amount: "", purpose: "",
   channel: "direct_agent" as Channel, organisationId: "", teamId: "", agentId: "", claimedAgent: "",
+  // Fund Now Capital (in-house) source: exactly one of an employee, an office, or an online / direct referrer's name.
+  inhouseKind: "" as InhouseKind, inhouseStaffId: "", inhouseOffice: "", inhouseName: "",
 };
 
 export default function StaffNewLeadPage() {
@@ -26,11 +35,16 @@ export default function StaffNewLeadPage() {
     if (!L) return [];
     if (form.channel === "direct_agent") return L.direct_agents;
     if (form.channel === "team") return L.members.filter((m) => m.team_id === form.teamId);
+    if (form.channel === "inhouse") return [];
     return L.partner_agents.filter((a) => a.organisation_id === form.organisationId);
   }, [L, form.channel, form.teamId, form.organisationId]);
 
+  const inhouse = form.channel === "inhouse";
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (inhouse && !form.inhouseKind) { toast.error("Choose where the Fund Now Capital lead came from"); return; }
+    if (inhouse && form.inhouseKind === "online" && form.inhouseName.trim().length < 2) { toast.error("Type who referred them"); return; }
     try {
       const res = await register.mutateAsync({
         businessName: form.businessName.trim(), contactName: form.contactName.trim(), contactCell: form.contactCell.trim(),
@@ -38,7 +52,11 @@ export default function StaffNewLeadPage() {
         amount: form.amount ? Number(form.amount) : null, purpose: form.purpose.trim(), channel: form.channel,
         organisationId: form.channel === "referral_partner" ? form.organisationId || null : null,
         teamId: form.channel === "team" ? form.teamId || null : null,
-        agentId: form.agentId || null, claimedAgent: form.claimedAgent.trim(), idempotencyKey: key,
+        agentId: inhouse ? null : form.agentId || null, claimedAgent: form.claimedAgent.trim(), idempotencyKey: key,
+        inhouseKind: inhouse ? form.inhouseKind || null : null,
+        inhouseStaffId: inhouse && form.inhouseKind === "employee" ? form.inhouseStaffId || null : null,
+        inhouseOfficeCode: inhouse && form.inhouseKind === "office" ? form.inhouseOffice || null : null,
+        inhouseReferrerName: inhouse && form.inhouseKind === "online" ? form.inhouseName.trim() || null : null,
       });
       setResult(res);
       if (res.status === "created") { toast.success("Submission registered"); setForm(blank); setKey(crypto.randomUUID()); }
@@ -88,12 +106,44 @@ export default function StaffNewLeadPage() {
 
         <div className="md:col-span-2 border-t border-border pt-4"><h2 className="text-base font-bold text-brand-navy">Who introduced this?</h2></div>
         <Field label="Channel">
-          <select className={selectClass} value={form.channel} onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value as Channel, organisationId: "", teamId: "", agentId: "" }))}>
+          <select className={selectClass} value={form.channel} onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value as Channel, organisationId: "", teamId: "", agentId: "", inhouseKind: "", inhouseStaffId: "", inhouseOffice: "", inhouseName: "" }))}>
             <option value="direct_agent">Direct agent (independent)</option>
             <option value="team">Team (through a Team Leader)</option>
             <option value="referral_partner">Referral partner organisation</option>
+            <option value="inhouse">Fund Now Capital (in-house)</option>
           </select>
         </Field>
+        {inhouse ? (
+          <Field label="Where did it come from?" hint="No agent or partner is credited on an in-house lead.">
+            <select required className={selectClass} value={form.inhouseKind} onChange={(e) => setForm((f) => ({ ...f, inhouseKind: e.target.value as InhouseKind, inhouseStaffId: "", inhouseOffice: "", inhouseName: "" }))}>
+              <option value="">Choose...</option>
+              <option value="employee">Fund Now Capital employee</option>
+              <option value="office">Fund Now Capital office</option>
+              <option value="online">Online / direct referral</option>
+            </select>
+          </Field>
+        ) : null}
+        {inhouse && form.inhouseKind === "employee" ? (
+          <Field label="Employee">
+            <select required className={selectClass} value={form.inhouseStaffId} onChange={(e) => set("inhouseStaffId", e.target.value)}>
+              <option value="">Choose...</option>
+              {(L?.fnc_people ?? []).map((p) => <option key={p.profile_id} value={p.profile_id}>{p.name} · {ROLE_LABEL[p.role] ?? p.role}</option>)}
+            </select>
+          </Field>
+        ) : null}
+        {inhouse && form.inhouseKind === "office" ? (
+          <Field label="Office">
+            <select required className={selectClass} value={form.inhouseOffice} onChange={(e) => set("inhouseOffice", e.target.value)}>
+              <option value="">Choose...</option>
+              {(L?.fnc_offices ?? []).map((o) => <option key={o.code} value={o.code}>{o.label}</option>)}
+            </select>
+          </Field>
+        ) : null}
+        {inhouse && form.inhouseKind === "online" ? (
+          <Field label="Who referred them?" hint="The person's name, as the client gave it.">
+            <Input required minLength={2} maxLength={120} value={form.inhouseName} onChange={(e) => set("inhouseName", e.target.value)} />
+          </Field>
+        ) : null}
         {form.channel === "team" ? (
           <Field label="Team">
             <select required className={selectClass} value={form.teamId} onChange={(e) => setForm((f) => ({ ...f, teamId: e.target.value, agentId: "" }))}>
@@ -110,12 +160,14 @@ export default function StaffNewLeadPage() {
             </select>
           </Field>
         ) : null}
-        <Field label="Agent" hint={form.channel === "referral_partner" ? "Leave blank if the organisation introduced it directly." : undefined}>
-          <select required={form.channel !== "referral_partner"} className={selectClass} value={form.agentId} onChange={(e) => set("agentId", e.target.value)}>
-            <option value="">Choose...</option>
-            {agentOptions.map((a) => <option key={a.profile_id} value={a.profile_id}>{a.name}</option>)}
-          </select>
-        </Field>
+        {!inhouse ? (
+          <Field label="Agent" hint={form.channel === "referral_partner" ? "Leave blank if the organisation introduced it directly." : undefined}>
+            <select required={form.channel !== "referral_partner"} className={selectClass} value={form.agentId} onChange={(e) => set("agentId", e.target.value)}>
+              <option value="">Choose...</option>
+              {agentOptions.map((a) => <option key={a.profile_id} value={a.profile_id}>{a.name}</option>)}
+            </select>
+          </Field>
+        ) : null}
         <div className="md:col-span-2">
           <Field label="What the caller said about who referred them (optional)">
             <textarea maxLength={300} className={textareaClass} value={form.claimedAgent} onChange={(e) => set("claimedAgent", e.target.value)} />

@@ -264,6 +264,8 @@ export type IntakeRow = {
   organisation_name: string | null; team_name: string | null; agent_name: string | null;
   workflow_status: string; assignee_name: string | null; registered_at: string; first_complete_at: string | null;
   archived_at: string | null; missing_documents: string[]; has_review_flag: boolean;
+  // In-house leads only: "Fund Now Capital — <employee>", "Fund Now Capital Polokwane", "Online / direct referral — <name>".
+  source_label: string | null;
 };
 
 export function useIntakeQueue(status: string | null = null, includeArchived = false) {
@@ -280,6 +282,9 @@ export type IntakeLookups = {
   members: { profile_id: string; name: string; team_id: string; membership_role: string }[];
   direct_agents: { profile_id: string; name: string }[];
   partner_agents: { profile_id: string; name: string; organisation_id: string }[];
+  // Fund Now Capital (in-house) sources.
+  fnc_people: { profile_id: string; name: string; role: string }[];
+  fnc_offices: { code: string; label: string }[];
 };
 
 export function useIntakeLookups(enabled = true) {
@@ -289,9 +294,12 @@ export function useIntakeLookups(enabled = true) {
 export type RegisterIntakeInput = {
   businessName: string; contactName: string; contactCell: string; contactEmail: string; cipc: string;
   fundingType: string; amount: number | null; purpose: string;
-  channel: "direct_agent" | "team" | "referral_partner";
+  channel: "direct_agent" | "team" | "referral_partner" | "inhouse";
   organisationId: string | null; teamId: string | null; agentId: string | null; claimedAgent: string;
   idempotencyKey: string;
+  // Only for channel "inhouse": exactly one source (employee, office or online referrer's name).
+  inhouseKind?: "employee" | "office" | "online" | null;
+  inhouseStaffId?: string | null; inhouseOfficeCode?: string | null; inhouseReferrerName?: string | null;
 };
 
 export type RegisterIntakeResult = {
@@ -311,6 +319,8 @@ export function useRegisterIntake() {
       p_funding_amount: i.amount, p_funding_purpose: i.purpose || null, p_channel: i.channel,
       p_organisation_id: i.organisationId, p_team_id: i.teamId, p_agent_profile_id: i.agentId,
       p_claimed_agent_reference: i.claimedAgent || null, p_idempotency_key: i.idempotencyKey,
+      p_inhouse_kind: i.inhouseKind ?? null, p_inhouse_staff_id: i.inhouseStaffId ?? null,
+      p_inhouse_office_code: i.inhouseOfficeCode ?? null, p_inhouse_referrer_name: i.inhouseReferrerName ?? null,
     }),
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-intake-queue"] }); },
   });
