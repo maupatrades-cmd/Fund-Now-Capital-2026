@@ -29,7 +29,10 @@ test("team invitations are owner-only and expose both supported delivery paths",
   ], "team invite request");
   includesAll(edge, [
     'userClient.rpc("staff_inviter_role")',
-    'return json({ error: "Only the Director or the Field Supervisor can invite people" }, 403)',
+    'return json({ error: "Only the Director, the Office Administrator or the Field Supervisor can invite people" }, 403)',
+    'if (isAdministrator && role !== "partner" && role !== "contractor" && role !== "lead_referrer")',
+    'if (isAdministrator && inviteMethod !== "magic_link")',
+    'userClient.rpc("agent_added_notify", { p_profile: userId })',
     'if (isFieldSupervisor && (role !== "field_consultant" || parentPartnerId))',
     'return json({ error: "The Field Supervisor can only add field agents (field consultants)" }, 403)',
     'userClient.rpc("field_agent_added_notify", { p_profile: userId })',

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { card, errorText, primaryButton, SAFE_TEXT_NOTE } from "@/components/staff/StaffShell";
 import { useStaffRole } from "@/hooks/useStaffDesk";
+import { AddAgentForm } from "@/components/staff/AddAgentForm";
 import {
   useAgentOnboarding, useMarkOnboardingItem, useStaffIssueAgentCode,
   type AgentOnboardingRow, type OnboardingItem,
@@ -103,6 +104,9 @@ export default function StaffOnboardingPage() {
   const allowed = role === "owner" || role === "hr" || role === "administrator" || role === "coordinator";
   const q = useAgentOnboarding(allowed);
   const [filter, setFilter] = useState<"open" | "all">("open");
+  const [adding, setAdding] = useState(false);
+  // The Director and the Office Administrator add agents here (owner, 18 Nov 2026); the Edge Function re-checks it.
+  const canAdd = role === "owner" || role === "administrator";
   if (!allowed) return <p className="text-sm text-muted-foreground">This screen is for the Director, HR, the Office Administrator and the Sales Coordinator.</p>;
   const rows = (q.data ?? []).filter((r) => filter === "all" || !r.agent_code);
   return (
@@ -115,7 +119,11 @@ export default function StaffOnboardingPage() {
         </p>
         {role === "hr" || role === "administrator" || role === "owner" ? <p className="mt-1 text-xs text-muted-foreground">{SAFE_TEXT_NOTE}</p> : null}
       </div>
-      <div className="flex gap-2 text-sm">
+      {canAdd && adding ? <AddAgentForm onClose={() => setAdding(false)} /> : null}
+      <div className="flex flex-wrap gap-2 text-sm">
+        {canAdd && !adding ? (
+          <button type="button" onClick={() => setAdding(true)} className={`${primaryButton} mr-2`}>Add agent</button>
+        ) : null}
         {(["open", "all"] as const).map((f) => (
           <button key={f} type="button" onClick={() => setFilter(f)}
             className={`rounded-lg px-3 py-1.5 font-semibold ${filter === f ? "bg-brand-teal text-white" : "border border-border text-brand-navy"}`}>
