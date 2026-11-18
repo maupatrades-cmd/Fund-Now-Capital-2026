@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { useSession } from "@/lib/useSession";
 import { Field, SAFE_TEXT_NOTE, card, errorText, primaryButton, selectClass, textareaClass } from "@/components/staff/StaffShell";
 import {
-  canAssignTasks, useAskTaskQuestion, useAssignTask, useAssignableStaff, useCloseStaffTask, useCreateAssignedTask, useCreateStaffTask,
-  useRouteStaffTask, useStaffRole, useStaffTasks, type RouteTo, type StaffTask,
+  canAssignTasks, canGiveTasks, useAskTaskQuestion, useAssignTask, useAssignableStaff, useCloseStaffTask, useCreateAssignedTask,
+  useCreateStaffTask, useRouteStaffTask, useStaffRole, useStaffTasks, useTaskAssignablePeople, type RouteTo, type StaffTask,
 } from "@/hooks/useStaffDesk";
 
 const KINDS = [
@@ -48,13 +48,18 @@ export default function StaffTasksPage() {
   const route = useRouteStaffTask();
   const close = useCloseStaffTask();
   const [form, setForm] = useState({ title: "", notes: "", kind: "general", priority: "normal", due: "", routeTo: "coordinator" as RouteTo });
+  // Re-giving an existing task stays with the Director and the Administrator.
   const assigner = canAssignTasks(role);
   const people = useAssignableStaff(assigner);
   // Any enabled member of the office staff (Important tasks, 17 Nov); the database refuses giving one to yourself.
   const staffPeople = (people.data ?? []).filter((p) => p.profile_id !== myId);
+  // Creating a task for a person (field team, 17 Nov): the Sales Coordinator and the Field Supervisor too, each to the
+  // people the database allows; the picker comes from the same rule (staff_task_assignable_people).
+  const giver = canGiveTasks(role);
+  const givePeople = useTaskAssignablePeople(giver);
   // HR and the field roles have no desk: they see and finish their own tasks only.
   const hasDesk = role === "owner" || role === "administrator" || role === "coordinator" || role === "switchboard";
-  const given = useStaffTasks(assigner ? null : "open");
+  const given = useStaffTasks(giver ? null : "open");
   const ask = useAskTaskQuestion();
   const [question, setQuestion] = useState<Record<string, string>>({});
   const createAssigned = useCreateAssignedTask();
@@ -105,20 +110,22 @@ export default function StaffTasksPage() {
     <>
       <div>
         <h1 className="text-2xl font-bold text-brand-navy">Tasks</h1>
-        <p className="text-sm text-muted-foreground">Shared work between the desk, the Coordinator and the Owner. A founder decision always goes to the Owner. The Director and the Administrator can give a task to anyone in the office; an Important task from the Director cannot be declined.</p>
+        <p className="text-sm text-muted-foreground">Shared work between the desk, the Coordinator and the Owner. A founder decision always goes to the Owner. The Director and the Administrator can give a task to anyone in the office, the Sales Coordinator to the Field Supervisor and field consultants, and the Field Supervisor to field consultants; an Important task from the Director cannot be declined.</p>
       </div>
 
       <PendingTasksPanel />
 
-      {assigner ? (
+      {giver ? (
         <form onSubmit={submitGive} className={`${card} grid gap-4 md:grid-cols-2`}>
           <h2 className="text-base font-bold text-brand-navy md:col-span-2">Give a task to a person</h2>
           <Field label="Title"><Input required minLength={3} maxLength={160} value={give.title} onChange={(e) => setGive({ ...give, title: e.target.value })} /></Field>
           <Field label="Give it to">
             <select className={selectClass} value={give.person} onChange={(e) => setGive({ ...give, person: e.target.value })}>
               <option value="">Choose a person...</option>
-              {staffPeople.map((p) => <option key={p.profile_id} value={p.profile_id}>{p.full_name} ({ROLE_NAME[p.staff_role] ?? p.staff_role})</option>)}
+              {(givePeople.data ?? []).map((p) => <option key={p.profile_id} value={p.profile_id}>{p.full_name} ({ROLE_NAME[p.staff_role] ?? p.staff_role})</option>)}
             </select>
+            {givePeople.error ? <span role="alert" className="text-xs text-red-600">{errorText(givePeople.error)}</span> : null}
+            {givePeople.data && givePeople.data.length === 0 ? <span className="text-xs text-muted-foreground">Nobody you can give a task to has access yet.</span> : null}
           </Field>
           <Field label="Priority">
             <select className={selectClass} value={give.priority} onChange={(e) => setGive({ ...give, priority: e.target.value })}>
@@ -136,7 +143,7 @@ export default function StaffTasksPage() {
         </form>
       ) : null}
 
-      {assigner ? (
+      {giver ? (
         <section className={card}>
           <h2 className="mb-2 text-base font-bold text-brand-navy">Tasks I gave</h2>
           {given.error ? <p role="alert" className="text-sm text-red-600">{errorText(given.error)}</p> : null}
@@ -203,6 +210,7 @@ export default function StaffTasksPage() {
                 {t.priority === "important" ? <span className={IMPORTANT_BADGE}>Important — from the Director</span> : null}
                 {t.priority === "high" ? <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-800">high</span> : null}
                 {t.task_kind === "founder_decision" ? <span className="ml-2 rounded bg-violet-100 px-1.5 py-0.5 text-xs text-violet-800">founder decision</span> : null}
+                {t.task_kind === "materials_request" ? <span className="ml-2 rounded bg-teal-100 px-1.5 py-0.5 text-xs text-teal-800">marketing materials</span> : null}
               </p>
               {t.notes ? <p className="text-muted-foreground">{t.notes}</p> : null}
               {t.acceptance ? (

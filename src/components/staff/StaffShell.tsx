@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, CalendarClock, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon, MapPin, BadgeCheck, FolderOpen, UserPlus } from "lucide-react";
+import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon, MapPin, BadgeCheck, FolderOpen, Package, UserPlus, CalendarClock } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -7,7 +7,7 @@ import { useSession } from "@/lib/useSession";
 import { canDecideTimeRequests, isFieldRole, isStaffManager, useStaffRole } from "@/hooks/useStaffDesk";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
-type Item = { to: string; label: string; icon: typeof PhoneCall; end: boolean; managerOnly?: boolean; founderAdminOnly?: boolean; hr?: boolean; field?: boolean; noSwitchboard?: boolean; ownerOnly?: boolean; notOwner?: boolean; personal?: boolean; fieldSupervisorOnly?: boolean };
+type Item = { to: string; label: string; icon: typeof PhoneCall; end: boolean; managerOnly?: boolean; founderAdminOnly?: boolean; hr?: boolean; field?: boolean; noSwitchboard?: boolean; ownerOnly?: boolean; notOwner?: boolean; personal?: boolean; fieldOnly?: boolean; fieldSupervisorOnly?: boolean };
 
 const navigation: Item[] = [
   { to: "/staff/home", label: "Home", icon: LayoutDashboard, end: false, managerOnly: true },
@@ -21,6 +21,8 @@ const navigation: Item[] = [
   { to: "/staff/messages", label: "Messages", icon: MessagesSquare, end: false, hr: true },
   { to: "/staff/notices", label: "Notices", icon: Megaphone, end: false, hr: true, field: true },
   { to: "/staff/tasks", label: "Tasks", icon: ListChecks, end: false, hr: true, field: true },
+  // The field team asks the Office Administrator for flyers, banners and so on (field team, 17 Nov).
+  { to: "/staff/materials", label: "Request materials", icon: Package, end: false, field: true, fieldOnly: true },
   { to: "/staff/reports", label: "Reports", icon: BarChart3, end: false, founderAdminOnly: true },
   { to: "/staff/admin-fees", label: "Admin fees", icon: ReceiptText, end: false, founderAdminOnly: true },
   { to: "/staff/commissions", label: "Commission flow", icon: HandCoins, end: false, hr: true, noSwitchboard: true },
@@ -50,7 +52,7 @@ export function StaffShell({ children }: { children: ReactNode }) {
     : isFieldRole(role) ? navigation.filter((i) => i.field && (!i.fieldSupervisorOnly || role === "field_supervisor"))
     : navigation.filter((i) => (!i.managerOnly || isStaffManager(role)) && (!i.founderAdminOnly || canDecideTimeRequests(role))
       && (!i.noSwitchboard || role !== "switchboard") && (!i.ownerOnly || role === "owner") && (!i.notOwner || role !== "owner")
-      && (!i.personal || role === "switchboard"));
+      && (!i.personal || role === "switchboard") && !i.fieldOnly);
   const roleLabel = role === "administrator" ? "Administrator" : role === "coordinator" ? "Sales Coordinator" : role === "switchboard" ? "Switchboard" : role === "hr" ? "HR"
     : role === "field_supervisor" ? "Field Supervisor" : role === "field_consultant" ? "Field consultant" : "Staff";
 

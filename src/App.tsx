@@ -38,6 +38,7 @@ import PortalCommissionsPage from "./pages/portal/PortalCommissionsPage";
 import PortalCommsPage from "./pages/portal/PortalCommsPage";
 import MyAppointmentsPage from "./pages/portal/MyAppointmentsPage";
 import StaffTasksPage from "@/pages/staff/StaffTasksPage";
+import StaffMaterialsRequestPage from "@/pages/staff/StaffMaterialsRequestPage";
 import StaffOutboundPage from "@/pages/staff/StaffOutboundPage";
 import StaffFieldLeadsPage from "@/pages/staff/StaffFieldLeadsPage";
 import StaffFieldDiaryPage from "@/pages/staff/StaffFieldDiaryPage";
@@ -294,6 +295,7 @@ function AppRoutes() {
         <Route path="payslips" element={<StaffPayslipsPage />} />
         <Route path="payslips/:payslipId" element={<StaffPayslipDocumentPage />} />
         <Route path="tasks" element={<StaffTasksPage />} />
+        <Route path="materials" element={<StaffMaterialsRequestPage />} />
         <Route path="outbound" element={<StaffOutboundPage />} />
         <Route path="field-leads" element={<StaffFieldLeadsPage />} />
         <Route path="my-diary" element={<StaffFieldDiaryPage />} />
