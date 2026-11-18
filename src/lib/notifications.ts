@@ -9,6 +9,7 @@
 // eventIcon() falls back to the Bell icon.
 import {
   Bell,
+  NotebookPen,
   CheckCircle2,
   PartyPopper,
   Banknote,
@@ -98,6 +99,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   { value: "PAYSLIP_STATUS_CHANGED", label: "Payslip" },
   { value: "FIELD_LEAD_UPDATED", label: "Field lead" },
   { value: "FIELD_AGENT_ADDED", label: "Field agent added" },
+  { value: "DAILY_LOG_REMINDER", label: "Daily log reminder" },
   { value: "LEAD_FEE_STATUS_CHANGED", label: "Lead fee" },
   { value: "AGENT_ONBOARDING_READY", label: "Agent Code can be issued" },
   { value: "AGENT_CODE_ISSUED", label: "Agent Code issued" },
@@ -194,6 +196,7 @@ const EVENT_ICON: Record<string, LucideIcon> = {
   PAYSLIP_STATUS_CHANGED: FileText,
   FIELD_LEAD_UPDATED: Route,
   FIELD_AGENT_ADDED: UserPlus,
+  DAILY_LOG_REMINDER: NotebookPen,
   LEAD_FEE_STATUS_CHANGED: Banknote,
   AGENT_ONBOARDING_READY: ClipboardCheck,
   AGENT_CODE_ISSUED: UserCheck,
