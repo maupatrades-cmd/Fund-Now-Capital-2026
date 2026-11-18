@@ -40,6 +40,7 @@ import MyAppointmentsPage from "./pages/portal/MyAppointmentsPage";
 import StaffTasksPage from "@/pages/staff/StaffTasksPage";
 import StaffOutboundPage from "@/pages/staff/StaffOutboundPage";
 import StaffFieldLeadsPage from "@/pages/staff/StaffFieldLeadsPage";
+import StaffFieldDiaryPage from "@/pages/staff/StaffFieldDiaryPage";
 import StaffAddFieldAgentPage from "@/pages/staff/StaffAddFieldAgentPage";
 import StaffQueuePage from "@/pages/staff/StaffQueuePage";
 import StaffAgentFilePage from "@/pages/staff/StaffAgentFilePage";
@@ -295,6 +296,7 @@ function AppRoutes() {
         <Route path="tasks" element={<StaffTasksPage />} />
         <Route path="outbound" element={<StaffOutboundPage />} />
         <Route path="field-leads" element={<StaffFieldLeadsPage />} />
+        <Route path="my-diary" element={<StaffFieldDiaryPage />} />
         <Route path="field-agents" element={<StaffAddFieldAgentPage />} />
         <Route path="queue" element={<StaffQueuePage />} />
         <Route path="home" element={<StaffHomePage />} />
