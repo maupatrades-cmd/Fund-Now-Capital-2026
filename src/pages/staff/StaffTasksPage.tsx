@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { useSession } from "@/lib/useSession";
 import { Field, SAFE_TEXT_NOTE, card, errorText, primaryButton, selectClass, textareaClass } from "@/components/staff/StaffShell";
 import {
-  canAssignTasks, canGiveTasks, useAskTaskQuestion, useAssignTask, useAssignableStaff, useCloseStaffTask, useCreateAssignedTask,
-  useCreateStaffTask, useRouteStaffTask, useStaffRole, useStaffTasks, useTaskAssignablePeople, type RouteTo, type StaffTask,
+  TASK_NOTE_MIN, canAssignTasks, canGiveTasks, useAddTaskNote, useAskTaskQuestion, useAssignTask, useAssignableStaff,
+  useCloseStaffTask, useCreateAssignedTask, useCreateStaffTask, useRouteStaffTask, useStaffRole, useStaffTasks,
+  useTaskAssignablePeople, useTaskLeadOptions, type RouteTo, type StaffTask,
 } from "@/hooks/useStaffDesk";
 
 const KINDS = [
@@ -36,6 +37,49 @@ function givenState(t: StaffTask): [string, string] {
   return ["accepted, in progress", "bg-blue-100 text-blue-800"];
 }
 
+// "What happened?" — required before a task is marked done (18 Nov: tasks were being ticked with no answer recorded),
+// and used to add the note to a done task that was closed without one. The lead link is optional.
+function TaskNoteForm({ mode, leadOptions, linked, busy, onSubmit, onCancel }: {
+  mode: "close" | "late"; leadOptions: { id: string; label: string }[] | null; linked: boolean; busy: boolean;
+  onSubmit: (note: string, leadId: string | null) => void; onCancel: () => void;
+}) {
+  const [note, setNote] = useState("");
+  const [leadId, setLeadId] = useState("");
+  const [leadSearch, setLeadSearch] = useState("");
+  const length = note.trim().length;
+  const short = length < TASK_NOTE_MIN;
+  const shown = (leadOptions ?? []).filter((o) => o.label.toLowerCase().includes(leadSearch.trim().toLowerCase())).slice(0, 50);
+  return (
+    <form className="mt-2 space-y-2 rounded-lg border border-border bg-slate-50 p-3"
+      onSubmit={(e) => { e.preventDefault(); if (!short) onSubmit(note, leadId || null); }}>
+      <label className="block text-xs font-semibold text-brand-navy">
+        What happened? <span className="font-normal text-muted-foreground">(the answer, the name, the email, what was agreed)</span>
+        <textarea required autoFocus maxLength={500} className={`${textareaClass} mt-1`} value={note} onChange={(e) => setNote(e.target.value)}
+          placeholder="Example: Sabelo agreed to send 6 months of bank statements by Friday." />
+      </label>
+      <p className={`text-xs ${short ? "text-amber-700" : "text-muted-foreground"}`}>
+        {short ? `At least ${TASK_NOTE_MIN} characters (${length}/${TASK_NOTE_MIN})` : `${length}/500`}
+      </p>
+      {leadOptions && !linked ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <input className="h-9 rounded-md border border-input px-3 text-sm" placeholder="Search leads (optional)" aria-label="Search leads"
+            value={leadSearch} onChange={(e) => setLeadSearch(e.target.value)} />
+          <select className={selectClass} aria-label="Link to a lead" value={leadId} onChange={(e) => setLeadId(e.target.value)}>
+            <option value="">Link to a lead (optional)</option>
+            {shown.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+        </div>
+      ) : null}
+      <div className="flex gap-3">
+        <button type="submit" disabled={short || busy} className="text-xs font-semibold text-green-700 underline disabled:opacity-50">
+          {mode === "close" ? "Mark done" : "Save note"}
+        </button>
+        <button type="button" onClick={onCancel} className="text-xs font-semibold text-muted-foreground underline">Cancel</button>
+      </div>
+    </form>
+  );
+}
+
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", dateStyle: "medium", timeStyle: "short" });
 
 export default function StaffTasksPage() {
@@ -47,6 +91,9 @@ export default function StaffTasksPage() {
   const create = useCreateStaffTask();
   const route = useRouteStaffTask();
   const close = useCloseStaffTask();
+  const addNote = useAddTaskNote();
+  // Which task's note form is open: closing it, or adding the note a done task is missing.
+  const [noteFor, setNoteFor] = useState<{ id: string; mode: "close" | "late" } | null>(null);
   const [form, setForm] = useState({ title: "", notes: "", kind: "general", priority: "normal", due: "", routeTo: "coordinator" as RouteTo });
   // Re-giving an existing task stays with the Director and the Administrator.
   const assigner = canAssignTasks(role);
@@ -59,6 +106,9 @@ export default function StaffTasksPage() {
   const givePeople = useTaskAssignablePeople(giver);
   // HR and the field roles have no desk: they see and finish their own tasks only.
   const hasDesk = role === "owner" || role === "administrator" || role === "coordinator" || role === "switchboard";
+  const leadOptions = useTaskLeadOptions(hasDesk);
+  // The Director may still mark a task done without a note (the database allows it); everyone else writes one.
+  const quickClose = role === "owner";
   const given = useStaffTasks(giver ? null : "open");
   const ask = useAskTaskQuestion();
   const [question, setQuestion] = useState<Record<string, string>>({});
@@ -158,6 +208,11 @@ export default function StaffTasksPage() {
                     <span className="block text-xs text-muted-foreground">
                       {t.assigned_name ?? "Someone"}{t.route_to ? ` (${ROLE_NAME[t.route_to] ?? t.route_to})` : ""}{t.due_at ? ` · due ${fmt(t.due_at)}` : ""}
                     </span>
+                    {t.status === "done" ? (
+                      t.completion_note
+                        ? <span className="block text-xs text-green-900"><span className="font-semibold">What happened:</span> {t.completion_note}</span>
+                        : <span className="block text-xs font-semibold text-amber-800">No note — add what happened</span>
+                    ) : null}
                   </span>
                   <span className={`rounded px-1.5 py-0.5 text-xs ${cls}`}>{label}</span>
                 </li>
@@ -242,12 +297,44 @@ export default function StaffTasksPage() {
                 <div className="flex flex-wrap gap-3 pt-1">
                   {t.task_kind !== "founder_decision" ? (
                     <button type="button" className="text-xs font-semibold text-green-700 underline"
-                      onClick={() => close.mutate({ taskId: t.id, outcome: "done", note: "" }, { onError: (e) => toast.error(errorText(e)) })}>Mark done</button>
+                      onClick={() => setNoteFor({ id: t.id, mode: "close" })}>Mark done</button>
                   ) : null}
                   {t.task_kind !== "founder_decision" && hasDesk ? targets.filter((x) => x !== t.route_to).map((to) => (
                     <button key={to} type="button" className="text-xs font-semibold text-brand-teal underline" onClick={() => doRoute(t, to)}>Send to {to}</button>
                   )) : null}
                 </div>
+              ) : null}
+              {t.status === "done" ? (
+                t.completion_note ? (
+                  <p className="rounded bg-green-50 px-2 py-1 text-xs text-green-900">
+                    <span className="font-semibold">What happened:</span> {t.completion_note}
+                    {t.completed_by_name ? <span className="text-green-700"> — {t.completed_by_name}{t.completed_at ? `, ${fmt(t.completed_at)}` : ""}</span> : null}
+                    {t.client_name ? <span className="text-green-700"> · client {t.client_name}</span> : null}
+                  </p>
+                ) : (
+                  <p className="text-xs">
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-900">No note — add what happened</span>
+                    {t.completed_by_name ? <span className="ml-2 text-muted-foreground">done by {t.completed_by_name}</span> : null}
+                    {t.can_add_note ? (
+                      <button type="button" className="ml-3 font-semibold text-brand-teal underline" onClick={() => setNoteFor({ id: t.id, mode: "late" })}>Add note</button>
+                    ) : null}
+                  </p>
+                )
+              ) : null}
+              {noteFor?.id === t.id ? (
+                <TaskNoteForm mode={noteFor.mode} leadOptions={hasDesk ? leadOptions.data ?? [] : null} linked={Boolean(t.lead_id)}
+                  busy={close.isPending || addNote.isPending} onCancel={() => setNoteFor(null)}
+                  onSubmit={(note, leadId) => {
+                    const done = { onSuccess: () => { toast.success(noteFor.mode === "close" ? "Task done" : "Note added"); setNoteFor(null); }, onError: (e: unknown) => toast.error(errorText(e)) };
+                    if (noteFor.mode === "close") close.mutate({ taskId: t.id, outcome: "done", note, leadId }, done);
+                    else addNote.mutate({ taskId: t.id, note, leadId }, done);
+                  }} />
+              ) : null}
+              {quickClose && t.status === "open" && noteFor?.id === t.id && noteFor.mode === "close" ? (
+                <button type="button" className="text-xs text-muted-foreground underline"
+                  onClick={() => close.mutate({ taskId: t.id, outcome: "done", note: "" }, { onSuccess: () => setNoteFor(null), onError: (e) => toast.error(errorText(e)) })}>
+                  Mark done without a note (Director only)
+                </button>
               ) : null}
               {t.status === "open" && t.priority === "important" && t.assigned_to === myId && t.acceptance === "accepted" ? (
                 <div className="flex flex-wrap items-center gap-2 pt-1">
