@@ -88,6 +88,7 @@ import DealDetailPage from "@/pages/DealDetailPage";
 import ArchivedDealsPage from "@/pages/ArchivedDealsPage";
 import TasksPage from "@/pages/TasksPage";
 import OwnerCalendarPage from "@/pages/OwnerCalendarPage";
+import DailyLogPage from "@/pages/DailyLogPage";
 import DealPackagePage from "@/pages/DealPackagePage";
 import ClientsPage from "@/pages/ClientsPage";
 import ClientDetailPage from "@/pages/ClientDetailPage";
@@ -335,6 +336,7 @@ function AppRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/daily-log" element={<DailyLogPage />} />
         <Route path="/calendar" element={<OwnerCalendarPage />} />
         <Route path="/calendar/access" element={<CalendarAccessPage />} />
         <Route path="/settings/document-rules" element={<DocumentRulesPage />} />
