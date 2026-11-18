@@ -24,7 +24,10 @@
 // this function, and the owner role can never be created through it. One
 // exception (owner, 17 Nov 2026): a Field Supervisor with enabled staff access
 // may invite field consultants ONLY (staff_inviter_role decides, server-side);
-// their staff access stays off until the Director switches it on.
+// their staff access stays off until the Director switches it on. A second
+// exception (owner, 18 Nov 2026): the Office Administrator with enabled staff
+// access may invite AGENTS only (partner / contractor / sub-agent), by emailed
+// sign-in link only — never a staff role and never a temporary password.
 //
 // Env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (auto-injected);
 //      RESEND_API_KEY, APP_BASE_URL, optionally EMAIL_FROM / EMAIL_REPLY_TO
@@ -222,10 +225,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // role; a Field Supervisor with enabled staff access invites ONLY field consultants (owner, 17 Nov 2026).
   const { data: inviterRole, error: inviterErr } = await userClient.rpc("staff_inviter_role");
   if (inviterErr) return json({ error: "Authorization check failed" }, 500);
-  if (inviterRole !== "owner" && inviterRole !== "field_supervisor") {
-    return json({ error: "Only the Director or the Field Supervisor can invite people" }, 403);
+  if (inviterRole !== "owner" && inviterRole !== "field_supervisor" && inviterRole !== "administrator") {
+    return json({ error: "Only the Director, the Office Administrator or the Field Supervisor can invite people" }, 403);
   }
   const isFieldSupervisor = inviterRole === "field_supervisor";
+  // The Office Administrator adds agents only (owner, 18 Nov 2026).
+  const isAdministrator = inviterRole === "administrator";
+  // Staff inviters (not the Director) are never told which role another person's account holds.
+  const isStaffInviter = isFieldSupervisor || isAdministrator;
 
   // ---- validate input ------------------------------------------------------
   let body: InviteBody;
@@ -266,6 +273,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
   if (isFieldSupervisor && (role !== "field_consultant" || parentPartnerId)) {
     return json({ error: "The Field Supervisor can only add field agents (field consultants)" }, 403);
+  }
+  if (isAdministrator && role !== "partner" && role !== "contractor" && role !== "lead_referrer") {
+    return json({ error: "The Office Administrator can only add agents (Team Leader, Direct agent or Sub-agent)" }, 403);
+  }
+  if (isAdministrator && inviteMethod !== "magic_link") {
+    return json({ error: "Agents added by the Office Administrator get an emailed sign-in link; temporary passwords are set by the Director only" }, 403);
   }
 
   let tempPassword = (body.temp_password ?? "").trim();
@@ -310,8 +323,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (existing) {
     // A user with this email already exists.
     if (existing.role !== role) {
-      // A Field Supervisor is not told which role another person holds.
-      if (isFieldSupervisor) {
+      // A Field Supervisor or the Office Administrator is not told which role another person holds.
+      if (isStaffInviter) {
         return json({ error: "This email already has a CRM account. Ask the Director to check it." }, 409);
       }
       return json(
@@ -425,6 +438,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const { data: raced } = await service.from("profiles").select("id, role").eq("email", email).maybeSingle();
     if (raced) {
       if (raced.role !== role) {
+        if (isStaffInviter) {
+          return json({ error: "This email already has a CRM account. Ask the Director to check it." }, 409);
+        }
         return json(
           { error: `A user with this email already exists as ${ROLE_LABEL[raced.role] ?? raced.role}.` },
           409,
@@ -521,6 +537,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     staffAccessPending = true;
     const { error: notifyErr } = await userClient.rpc("field_agent_added_notify", { p_profile: userId });
     if (notifyErr) console.error("field_agent_added_notify failed:", notifyErr.message);
+  }
+  // An agent added by the Office Administrator: tell the Director (agent_added_notify also writes the staff audit
+  // trail). Never fatal — the account and welcome email already stand.
+  if (isAdministrator) {
+    const { error: notifyErr } = await userClient.rpc("agent_added_notify", { p_profile: userId });
+    if (notifyErr) console.error("agent_added_notify failed:", notifyErr.message);
   }
 
   const auditRes = await audit(
