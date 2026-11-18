@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, CalendarClock, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon, MapPin, BadgeCheck, FolderOpen } from "lucide-react";
+import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, CalendarClock, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon, MapPin, BadgeCheck, FolderOpen, UserPlus } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -7,7 +7,7 @@ import { useSession } from "@/lib/useSession";
 import { canDecideTimeRequests, isFieldRole, isStaffManager, useStaffRole } from "@/hooks/useStaffDesk";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
-type Item = { to: string; label: string; icon: typeof PhoneCall; end: boolean; managerOnly?: boolean; founderAdminOnly?: boolean; hr?: boolean; field?: boolean; noSwitchboard?: boolean; ownerOnly?: boolean; notOwner?: boolean; personal?: boolean };
+type Item = { to: string; label: string; icon: typeof PhoneCall; end: boolean; managerOnly?: boolean; founderAdminOnly?: boolean; hr?: boolean; field?: boolean; noSwitchboard?: boolean; ownerOnly?: boolean; notOwner?: boolean; personal?: boolean; fieldSupervisorOnly?: boolean };
 
 const navigation: Item[] = [
   { to: "/staff/home", label: "Home", icon: LayoutDashboard, end: false, managerOnly: true },
@@ -34,6 +34,8 @@ const navigation: Item[] = [
   { to: "/staff/field-leads", label: "Field leads", icon: MapPin, end: false, managerOnly: true, field: true },
   // Field diary: the field roles' own meetings; the Director and the Administrator open every field diary.
   { to: "/staff/my-diary", label: "My diary", icon: CalendarClock, end: false, founderAdminOnly: true, field: true },
+  // Only the Field Supervisor adds field agents; the Edge Function enforces it server-side.
+  { to: "/staff/field-agents", label: "Add field agent", icon: UserPlus, end: false, field: true, fieldSupervisorOnly: true },
   { to: "/staff/answers", label: "Answer desk", icon: MessageSquareReply, end: false, managerOnly: true },
   { to: "/staff/queue", label: "Submission queue", icon: ClipboardList, end: false, managerOnly: true },
 ];
@@ -45,7 +47,7 @@ export function StaffShell({ children }: { children: ReactNode }) {
   // own payslips, My day; field roles: My day, notices, own payslips); every other page refuses them anyway. "My day" is for the roles without the Coordinator's
   // Home page; the all-roles targets screen is the Director's.
   const items = role === "hr" ? navigation.filter((i) => i.hr)
-    : isFieldRole(role) ? navigation.filter((i) => i.field)
+    : isFieldRole(role) ? navigation.filter((i) => i.field && (!i.fieldSupervisorOnly || role === "field_supervisor"))
     : navigation.filter((i) => (!i.managerOnly || isStaffManager(role)) && (!i.founderAdminOnly || canDecideTimeRequests(role))
       && (!i.noSwitchboard || role !== "switchboard") && (!i.ownerOnly || role === "owner") && (!i.notOwner || role !== "owner")
       && (!i.personal || role === "switchboard"));
