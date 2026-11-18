@@ -13,15 +13,18 @@
 //   deployed verify_jwt=false and does the check itself:
 //     1. read the caller's Bearer JWT (supabase-js functions.invoke attaches
 //        the current session token automatically),
-//     2. build a user-scoped client with that JWT and call is_owner() — the
-//        DB is the single source of truth for "who is the owner" (auth.uid()
+//     2. build a user-scoped client with that JWT and call staff_inviter_role()
+//        — the DB is the single source of truth for who may invite (auth.uid()
 //        under the RLS role resolves to the caller),
 //     3. only then use the service-role client for the admin operations.
 //   verify_jwt=false (not true) so we can answer the CORS preflight and return
-//   clean JSON errors ourselves; the is_owner() gate is the real authorization.
+//   clean JSON errors ourselves; the staff_inviter_role() gate is the real authorization.
 //
 // A public signup is never opened (CLAUDE.md rule 4) — only the owner reaches
-// this function, and the owner role can never be created through it.
+// this function, and the owner role can never be created through it. One
+// exception (owner, 17 Nov 2026): a Field Supervisor with enabled staff access
+// may invite field consultants ONLY (staff_inviter_role decides, server-side);
+// their staff access stays off until the Director switches it on.
 //
 // Env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (auto-injected);
 //      RESEND_API_KEY, APP_BASE_URL, optionally EMAIL_FROM / EMAIL_REPLY_TO
@@ -159,7 +162,7 @@ type AuditResult = { ok: boolean; recorded: boolean };
 // can be reconstructed verbatim by a backfill sweep.
 async function audit(
   service: SupabaseClient,
-  caller: { id: string; email: string | null },
+  caller: { id: string; email: string | null; role: string },
   eventType: "CREATE" | "UPDATE",
   targetUserId: string,
   action: string,
@@ -170,7 +173,7 @@ async function audit(
   const row = {
     user_id: caller.id,
     user_email: caller.email,
-    user_role: "owner",
+    user_role: caller.role,
     event_type: eventType,
     entity_type: "profile",
     entity_id: targetUserId,
@@ -215,9 +218,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const caller = userData?.user;
   if (userErr || !caller) return json({ error: "Not authenticated" }, 401);
 
-  const { data: isOwner, error: ownerErr } = await userClient.rpc("is_owner");
-  if (ownerErr) return json({ error: "Authorization check failed" }, 500);
-  if (isOwner !== true) return json({ error: "Only the owner can invite people" }, 403);
+  // Who may invite is decided by the database (staff_inviter_role), never by the request: the Director invites any
+  // role; a Field Supervisor with enabled staff access invites ONLY field consultants (owner, 17 Nov 2026).
+  const { data: inviterRole, error: inviterErr } = await userClient.rpc("staff_inviter_role");
+  if (inviterErr) return json({ error: "Authorization check failed" }, 500);
+  if (inviterRole !== "owner" && inviterRole !== "field_supervisor") {
+    return json({ error: "Only the Director or the Field Supervisor can invite people" }, 403);
+  }
+  const isFieldSupervisor = inviterRole === "field_supervisor";
 
   // ---- validate input ------------------------------------------------------
   let body: InviteBody;
@@ -256,6 +264,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (inviteMethod !== "magic_link" && inviteMethod !== "temp_password") {
     return json({ error: "Invite method must be magic_link or temp_password" }, 400);
   }
+  if (isFieldSupervisor && (role !== "field_consultant" || parentPartnerId)) {
+    return json({ error: "The Field Supervisor can only add field agents (field consultants)" }, 403);
+  }
 
   let tempPassword = (body.temp_password ?? "").trim();
   if (inviteMethod === "temp_password") {
@@ -275,7 +286,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const service = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const callerInfo = { id: caller.id, email: caller.email ?? null };
+  const callerInfo = { id: caller.id, email: caller.email ?? null, role: inviterRole as string };
 
   if (parentPartnerId) {
     const { data: partner, error: partnerErr } = await service
@@ -299,6 +310,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (existing) {
     // A user with this email already exists.
     if (existing.role !== role) {
+      // A Field Supervisor is not told which role another person holds.
+      if (isFieldSupervisor) {
+        return json({ error: "This email already has a CRM account. Ask the Director to check it." }, 409);
+      }
       return json(
         {
           error:
@@ -499,6 +514,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
   }
 
+  // A field agent added by the Field Supervisor starts with staff access OFF (owner_set_staff_access is Director-
+  // only): tell the Director to switch it on, and the Office Administrators for awareness. Never fatal.
+  let staffAccessPending = false;
+  if (isFieldSupervisor) {
+    staffAccessPending = true;
+    const { error: notifyErr } = await userClient.rpc("field_agent_added_notify", { p_profile: userId });
+    if (notifyErr) console.error("field_agent_added_notify failed:", notifyErr.message);
+  }
+
   const auditRes = await audit(
     service,
     callerInfo,
@@ -526,6 +550,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     email_sent: emailSent,
     temp_password: inviteMethod === "temp_password" ? tempPassword : undefined,
     phone_saved: phoneSaved,
+    staff_access_pending: staffAccessPending,
     audit_logged: auditRes.ok,
     audit_failure_recorded: auditRes.recorded,
   });
