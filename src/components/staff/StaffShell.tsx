@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
-import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon, MapPin, BadgeCheck, FolderOpen, Package, UserPlus, CalendarClock } from "lucide-react";
+import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon, MapPin, BadgeCheck, FolderOpen, Package, UserPlus, CalendarClock, CalendarHeart } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
 import { useSession } from "@/lib/useSession";
 import { canDecideTimeRequests, isFieldRole, isStaffManager, useStaffRole } from "@/hooks/useStaffDesk";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { useDiaryCalendars } from "@/hooks/useDirectorDiary";
 
-type Item = { to: string; label: string; icon: typeof PhoneCall; end: boolean; managerOnly?: boolean; founderAdminOnly?: boolean; hr?: boolean; field?: boolean; noSwitchboard?: boolean; ownerOnly?: boolean; notOwner?: boolean; personal?: boolean; fieldOnly?: boolean; fieldSupervisorOnly?: boolean };
+type Item = { to: string; label: string; icon: typeof PhoneCall; end: boolean; managerOnly?: boolean; founderAdminOnly?: boolean; hr?: boolean; field?: boolean; noSwitchboard?: boolean; ownerOnly?: boolean; notOwner?: boolean; personal?: boolean; fieldOnly?: boolean; fieldSupervisorOnly?: boolean; diaryGrant?: boolean };
 
 const navigation: Item[] = [
   { to: "/staff/home", label: "Home", icon: LayoutDashboard, end: false, managerOnly: true },
@@ -17,6 +18,8 @@ const navigation: Item[] = [
   { to: "/staff/new-lead", label: "New lead", icon: FilePlus2, end: false },
   { to: "/staff/documents", label: "Document tracker", icon: BookOpenCheck, end: false },
   { to: "/staff/diary", label: "Diary", icon: CalendarDays, end: false },
+  // Shown only to staff the Director gave "Manage my diary" (any staff role); the database checks it on every call.
+  { to: "/staff/director-diary", label: "Director's diary", icon: CalendarHeart, end: false, hr: true, field: true, notOwner: true, diaryGrant: true },
   { to: "/staff/team-diary", label: "Team diary", icon: CalendarCheck, end: false },
   { to: "/staff/messages", label: "Messages", icon: MessagesSquare, end: false, hr: true },
   { to: "/staff/notices", label: "Notices", icon: Megaphone, end: false, hr: true, field: true },
@@ -45,14 +48,17 @@ const navigation: Item[] = [
 export function StaffShell({ children }: { children: ReactNode }) {
   const session = useSession();
   const { data: role } = useStaffRole();
+  const diaryCalendars = useDiaryCalendars();
+  const hasDiary = (diaryCalendars.data?.length ?? 0) > 0;
   // HR and the field roles see only the pages marked for them (HR: messages, notices, the commission flow, payroll,
   // own payslips, My day; field roles: My day, notices, own payslips); every other page refuses them anyway. "My day" is for the roles without the Coordinator's
   // Home page; the all-roles targets screen is the Director's.
-  const items = role === "hr" ? navigation.filter((i) => i.hr)
+  const items = (role === "hr" ? navigation.filter((i) => i.hr)
     : isFieldRole(role) ? navigation.filter((i) => i.field && (!i.fieldSupervisorOnly || role === "field_supervisor"))
     : navigation.filter((i) => (!i.managerOnly || isStaffManager(role)) && (!i.founderAdminOnly || canDecideTimeRequests(role))
       && (!i.noSwitchboard || role !== "switchboard") && (!i.ownerOnly || role === "owner") && (!i.notOwner || role !== "owner")
-      && (!i.personal || role === "switchboard") && !i.fieldOnly);
+      && (!i.personal || role === "switchboard") && !i.fieldOnly))
+    .filter((i) => !i.diaryGrant || (hasDiary && role !== "owner"));
   const roleLabel = role === "administrator" ? "Administrator" : role === "coordinator" ? "Sales Coordinator" : role === "switchboard" ? "Switchboard" : role === "hr" ? "HR"
     : role === "field_supervisor" ? "Field Supervisor" : role === "field_consultant" ? "Field consultant" : "Staff";
 

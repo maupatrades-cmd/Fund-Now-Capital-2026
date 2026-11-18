@@ -20,9 +20,7 @@ test('Owner diary: event types, Personal privacy and the manage_diary delegate a
   const db = new PGlite({ extensions: { btree_gist } });
   const q = async (sql, args = []) => (await db.query(sql, args)).rows;
   const one = async (sql, args = []) => (await q(sql, args))[0];
-  let current = null;
   const as = async (uid) => {
-    current = uid;
     await db.exec('reset role;');
     if (uid) await db.exec(`select set_config('request.jwt.claim.sub','${uid}',false); set role authenticated;`);
   };
