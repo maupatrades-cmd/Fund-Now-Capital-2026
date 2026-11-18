@@ -3,7 +3,7 @@ import { Camera, Loader2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Field, errorText, primaryButton, selectClass } from "@/components/staff/StaffShell";
 import {
-  CATEGORY_LABEL, MAX_TOTAL_BYTES, useClientDealsForForms, useFormCatalogue, useLinkOptions, useRegisterScannedForm,
+  ACCEPTED_MIME, CATEGORY_LABEL, MAX_TOTAL_BYTES, useClientDealsForForms, useFormCatalogue, useLinkOptions, useRegisterScannedForm,
   type CatalogueForm, type LinkKind,
 } from "@/hooks/useScannedForms";
 
@@ -50,9 +50,15 @@ export function UploadScannedFormDialog({ preset, onClose }: { preset: UploadPre
   const deals = useClientDealsForForms(form?.link_kind === "client" ? clientId : null);
   const total = files.reduce((n, f) => n + f.size, 0);
 
+  // Refuse a wrong file type the moment it is picked (a phone's HEIC photo, a Word file), naming the file, instead of
+  // only at Upload time.
   const addFiles = (list: FileList | null) => {
     if (!list) return;
-    setFiles((prev) => [...prev, ...Array.from(list)]);
+    const picked = Array.from(list);
+    const ok = picked.filter((f) => (ACCEPTED_MIME as readonly string[]).includes(f.type));
+    const bad = picked.filter((f) => !ok.includes(f));
+    if (bad.length) toast.error(`${bad.map((f) => f.name).join(", ")}: only PDF, JPG or PNG files can be uploaded. Save it as a PDF and try again.`);
+    if (ok.length) setFiles((prev) => [...prev, ...ok]);
   };
 
   const submit = async (e: FormEvent) => {
@@ -144,6 +150,12 @@ export function UploadScannedFormDialog({ preset, onClose }: { preset: UploadPre
               <input type="file" className="sr-only" accept="image/*" capture="environment" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
             </label>
           </div>
+          {files.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              No pages attached yet. Click <strong>Choose files</strong> and pick the scan from this computer (for a file in
+              Dropbox or email, download it first; it goes to the Downloads folder).
+            </p>
+          ) : null}
           <ul className="space-y-1 text-xs">
             {files.map((f, i) => (
               <li key={`${f.name}-${i}`} className="flex items-center justify-between gap-2 rounded border border-border px-2 py-1">
@@ -157,8 +169,9 @@ export function UploadScannedFormDialog({ preset, onClose }: { preset: UploadPre
           </p>
         </div>
 
-        <button type="submit" className={`${primaryButton} w-full gap-2`} disabled={register.isPending}>
-          {register.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null} Upload
+        <button type="submit" className={`${primaryButton} w-full gap-2`} disabled={register.isPending || files.length === 0}>
+          {register.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+          {files.length === 0 ? "Attach the scanned pages first" : `Upload ${files.length} page${files.length === 1 ? "" : "s"}`}
         </button>
       </form>
     </div>
