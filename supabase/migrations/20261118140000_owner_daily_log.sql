@@ -90,11 +90,18 @@ begin
   get diagnostics v_rows = row_count;
   if v_rows <> 1 then raise exception 'Saving the daily log affected no rows'; end if;
 
-  -- The log entry names the day only; the journal text never leaves the owner's own table.
-  select p.email into v_email from public.profiles p where p.id = v_owner;
-  insert into public.activity_logs (user_id, user_email, user_role, event_type, entity_type, entity_id, description)
-  values (v_owner, v_email, 'owner', case when v_existed then 'UPDATE' else 'CREATE' end::public.activity_event_type,
-          'daily_log', null, 'Daily log updated for ' || to_char(p_date, 'YYYY-MM-DD'));
+  -- The log entry names the day only; the journal text never leaves the owner's own table. Autosave runs every few
+  -- seconds while she types, so one entry per day per 30 minutes is enough (the first save of a day always logs).
+  if not exists (
+    select 1 from public.activity_logs a
+     where a.user_id = v_owner and a.entity_type = 'daily_log'
+       and a.description = 'Daily log updated for ' || to_char(p_date, 'YYYY-MM-DD')
+       and a.occurred_at > now() - interval '30 minutes') then
+    select p.email into v_email from public.profiles p where p.id = v_owner;
+    insert into public.activity_logs (user_id, user_email, user_role, event_type, entity_type, entity_id, description)
+    values (v_owner, v_email, 'owner', case when v_existed then 'UPDATE' else 'CREATE' end::public.activity_event_type,
+            'daily_log', null, 'Daily log updated for ' || to_char(p_date, 'YYYY-MM-DD'));
+  end if;
   return v_saved;
 end;
 $$;

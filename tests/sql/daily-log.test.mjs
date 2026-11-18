@@ -104,7 +104,8 @@ test('Daily log: owner-only, one entry per day, no future days, activity panel a
     // The log entries written on save name the date only and never carry the journal text.
     await as(null);
     const logs = await q("select event_type::text e, description, coalesce(after_values::text,'') a from public.activity_logs where entity_type = 'daily_log' order by occurred_at");
-    assert.deepEqual(logs.map((r) => r.e), ['CREATE', 'UPDATE', 'CREATE']);
+    // Autosave throttle: the second save of the same day within 30 minutes writes no extra entry.
+    assert.deepEqual(logs.map((r) => r.e), ['CREATE', 'CREATE']);
     for (const r of logs) {
       assert.match(r.description, /^Daily log updated for \d{4}-\d{2}-\d{2}$/);
       assert.ok(!r.description.includes('funder') && !r.a.includes('funder'), 'journal text never logged');
