@@ -41,6 +41,7 @@ import StaffTasksPage from "@/pages/staff/StaffTasksPage";
 import StaffMaterialsRequestPage from "@/pages/staff/StaffMaterialsRequestPage";
 import StaffOutboundPage from "@/pages/staff/StaffOutboundPage";
 import StaffFieldLeadsPage from "@/pages/staff/StaffFieldLeadsPage";
+import StaffAddFieldAgentPage from "@/pages/staff/StaffAddFieldAgentPage";
 import StaffQueuePage from "@/pages/staff/StaffQueuePage";
 import StaffAgentFilePage from "@/pages/staff/StaffAgentFilePage";
 import StaffFormsLibraryPage from "@/pages/staff/StaffFormsLibraryPage";
@@ -296,6 +297,7 @@ function AppRoutes() {
         <Route path="materials" element={<StaffMaterialsRequestPage />} />
         <Route path="outbound" element={<StaffOutboundPage />} />
         <Route path="field-leads" element={<StaffFieldLeadsPage />} />
+        <Route path="field-agents" element={<StaffAddFieldAgentPage />} />
         <Route path="queue" element={<StaffQueuePage />} />
         <Route path="home" element={<StaffHomePage />} />
         <Route path="answers" element={<StaffAnswerDeskPage />} />
