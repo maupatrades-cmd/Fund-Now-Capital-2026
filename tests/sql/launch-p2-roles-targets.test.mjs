@@ -166,6 +166,30 @@ test('Launch priority 2: field logins, history role and targets are enforced by 
     assert.equal((await q('select * from public.my_targets()')).find((r) => r.metric_key === 'files_opened').status, 'confirmed');
     await rejects(() => q('select * from public.role_targets'), /permission denied/);
     await rejects(() => q("select public.role_target_actual('files_opened', null, 'office')"), /permission denied/);
+    // ---- Field Supervisor adds field agents (20261118110000/110100) ------------------------------------------------
+    await db.exec('reset role;');
+    await db.exec(await mig('20261118110000_field_agent_invite_enum.sql'));
+    await db.exec(await mig('20261118110100_field_agent_invite.sql'));
+    await as(U.owner);
+    assert.equal((await one('select public.staff_inviter_role() as r')).r, 'owner');
+    await as(U.fsup);
+    assert.equal((await one('select public.staff_inviter_role() as r')).r, 'field_supervisor');
+    for (const who of [U.fcon, U.coordinator, U.admin, U.partner]) {
+      await as(who);
+      assert.equal((await one('select public.staff_inviter_role() as r')).r, null, 'only the Director or an enabled Field Supervisor invites');
+    }
+    await rejects(() => q('select public.field_agent_added_notify($1)', [U.fcon]), /permission/, '42501');
+    await as(U.fsup);
+    await rejects(() => q('select public.field_agent_added_notify($1)', [U.coordinator]), /Field agent not found/);
+    assert.equal((await one('select public.field_agent_added_notify($1) as n', [U.fcon])).n, 2, 'the Director and the enabled Administrator');
+    await db.exec('reset role;');
+    const told = await q("select user_id from public.notifications where event_type = 'FIELD_AGENT_ADDED' order by user_id");
+    assert.deepEqual(told.map((r) => r.user_id), [U.owner, U.admin].sort());
+    const audit = await one("select actor_role, detail from public.staff_audit_events where event_type = 'field_agent_added'");
+    assert.equal(audit.actor_role, 'field_supervisor');
+    assert.equal(audit.detail.invited_by_role, 'field_supervisor');
+    assert.equal((await one('select access_enabled from public.staff_access where profile_id = $1', [U.fcon]))?.access_enabled ?? false, false,
+      'the new consultant stays switched off until the Director enables them');
   } finally {
     await db.close();
   }
