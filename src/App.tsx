@@ -42,6 +42,7 @@ import StaffMaterialsRequestPage from "@/pages/staff/StaffMaterialsRequestPage";
 import StaffOutboundPage from "@/pages/staff/StaffOutboundPage";
 import StaffFieldLeadsPage from "@/pages/staff/StaffFieldLeadsPage";
 import StaffFieldDiaryPage from "@/pages/staff/StaffFieldDiaryPage";
+import StaffDirectorDiaryPage from "@/pages/staff/StaffDirectorDiaryPage";
 import StaffAddFieldAgentPage from "@/pages/staff/StaffAddFieldAgentPage";
 import StaffQueuePage from "@/pages/staff/StaffQueuePage";
 import StaffAgentFilePage from "@/pages/staff/StaffAgentFilePage";
@@ -87,6 +88,7 @@ import DealDetailPage from "@/pages/DealDetailPage";
 import ArchivedDealsPage from "@/pages/ArchivedDealsPage";
 import TasksPage from "@/pages/TasksPage";
 import OwnerCalendarPage from "@/pages/OwnerCalendarPage";
+import DailyLogPage from "@/pages/DailyLogPage";
 import DealPackagePage from "@/pages/DealPackagePage";
 import ClientsPage from "@/pages/ClientsPage";
 import ClientDetailPage from "@/pages/ClientDetailPage";
@@ -299,6 +301,7 @@ function AppRoutes() {
         <Route path="outbound" element={<StaffOutboundPage />} />
         <Route path="field-leads" element={<StaffFieldLeadsPage />} />
         <Route path="my-diary" element={<StaffFieldDiaryPage />} />
+        <Route path="director-diary" element={<StaffDirectorDiaryPage />} />
         <Route path="field-agents" element={<StaffAddFieldAgentPage />} />
         <Route path="queue" element={<StaffQueuePage />} />
         <Route path="home" element={<StaffHomePage />} />
@@ -333,6 +336,7 @@ function AppRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/pipeline" element={<PipelinePage />} />
         <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/daily-log" element={<DailyLogPage />} />
         <Route path="/calendar" element={<OwnerCalendarPage />} />
         <Route path="/calendar/access" element={<CalendarAccessPage />} />
         <Route path="/settings/document-rules" element={<DocumentRulesPage />} />
