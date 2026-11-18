@@ -107,6 +107,9 @@ export type InviteResult = {
   // double-failure case, nothing queued → escalate).
   audit_logged?: boolean;
   audit_failure_recorded?: boolean;
+  // true when the Field Supervisor added the person: their staff access stays off
+  // until the Director switches it on (the Director and Administrators are notified).
+  staff_access_pending?: boolean;
 };
 
 export type DeactivateResult = {
