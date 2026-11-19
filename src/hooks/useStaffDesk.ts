@@ -132,7 +132,14 @@ export type StaffTask = {
   // Administrator batch 2: a task given to a named person waits for their answer.
   acceptance: "pending" | "accepted" | "declined" | null; assigned_by_name: string | null;
   responded_at: string | null; decline_reason: string | null; given_by_me: boolean;
+  // Completion notes (18 Nov): what happened, who finished it, the optional client link, and whether the caller may add
+  // a note the task was closed without.
+  completion_note: string | null; completed_by_name: string | null; completed_at: string | null;
+  client_id: string | null; client_name: string | null; can_add_note: boolean;
 };
+
+// A note is required to mark a task done (except the Director); the database enforces the same minimum.
+export const TASK_NOTE_MIN = 10;
 
 // Only the Founder and the Administrator re-give an existing task or cancel one somebody else gave (the database
 // enforces it).
@@ -251,9 +258,32 @@ export function useRouteStaffTask() {
 export function useCloseStaffTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (i: { taskId: string; outcome: "done" | "cancelled"; note: string }) =>
-      rpc<void>("staff_close_task", { p_task_id: i.taskId, p_outcome: i.outcome, p_note: i.note || null }),
+    mutationFn: (i: { taskId: string; outcome: "done" | "cancelled"; note: string; leadId?: string | null }) =>
+      rpc<void>("staff_close_task", {
+        p_task_id: i.taskId, p_outcome: i.outcome, p_note: i.note.trim() || null, p_lead_id: i.leadId || null, p_client_id: null,
+      }),
     onSuccess: () => invalidateTasks(qc),
+  });
+}
+
+// The note a done task was closed without (once; the completer, the Administrator or the Director).
+export function useAddTaskNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: { taskId: string; note: string; leadId?: string | null }) =>
+      rpc<void>("staff_add_task_note", { p_task_id: i.taskId, p_note: i.note.trim(), p_lead_id: i.leadId || null, p_client_id: null }),
+    onSuccess: () => invalidateTasks(qc),
+  });
+}
+
+// Leads a task can be linked to: the submission queue, for the roles that read it (Director, Administrator,
+// Coordinator, Switchboard). Other roles close tasks without the picker.
+export function useTaskLeadOptions(enabled: boolean) {
+  return useQuery({
+    queryKey: ["task-lead-options"],
+    enabled,
+    queryFn: async () => (await rpc<IntakeRow[]>("staff_intake_queue", { p_status: null, p_include_archived: false, p_limit: 100, p_offset: 0 }))
+      .map((r) => ({ id: r.lead_id, label: `${r.business_name}${r.contact_name ? ` · ${r.contact_name}` : ""}` })),
   });
 }
 
