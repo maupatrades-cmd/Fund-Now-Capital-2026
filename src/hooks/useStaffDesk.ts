@@ -724,7 +724,31 @@ export type IntakeDetail = {
   // document_type carries the catalogue title for catalogue receipts (doc_code set).
   receipts: { receipt_id: string; document_type: string; doc_code: string | null; received_via: string; received_at: string; flagged_suspicious: boolean }[];
   history: { at: string; event: string; actor_role: string | null; actor_name: string | null; reason: string | null; to: string | null }[];
+  // Captured details (used to prefill "Edit details").
+  business_name?: string; contact_name?: string; contact_cell?: string | null; contact_email?: string | null;
+  cipc_number?: string | null; requested_amount?: number | null; funding_purpose?: string[] | null; funding_type?: string;
 };
+
+// Correct a capture mistake on a submission (19 Nov 2026). Who the sale is for stays with the Director.
+export type CorrectIntakeInput = {
+  leadId: string; businessName: string | null; contactName: string | null; contactCell: string | null;
+  contactEmail: string | null; cipc: string | null; amount: number | null; purpose: string | null; fundingType: string | null;
+  reason: string;
+};
+export function useCorrectIntakeDetails() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (i: CorrectIntakeInput) => rpc<string>("staff_correct_intake_details", {
+      p_lead_id: i.leadId, p_business_name: i.businessName, p_contact_name: i.contactName, p_contact_cell: i.contactCell,
+      p_contact_email: i.contactEmail, p_cipc_number: i.cipc, p_funding_amount: i.amount, p_funding_purpose: i.purpose,
+      p_funding_type: i.fundingType, p_reason: i.reason,
+    }),
+    onSuccess: (_d, i) => {
+      void qc.invalidateQueries({ queryKey: ["staff-intake-queue"] });
+      void qc.invalidateQueries({ queryKey: ["staff-intake-detail", i.leadId] });
+    },
+  });
+}
 export function useIntakeDetail(leadId: string, enabled: boolean) {
   return useQuery({ queryKey: ["staff-intake-detail", leadId], enabled, queryFn: () => rpc<IntakeDetail>("staff_intake_detail", { p_lead_id: leadId }) });
 }

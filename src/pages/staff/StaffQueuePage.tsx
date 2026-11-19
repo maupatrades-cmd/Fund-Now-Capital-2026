@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import QueueActions from "@/components/staff/QueueActions";
 import { PrintLeadFormButton } from "@/components/staff/LeadPrintSheet";
+import { EditLeadDetailsForm } from "@/components/staff/EditLeadDetailsForm";
 import { CoordinatorDocumentsPanel } from "@/components/staff/CoordinatorDocumentsPanel";
 import { FileDecisionLine, SendToFounderForm } from "@/components/staff/FounderDecision";
 import { card, errorText, selectClass } from "@/components/staff/StaffShell";
@@ -49,6 +50,8 @@ export default function StaffQueuePage() {
               {wordings.data?.[r.lead_id] ? <p className="text-xs text-brand-navy">Told to agents and clients: {wordings.data[r.lead_id]}</p> : null}
               {["with_founder", "documents_incomplete", "verified", "complete"].includes(r.workflow_status) ? <FileDecisionLine leadId={r.lead_id} /> : null}
               <QueueActions leadId={r.lead_id} />
+              {/* Correct a capture mistake (19 Nov 2026); the server refuses once the lead is a client. */}
+              {!r.archived_at ? <EditLeadDetailsForm leadId={r.lead_id} /> : null}
               <PrintLeadFormButton leadId={r.lead_id} label="Print lead form" />
               {/* Owner decision 19 Nov 2026: the Sales Coordinator uploads and opens client documents here. */}
               {role === "coordinator" ? <CoordinatorDocumentsPanel leadId={r.lead_id} /> : null}
