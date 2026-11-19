@@ -6,7 +6,7 @@ import { Field, card, errorText, primaryButton, selectClass } from "@/components
 import { canDecideTimeRequests, useStaffRole } from "@/hooks/useStaffDesk";
 import {
   CYCLE_LABEL, CYCLE_STEP, LINE_LABEL, PAYSLIP_LABEL, PAYSLIP_STEP, rands, useAddPayslipLine, useAddSalaryLine,
-  useMoveCycle, useMovePayslip, useOpenCycle, usePayrollCycles, usePayrollPayslips, useRemovePayslipLine,
+  useApplyQualifyingFiles, useMoveCycle, useMovePayslip, useOpenCycle, usePayrollCycles, usePayrollPayslips, useRemovePayslipLine,
   type LineKind, type PayrollCycle, type PayrollPayslip,
 } from "@/hooks/usePayroll";
 
@@ -146,6 +146,7 @@ export default function StaffPayrollPage() {
   const allowed = canDecideTimeRequests(role) || role === "hr";
   const cycles = usePayrollCycles(allowed);
   const open = useOpenCycle();
+  const apply = useApplyQualifyingFiles();
   const [month, setMonth] = useState(sastMonth(0));
   const [selected, setSelected] = useState<string | null>(null);
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
@@ -183,7 +184,19 @@ export default function StaffPayrollPage() {
       </section>
       {current ? (
         <section className={`${card} space-y-3`}>
-          <h2 className="text-base font-bold text-brand-navy">Payslips</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-base font-bold text-brand-navy">Payslips</h2>
+            {canDecideTimeRequests(role) ? (
+              <button type="button" className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-brand-navy hover:bg-slate-50"
+                disabled={apply.isPending}
+                onClick={() => apply.mutate(current, {
+                  onSuccess: (n) => toast.success(n > 0 ? `${n} file incentive line${n === 1 ? "" : "s"} added` : "No new signed-off file incentives for this cycle"),
+                  onError: (x) => toast.error(errorText(x)),
+                })}>
+                Add signed-off file incentives
+              </button>
+            ) : null}
+          </div>
           <Payslips cycleId={current} />
         </section>
       ) : null}

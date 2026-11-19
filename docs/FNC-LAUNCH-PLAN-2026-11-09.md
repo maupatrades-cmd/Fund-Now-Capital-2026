@@ -72,6 +72,12 @@ Until the payroll cycle is live, pay runs on a spreadsheet; the first cycle clos
     leads and clients, **including bank statements** and the other financial documents ("she must upload statements").
     Bank statements are now **owner + Sales Coordinator only**; partners, agents, sub-agents and clients still never see
     them. Every time she opens a document it is logged. She cannot delete documents or set verification (Director only).
+12. **Sales Coordinator file incentive (19 Nov):** **R29 per file**, counted only for files that are **ready for
+    submission**: the SC9 qualifying file (she was assigned at or before it became Complete, all required documents in,
+    and it reached the Director). Counted once, in the month it first reached the Director. It replaces the 10 Oct R35
+    and the "R25 per closed file" in section 4. Paid both ways: a monthly report for the Director, and an incentive line
+    on her payslip one month in arrears (the 27th), only after the Director signs the month off. The CRM applies R35 to
+    October 2026 and R29 from November 2026; the start month of R29 is still to be confirmed by the owner.
 
 ## 4. Contract terms the CRM must enforce
 
@@ -80,7 +86,7 @@ their own pay dates until amended in writing).
 
 | Term | Sub-agent (FNC-SAA-01, Bright Destiny) | Direct agent (FNC-DRA-01) | Team Leader | Field Supervisor / consultant | Office staff |
 |---|---|---|---|---|---|
-| Per submission or lead | R100 per Complete Submission once FNC confirms it (Verified); max one per client per 6 months | Same | Own submissions as an agent | R100 (supervisor) / R150 (consultant) per lead marked Ready for sale | Sales Coordinator R25 per closed file |
+| Per submission or lead | R100 per Complete Submission once FNC confirms it (Verified); max one per client per 6 months | Same | Own submissions as an agent | R100 (supervisor) / R150 (consultant) per lead marked Ready for sale | Sales Coordinator **R29 per file ready for submission** (owner, 19 Nov; replaces R25 per closed file and the 10 Oct R35) |
 | Commission | Only on **approved deals of R1M+**: **40%** of FNC's Net Fee Received (R1M–R4.99M), **50%** (R5M–R9.99M), **65%** (R10M+). Below R1M: R100 submission fee only. One pool shared with the Principal Referral Partner | **40%** of Net Fee Received on every closed deal, no minimum; in a team **28% member + 12% Team Leader** | 12% of net fee on team deals | 2% / 2.3% of FNC's fee received on closed field deals | Switchboard 0.05% of FNC revenue per office deal |
 | Retainer or allowance | Tier 1 R2,000 (R1M+ deal), Tier 2 R5,000 (R5M+), Tier 3 R20,000 (R10M+), 3 months each, grace month on step-down from Tier 2 and 3. One tier at a time | Weekly bonus R1,000 (5 complete submissions in a week, different clients); activity allowance R4,500 for the first 2 months with 4 qualifying weeks; Tier 1 R10,000 (R5M closed in 3 months), Tier 2 R15,000 (R20M+), 3 months each, no grace month. One retainer or allowance per month | Basic R6,000–R25,000 by level (employee) | Field Supervisor R4,500 activity allowance | Salaries: Office Administrator R7,500, Sales Coordinator R6,000, Switchboard R5,000 allowance |
 | When paid | Submission fees and retainers by the 15th of the following month; commission within 14 days of FNC's cleared fee | Same as sub-agent | Staff cycle (27th) | Staff cycle | Salary 27th (current month); incentives one month in arrears |

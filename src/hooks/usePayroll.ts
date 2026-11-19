@@ -78,7 +78,21 @@ export function usePayslipDocument(payslipId: string | undefined) {
 export function useOpenCycle() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (payMonth: string) => rpc<string>("payroll_open_cycle", { p_pay_month: payMonth }).then((id) => must(id, "The cycle")),
+    // Opening (or re-opening) a cycle also puts the Director's signed-off "files ready for submission" incentives on the
+    // draft payslips (payroll_apply_qualifying_files is idempotent; a failure there never blocks the cycle).
+    mutationFn: async (payMonth: string) => {
+      const id = must(await rpc<string>("payroll_open_cycle", { p_pay_month: payMonth }), "The cycle");
+      await rpc<number>("payroll_apply_qualifying_files", { p_cycle: id }).catch(() => 0);
+      return id;
+    },
+    onSuccess: invalidate,
+  });
+}
+// Adds the signed-off "files ready for submission" incentive lines to this cycle's draft payslips (never twice).
+export function useApplyQualifyingFiles() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (cycleId: string) => rpc<number>("payroll_apply_qualifying_files", { p_cycle: cycleId }),
     onSuccess: invalidate,
   });
 }
