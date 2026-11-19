@@ -4,8 +4,9 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Field, card, errorText, primaryButton, selectClass, textareaClass } from "@/components/staff/StaffShell";
 import { useIntakeLookups, useRegisterIntake, type RegisterIntakeResult } from "@/hooks/useStaffDesk";
+import { PrintLeadFormButton } from "@/components/staff/LeadPrintSheet";
 
-type Channel = "direct_agent" | "team" | "referral_partner" | "inhouse";
+type Channel = "direct_agent" | "team" | "referral_partner" | "field" | "inhouse";
 type InhouseKind = "" | "employee" | "office" | "online";
 
 // Readable labels for the Fund Now Capital people list (the Director and staff with enabled access).
@@ -19,6 +20,8 @@ const blank = {
   channel: "direct_agent" as Channel, organisationId: "", teamId: "", agentId: "", claimedAgent: "",
   // Fund Now Capital (in-house) source: exactly one of an employee, an office, or an online / direct referrer's name.
   inhouseKind: "" as InhouseKind, inhouseStaffId: "", inhouseOffice: "", inhouseName: "",
+  // Fund Now Capital field team: the field consultant or Field Supervisor the sale is for.
+  fieldAgentId: "",
 };
 
 export default function StaffNewLeadPage() {
@@ -35,16 +38,20 @@ export default function StaffNewLeadPage() {
     if (!L) return [];
     if (form.channel === "direct_agent") return L.direct_agents;
     if (form.channel === "team") return L.members.filter((m) => m.team_id === form.teamId);
-    if (form.channel === "inhouse") return [];
+    if (form.channel === "inhouse" || form.channel === "field") return [];
     return L.partner_agents.filter((a) => a.organisation_id === form.organisationId);
   }, [L, form.channel, form.teamId, form.organisationId]);
 
   const inhouse = form.channel === "inhouse";
+  const field = form.channel === "field";
+  // In-house and field-team leads credit no agent: the source is chosen below instead.
+  const noAgent = inhouse || field;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (inhouse && !form.inhouseKind) { toast.error("Choose where the Fund Now Capital lead came from"); return; }
     if (inhouse && form.inhouseKind === "online" && form.inhouseName.trim().length < 2) { toast.error("Type who referred them"); return; }
+    if (field && !form.fieldAgentId) { toast.error("Choose the field consultant the sale is for"); return; }
     try {
       const res = await register.mutateAsync({
         businessName: form.businessName.trim(), contactName: form.contactName.trim(), contactCell: form.contactCell.trim(),
@@ -52,11 +59,12 @@ export default function StaffNewLeadPage() {
         amount: form.amount ? Number(form.amount) : null, purpose: form.purpose.trim(), channel: form.channel,
         organisationId: form.channel === "referral_partner" ? form.organisationId || null : null,
         teamId: form.channel === "team" ? form.teamId || null : null,
-        agentId: inhouse ? null : form.agentId || null, claimedAgent: form.claimedAgent.trim(), idempotencyKey: key,
+        agentId: noAgent ? null : form.agentId || null, claimedAgent: form.claimedAgent.trim(), idempotencyKey: key,
         inhouseKind: inhouse ? form.inhouseKind || null : null,
         inhouseStaffId: inhouse && form.inhouseKind === "employee" ? form.inhouseStaffId || null : null,
         inhouseOfficeCode: inhouse && form.inhouseKind === "office" ? form.inhouseOffice || null : null,
         inhouseReferrerName: inhouse && form.inhouseKind === "online" ? form.inhouseName.trim() || null : null,
+        fieldAgentId: field ? form.fieldAgentId || null : null,
       });
       setResult(res);
       if (res.status === "created") { toast.success("Submission registered"); setForm(blank); setKey(crypto.randomUUID()); }
@@ -86,6 +94,7 @@ export default function StaffNewLeadPage() {
         <div role="status" className="rounded-xl border border-green-300 bg-green-50 p-4 text-sm text-green-900">
           Registered. {result.flags?.recent_submission || result.flags?.duplicate_contact ? "A possible duplicate was found and the Owner will review it. " : ""}
           <Link className="font-semibold underline" to="/staff/documents">Go to the Document tracker</Link>.
+          {result.lead_id ? <div className="mt-3"><PrintLeadFormButton leadId={result.lead_id} /></div> : null}
         </div>
       ) : null}
 
@@ -106,10 +115,11 @@ export default function StaffNewLeadPage() {
 
         <div className="md:col-span-2 border-t border-border pt-4"><h2 className="text-base font-bold text-brand-navy">Who introduced this?</h2></div>
         <Field label="Channel">
-          <select className={selectClass} value={form.channel} onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value as Channel, organisationId: "", teamId: "", agentId: "", inhouseKind: "", inhouseStaffId: "", inhouseOffice: "", inhouseName: "" }))}>
+          <select className={selectClass} value={form.channel} onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value as Channel, organisationId: "", teamId: "", agentId: "", inhouseKind: "", inhouseStaffId: "", inhouseOffice: "", inhouseName: "", fieldAgentId: "" }))}>
             <option value="direct_agent">Direct agent (independent)</option>
             <option value="team">Team (through a Team Leader)</option>
             <option value="referral_partner">Referral partner organisation</option>
+            <option value="field">Fund Now Capital field team</option>
             <option value="inhouse">Fund Now Capital (in-house)</option>
           </select>
         </Field>
@@ -144,6 +154,14 @@ export default function StaffNewLeadPage() {
             <Input required minLength={2} maxLength={120} value={form.inhouseName} onChange={(e) => set("inhouseName", e.target.value)} />
           </Field>
         ) : null}
+        {field ? (
+          <Field label="Field team member the sale is for" hint="A field consultant or the Field Supervisor. No agent or partner is credited.">
+            <select required className={selectClass} value={form.fieldAgentId} onChange={(e) => set("fieldAgentId", e.target.value)}>
+              <option value="">Choose...</option>
+              {(L?.field_team ?? []).map((p) => <option key={p.profile_id} value={p.profile_id}>{p.name} · {ROLE_LABEL[p.role] ?? p.role}</option>)}
+            </select>
+          </Field>
+        ) : null}
         {form.channel === "team" ? (
           <Field label="Team">
             <select required className={selectClass} value={form.teamId} onChange={(e) => setForm((f) => ({ ...f, teamId: e.target.value, agentId: "" }))}>
@@ -160,11 +178,11 @@ export default function StaffNewLeadPage() {
             </select>
           </Field>
         ) : null}
-        {!inhouse ? (
-          <Field label="Agent" hint={form.channel === "referral_partner" ? "Leave blank if the organisation introduced it directly." : undefined}>
+        {!noAgent ? (
+          <Field label="Agent" hint={form.channel === "referral_partner" ? "Leave blank if the organisation introduced it directly." : form.channel === "direct_agent" ? "Independent agents: direct agents (contractors) and sub-agents with no organisation." : undefined}>
             <select required={form.channel !== "referral_partner"} className={selectClass} value={form.agentId} onChange={(e) => set("agentId", e.target.value)}>
               <option value="">Choose...</option>
-              {agentOptions.map((a) => <option key={a.profile_id} value={a.profile_id}>{a.name}</option>)}
+              {agentOptions.map((a) => <option key={a.profile_id} value={a.profile_id}>{a.name}{"role" in a && a.role === "contractor" ? " · Direct agent" : ""}</option>)}
             </select>
           </Field>
         ) : null}

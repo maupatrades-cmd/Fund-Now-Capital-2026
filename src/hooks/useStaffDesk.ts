@@ -280,11 +280,14 @@ export type IntakeLookups = {
   organisations: { id: string; name: string }[];
   teams: { id: string; name: string; organisation_id: string }[];
   members: { profile_id: string; name: string; team_id: string; membership_role: string }[];
-  direct_agents: { profile_id: string; name: string }[];
+  // Independent agents: lead-referrers and contractors ("Direct agent") with no organisation.
+  direct_agents: { profile_id: string; name: string; role?: string }[];
   partner_agents: { profile_id: string; name: string; organisation_id: string }[];
   // Fund Now Capital (in-house) sources.
   fnc_people: { profile_id: string; name: string; role: string }[];
   fnc_offices: { code: string; label: string }[];
+  // The field team (field consultants and the Field Supervisor with enabled access).
+  field_team: { profile_id: string; name: string; role: string }[];
 };
 
 export function useIntakeLookups(enabled = true) {
@@ -294,12 +297,14 @@ export function useIntakeLookups(enabled = true) {
 export type RegisterIntakeInput = {
   businessName: string; contactName: string; contactCell: string; contactEmail: string; cipc: string;
   fundingType: string; amount: number | null; purpose: string;
-  channel: "direct_agent" | "team" | "referral_partner" | "inhouse";
+  channel: "direct_agent" | "team" | "referral_partner" | "field" | "inhouse";
   organisationId: string | null; teamId: string | null; agentId: string | null; claimedAgent: string;
   idempotencyKey: string;
   // Only for channel "inhouse": exactly one source (employee, office or online referrer's name).
   inhouseKind?: "employee" | "office" | "online" | null;
   inhouseStaffId?: string | null; inhouseOfficeCode?: string | null; inhouseReferrerName?: string | null;
+  // Only for channel "field": the field consultant or Field Supervisor the sale is for.
+  fieldAgentId?: string | null;
 };
 
 export type RegisterIntakeResult = {
@@ -321,6 +326,7 @@ export function useRegisterIntake() {
       p_claimed_agent_reference: i.claimedAgent || null, p_idempotency_key: i.idempotencyKey,
       p_inhouse_kind: i.inhouseKind ?? null, p_inhouse_staff_id: i.inhouseStaffId ?? null,
       p_inhouse_office_code: i.inhouseOfficeCode ?? null, p_inhouse_referrer_name: i.inhouseReferrerName ?? null,
+      p_field_agent_id: i.fieldAgentId ?? null,
     }),
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["staff-intake-queue"] }); },
   });
@@ -784,3 +790,17 @@ export const useStartOutboundRoute = () => useOutboundMutation<{ leadId: string;
   "staff_start_outbound_route", (i) => ({ p_lead_id: i.leadId, p_note: i.note || null }));
 export const useMoveOutboundRoute = () => useOutboundMutation<{ routeId: string; to: OutboundStatus; note: string; assignedProfile?: string | null }>(
   "staff_move_outbound_route", (i) => ({ p_route_id: i.routeId, p_to: i.to, p_note: i.note || null, p_assigned_profile: i.assignedProfile ?? null }));
+
+// The printable lead form (19 Nov): only the fields the sheet prints, for the queue roles.
+export type IntakeSheet = {
+  lead_id: string; reference: string; registered_at: string; captured_by_name: string | null; captured_by_role: string | null;
+  business_name: string; cipc_number: string | null; contact_name: string; contact_cell: string | null; contact_email: string | null;
+  funding_type_label: string; requested_amount: number | string | null; funding_purpose: string[] | null;
+  channel: string; organisation_name: string | null; team_name: string | null; agent_name: string | null;
+  source_label: string | null; claimed_agent_reference: string | null; workflow_status: string;
+  review_flags: string[]; missing_documents: string[];
+};
+
+export function fetchIntakeSheet(leadId: string) {
+  return rpc<IntakeSheet>("staff_intake_sheet", { p_lead_id: leadId });
+}
