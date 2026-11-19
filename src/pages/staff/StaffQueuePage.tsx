@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import QueueActions from "@/components/staff/QueueActions";
 import { PrintLeadFormButton } from "@/components/staff/LeadPrintSheet";
+import { CoordinatorDocumentsPanel } from "@/components/staff/CoordinatorDocumentsPanel";
 import { FileDecisionLine, SendToFounderForm } from "@/components/staff/FounderDecision";
 import { card, errorText, selectClass } from "@/components/staff/StaffShell";
 import { useIntakeQueue, useStaffRole, useStatusWordings } from "@/hooks/useStaffDesk";
@@ -49,6 +50,8 @@ export default function StaffQueuePage() {
               {["with_founder", "documents_incomplete", "verified", "complete"].includes(r.workflow_status) ? <FileDecisionLine leadId={r.lead_id} /> : null}
               <QueueActions leadId={r.lead_id} />
               <PrintLeadFormButton leadId={r.lead_id} label="Print lead form" />
+              {/* Owner decision 19 Nov 2026: the Sales Coordinator uploads and opens client documents here. */}
+              {role === "coordinator" ? <CoordinatorDocumentsPanel leadId={r.lead_id} /> : null}
               {r.workflow_status === "complete" && !r.archived_at ? <SendToFounderForm leadId={r.lead_id} /> : null}
               {r.missing_documents.length ? <p className="text-xs text-amber-800">Missing: {r.missing_documents.join(", ").replaceAll("_", " ")}</p> : null}
             </li>

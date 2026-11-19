@@ -20,7 +20,7 @@ React + TypeScript + Vite · Tailwind + shadcn/ui · Supabase (Postgres/Auth/Sto
 4. Public signup OFF. Users created by owner. Current users: `business.lekgoro@gmail.com` (owner), `queenasdice@gmail.com` (test partner — placeholder for Doctor).
 5. Money is recomputed server-side on save; client values never trusted.
 6. All monetary values `numeric(14,2)`. Never floats. Currency format `R1,250,000` (en-ZA).
-7. Bank statements are owner-only in RLS — partners never see them.
+7. Bank statements are owner + Sales Coordinator only (owner decision 19 Nov 2026: the Sales Coordinator uploads and opens client documents incl. bank statements, every open logged; she cannot delete or verify) — partners never see them.
 8. Every new feature writes to `activity_logs` (once A10 lands) and, where user-relevant, fires notifications (once A11 lands).
 
 ## The Commission Engine (locked — implemented as `calculate_commission()` in Postgres)

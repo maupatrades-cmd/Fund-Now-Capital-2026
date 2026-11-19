@@ -68,6 +68,10 @@ Until the payroll cycle is live, pay runs on a spreadsheet; the first cycle clos
    days: monthly amount / working days in the month x days worked (4 Nov start = **19 of November's 21** working days).
 10. **Team Leaders** remain DRA-01 contract agents (12% of the net fee on team deals, Part E targets), not salaried
     staff, unless the owner says otherwise (asked 30 Oct, no answer yet).
+11. **Client documents and bank statements (19 Nov):** the **Sales Coordinator** uploads and opens client documents for
+    leads and clients, **including bank statements** and the other financial documents ("she must upload statements").
+    Bank statements are now **owner + Sales Coordinator only**; partners, agents, sub-agents and clients still never see
+    them. Every time she opens a document it is logged. She cannot delete documents or set verification (Director only).
 
 ## 4. Contract terms the CRM must enforce
 
