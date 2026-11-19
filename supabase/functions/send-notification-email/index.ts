@@ -18,7 +18,7 @@ import { renderEmail } from "./email-template.ts";
 
 const FROM = Deno.env.get("EMAIL_FROM") ?? "Fund Now Capital <hello@fundnowcapital.africa>";
 const REPLY_TO = Deno.env.get("EMAIL_REPLY_TO") ?? "hello@fundnowcapital.africa";
-const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? "https://fundnowcapital.africa";
+const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? "https://portal.fundnowcapital.africa";
 const QUIET_HOURS_TZ = "Africa/Johannesburg"; // SA business; SAST is UTC+2, no DST
 
 function json(body: unknown, status = 200): Response {
