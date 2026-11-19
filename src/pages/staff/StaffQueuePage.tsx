@@ -42,7 +42,7 @@ export default function StaffQueuePage() {
                 {r.archived_at ? <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-xs">archived</span> : null}
               </p>
               <p className="text-xs text-muted-foreground">
-                {r.contact_name} · {r.channel.replace("_", " ")}{r.team_name ? ` · ${r.team_name}` : ""}{r.organisation_name ? ` · ${r.organisation_name}` : ""}{r.agent_name ? ` · ${r.agent_name}` : ""}
+                {r.contact_name} · {r.source_label ?? r.channel.replace("_", " ")}{r.team_name ? ` · ${r.team_name}` : ""}{r.organisation_name ? ` · ${r.organisation_name}` : ""}{r.agent_name ? ` · ${r.agent_name}` : ""}
               </p>
               {wordings.data?.[r.lead_id] ? <p className="text-xs text-brand-navy">Told to agents and clients: {wordings.data[r.lead_id]}</p> : null}
               {["with_founder", "documents_incomplete", "verified", "complete"].includes(r.workflow_status) ? <FileDecisionLine leadId={r.lead_id} /> : null}
