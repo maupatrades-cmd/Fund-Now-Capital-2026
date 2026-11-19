@@ -116,6 +116,9 @@ test('Lead agents: contractors, field team, correction into field, lead sheet', 
       await db.exec(stmt + ';');
     }
     await db.exec(await mig('20261119093000_lead_agents_validate.sql'));
+    await db.exec(await mig('20261119094000_field_team_without_access.sql'));
+    // 094000: CRM access is not needed to be credited; an INACTIVE field person is still refused.
+    await db.exec(`update public.profiles set is_active = false where id = '${U.fieldOff}';`);
 
     await as(U.owner);
     await q("select public.owner_set_staff_access($1,true,'FNC-EMP-SC-01')", [U.coordinator]);
@@ -140,7 +143,7 @@ test('Lead agents: contractors, field team, correction into field, lead sheet', 
       return row;
     };
 
-    // Lookups: independent lead-referrers AND contractors (no name -> email); the field team (enabled access only).
+    // Lookups: independent lead-referrers AND contractors (no name -> email); every ACTIVE field person (access not needed).
     const L = (await one('select public.staff_intake_lookups() as r')).r;
     const directIds = L.direct_agents.map((a) => a.profile_id);
     assert.ok(directIds.includes(U.direct) && directIds.includes(U.contractor));
@@ -148,7 +151,7 @@ test('Lead agents: contractors, field team, correction into field, lead sheet', 
     assert.ok(!directIds.includes(U.contractorOrg), 'a contractor under an organisation is not an independent agent');
     assert.equal(L.direct_agents.find((a) => a.profile_id === U.contractor).name, 'contractor@example.test');
     const fieldIds = L.field_team.map((a) => a.profile_id).sort();
-    assert.deepEqual(fieldIds, [U.fieldC, U.fieldS].sort(), 'only the enabled field team is listed');
+    assert.deepEqual(fieldIds, [U.fieldC, U.fieldS, U.fieldNoAccess].sort(), 'every active field person is listed; inactive ones are not');
 
     // (1) A contractor is a direct agent.
     const c = await reg('direct_agent', { agent: U.contractor });
@@ -175,7 +178,6 @@ test('Lead agents: contractors, field team, correction into field, lead sheet', 
     assert.equal((await reg('field', { field: U.fieldS })).status, 'created', 'the Field Supervisor can be the one the sale is for');
     await rejects(() => reg('field', {}), /Choose the field consultant/);
     await rejects(() => reg('field', { field: U.fieldOff }), /active field consultant or Field Supervisor/);
-    await rejects(() => reg('field', { field: U.fieldNoAccess }), /active field consultant or Field Supervisor/);
     await rejects(() => reg('field', { field: U.partner1 }), /active field consultant or Field Supervisor/);
     await rejects(() => reg('field', { field: U.coordinator }), /active field consultant or Field Supervisor/);
     await rejects(() => reg('field', { field: U.fieldC, agent: U.direct }), /field team lead cannot carry an agent/);
