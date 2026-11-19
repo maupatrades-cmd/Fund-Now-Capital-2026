@@ -36,7 +36,8 @@ export type DocumentType =
   | "invoice_sent" | "commission_agreement" | "referral_agreement" | "msa" | "welcome_pack"
   | "other";
 
-export type UploadSource = "owner" | "partner" | "client" | "funder" | "contractor" | "lead_referrer";
+// "staff": uploaded by office staff (the Sales Coordinator, owner decision 19 Nov 2026).
+export type UploadSource = "owner" | "partner" | "client" | "funder" | "contractor" | "lead_referrer" | "staff";
 export type DocumentStatus = "active" | "archived" | "expired" | "rejected";
 
 // ---- Verification (B3.2) — mirrors document_verification_status /
