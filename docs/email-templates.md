@@ -50,7 +50,7 @@ type EmailModel = {
   eventType: string;            // derives variant + footer category
   firstName?: string | null;    // greeting; null => "Hi there,"
   linkUrl?: string | null;      // app-relative, e.g. "/deals/123" -> CTA target
-  appBaseUrl: string;           // e.g. https://fund-now-capital-2026.vercel.app
+  appBaseUrl: string;           // e.g. https://portal.fundnowcapital.africa
   // hydrated deal context (null for welcome/weekly_summary or on a hydration miss):
   funderDisplay?: string | null;   // role-aware: real name (owner) / fictional (partner)
   dealReference?: string | null;   // e.g. "DEAL-001"

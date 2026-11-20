@@ -25,7 +25,7 @@ database** (`pg_net`) after an in-app notification is written — see
 | --- | --- |
 | `RESEND_API_KEY` | Your Resend API key (`re_…`). |
 | `WEBHOOK_SECRET` | A long random string (e.g. `openssl rand -hex 32`). Must match the Vault secret below. |
-| `APP_BASE_URL` | The CRM's public base URL, e.g. `https://app.fundnowcapital.africa` (used for the "View in CRM" + preferences links). |
+| `APP_BASE_URL` | The CRM's public base URL, e.g. `https://portal.fundnowcapital.africa` (used for the "View in CRM" + preferences links). |
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically — do
 not set them.

@@ -57,7 +57,7 @@ $env:FNC_E2E_ARMED = "I_UNDERSTAND_THIS_CREATES_DISPOSABLE_FIXTURES"
 $env:FNC_E2E_TARGET_URL = "https://fnc-pr-123.example.test"
 $env:FNC_E2E_SUPABASE_URL = "https://fnc-db-pr-123.example.test"
 $env:FNC_E2E_ALLOWED_HOSTS = "fnc-pr-123.example.test,fnc-db-pr-123.example.test"
-$env:FNC_E2E_PRODUCTION_HOSTS = "fund-now-capital-2026.vercel.app,production-db.example.test"
+$env:FNC_E2E_PRODUCTION_HOSTS = "portal.fundnowcapital.africa,fund-now-capital-2026.vercel.app,production-db.example.test"
 $env:FNC_E2E_SUPABASE_ANON_KEY = "<preview anon key>"
 $env:FNC_E2E_FIXTURE_ADAPTER = "C:\secure\fnc-preview-fixture-adapter.mjs"
 npm run test:cross-role-e2e
