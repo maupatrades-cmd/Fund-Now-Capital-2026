@@ -6,8 +6,8 @@ import { card, errorText, Field, primaryButton, selectClass } from "@/components
 import { useStaffRole } from "@/hooks/useStaffDesk";
 import { ScannedFormsTab } from "@/components/forms/ScannedFormsTab";
 import {
-  useAgentFile, useRevealAgentSensitive, useSaveAgentBank, useSaveAgentDetails,
-  type AgentFile, type AgentSensitive, type BankAccountType, type VatStatus,
+  useAgentFile, useAgentTypeState, useCorrectAgent, useOrganisationOptions, useRevealAgentSensitive, useSaveAgentBank,
+  useSaveAgentDetails, type AgentFile, type AgentSensitive, type AgentType, type BankAccountType, type VatStatus,
 } from "@/hooks/useAgentFile";
 
 // Agent file (owner, 17 Nov 2026): the Office Administrator, HR and the Director capture an agent's details and bank
@@ -48,7 +48,7 @@ function DetailsForm({ f }: { f: AgentFile }) {
       <h2 className="text-lg font-bold text-brand-navy">Details</h2>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Full name"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-        <Field label="Email (sign-in, change on the Team page)"><Input value={f.email ?? ""} disabled /></Field>
+        <Field label="Email (sign-in)" hint="Ask the Director to change the email."><Input value={f.email ?? ""} disabled /></Field>
         <Field label="Cell number"><Input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></Field>
         <Field label="Contract type">
           <select className={selectClass} value={contract} onChange={(e) => setContract(e.target.value)}>
@@ -63,6 +63,70 @@ function DetailsForm({ f }: { f: AgentFile }) {
         </Field>
       </div>
       <button type="submit" className={primaryButton} disabled={save.isPending}>Save details</button>
+    </form>
+  );
+}
+
+const TYPE_LABEL: Record<AgentType, string> = { direct: "Direct agent", sub: "Sub-agent", team_leader: "Team Leader" };
+
+// Correct a capture mistake in the agent's type (owner, 19 Nov 2026): the Office Administrator and the Director only.
+// The agent file, onboarding checklist and scanned forms all follow automatically (they key on the person).
+function AgentTypeCard({ f }: { f: AgentFile }) {
+  const state = useAgentTypeState(f.profile_id, true);
+  const orgs = useOrganisationOptions(true);
+  const correct = useCorrectAgent(f.profile_id);
+  const [type, setType] = useState<AgentType | "">("");
+  const [org, setOrg] = useState("");
+  const [reason, setReason] = useState("");
+  const s = state.data;
+  if (state.error) return <section className={card}><p role="alert" className="text-sm text-red-600">{errorText(state.error)}</p></section>;
+  if (!s) return null;
+  const chosen = (type || s.type) as AgentType;
+  const chosenOrg = org || s.organisation_id || "";
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    correct.mutate({ type: chosen, organisationId: chosen === "direct" ? null : chosenOrg || null, reason: reason.trim() }, {
+      onSuccess: () => { toast.success(`Corrected to ${TYPE_LABEL[chosen]}`); setType(""); setOrg(""); setReason(""); },
+      onError: (err) => toast.error(errorText(err)),
+    });
+  };
+  return (
+    <form onSubmit={submit} className={`${card} space-y-4`}>
+      <h2 className="text-lg font-bold text-brand-navy">Agent type</h2>
+      <p className="text-sm text-muted-foreground">
+        Now: <strong>{TYPE_LABEL[s.type]}</strong>{s.organisation_name ? ` · ${s.organisation_name}` : ""}.
+        If this agent was added as the wrong type, correct it here. The Director is told.
+      </p>
+      {s.type_locked ? (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{s.type_locked_reason}</p>
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Correct type">
+              <select className={selectClass} value={chosen} onChange={(e) => setType(e.target.value as AgentType)}>
+                <option value="direct">Direct agent (no Team Leader)</option>
+                <option value="sub">Sub-agent (under a Team Leader)</option>
+                <option value="team_leader">Team Leader</option>
+              </select>
+            </Field>
+            {chosen !== "direct" ? (
+              <Field label="Organisation">
+                <select className={selectClass} value={chosenOrg} onChange={(e) => setOrg(e.target.value)} required>
+                  <option value="">Choose…</option>
+                  {(orgs.data ?? []).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+              </Field>
+            ) : null}
+          </div>
+          <Field label="What was wrong?">
+            <Input required minLength={5} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Added as Direct agent by mistake" />
+          </Field>
+          <button type="submit" className={primaryButton}
+            disabled={correct.isPending || reason.trim().length < 5 || (chosen === s.type && (chosen === "direct" || chosenOrg === s.organisation_id))}>
+            Save correction
+          </button>
+        </>
+      )}
     </form>
   );
 }
@@ -195,6 +259,7 @@ export default function StaffAgentFilePage() {
       </div>
       {/* key: reset the forms when a save brings back new values */}
       <DetailsForm key={`d-${f.details_updated_at ?? ""}`} f={f} />
+      {role === "owner" || role === "administrator" ? <AgentTypeCard f={f} /> : null}
       <BankForm key={`b-${f.bank?.updated_at ?? ""}`} f={f} />
       {f.can_view_sensitive ? <FullNumbers profileId={f.profile_id} /> : null}
       <section className={card}>
