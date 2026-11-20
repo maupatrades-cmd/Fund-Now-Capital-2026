@@ -83,6 +83,8 @@ export function useOpenCycle() {
     mutationFn: async (payMonth: string) => {
       const id = must(await rpc<string>("payroll_open_cycle", { p_pay_month: payMonth }), "The cycle");
       await rpc<number>("payroll_apply_qualifying_files", { p_cycle: id }).catch(() => 0);
+      // Staff R100s the Director chose last month (owner, 20 Nov) go on the same draft payslips; also idempotent.
+      await rpc<number>("payroll_apply_file_rewards", { p_cycle: id }).catch(() => 0);
       return id;
     },
     onSuccess: invalidate,
@@ -92,7 +94,9 @@ export function useOpenCycle() {
 export function useApplyQualifyingFiles() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (cycleId: string) => rpc<number>("payroll_apply_qualifying_files", { p_cycle: cycleId }),
+    // R29 files (signed-off months) and staff R100 file rewards, both idempotent; returns the lines added.
+    mutationFn: async (cycleId: string) => (await rpc<number>("payroll_apply_qualifying_files", { p_cycle: cycleId }))
+      + (await rpc<number>("payroll_apply_file_rewards", { p_cycle: cycleId })),
     onSuccess: invalidate,
   });
 }
