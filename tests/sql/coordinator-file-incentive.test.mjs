@@ -125,6 +125,7 @@ test('Coordinator R29 per submitted file: report, sign-off, payslip line', async
     }
     await db.exec('reset role;');
     await db.exec(await mig('20261119120000_coordinator_file_incentive.sql'));
+    await db.exec(await mig('20261119121000_file_rewards_and_report.sql'));
 
     // M = last month (paid on this month's cycle), N = this month (Johannesburg).
     const M = (await one("select to_char(date_trunc('month', public.current_sast_date()) - interval '1 month', 'YYYY-MM') as m")).m;
@@ -250,6 +251,66 @@ test('Coordinator R29 per submitted file: report, sign-off, payslip line', async
     const after = (await one('select public.staff_qualifying_files($1) as r', [fileMonth])).r;
     assert.equal(after.status, 'signed_off');
     assert.equal(after.signoffs[0].on_payslip, true);
+    // ---- R100 chooser (owner, 20 Nov): the Director picks who gets the R100 for any file --------------------------
+    const dealOf = async (ref) => (await one('select id from public.deals where reference = $1', [ref])).id;
+    const d1 = await dealOf('DEAL-101'); const d2 = await dealOf('DEAL-102'); const d3 = await dealOf('DEAL-103');
+    await as(U.coordinator);
+    await rejects(() => q('select public.owner_set_file_reward($1,null,null,$2,null)', [d1, U.agent]), /Only the Director/, '42501');
+    await rejects(() => q("select public.owner_files_report($1,'all')", [`${M}-01`]), /Only the Director/, '42501');
+    await rejects(() => q('select * from public.file_reward_assignments'), /permission denied/);
+    await as(U.owner);
+    // Search any file and anyone who can receive it.
+    const found = await q("select * from public.owner_file_search('Alph')");
+    assert.ok(found.some((r) => r.kind === 'deal' && r.deal_id === d1), 'deals are found by business name');
+    const people = await q("select * from public.owner_reward_people_search('Agent')");
+    assert.equal(people.find((p) => p.profile_id === U.agent).kind, 'agent');
+    assert.ok(!(await q("select * from public.owner_reward_people_search('Founder')")).length, 'the Director is not a beneficiary');
+    // Choose an agent, then replace with a typed outside name: history kept, one current.
+    const r1 = (await one('select public.owner_set_file_reward($1,null,null,$2,null,$3) as id', [d1, U.agent, 'Brought the client'])).id;
+    const r2 = (await one("select public.owner_set_file_reward($1,null,null,null,'Thabo Outside','Typed name') as id", [d1])).id;
+    await db.exec('reset role;');
+    const hist = await q('select id, is_current, beneficiary_kind from public.file_reward_assignments where deal_id = $1 order by chosen_at', [d1]);
+    assert.deepEqual(hist.map((h) => [h.id, h.is_current, h.beneficiary_kind]), [[r1, false, 'agent'], [r2, true, 'outside']]);
+    await rejects(() => q("update public.file_reward_assignments set beneficiary_name = 'X' where id = $1", [r1]), /cannot be changed/);
+    await rejects(() => q('delete from public.file_reward_assignments'), /cannot be deleted/);
+    await as(U.owner);
+    // Pay it; a paid R100 cannot move to someone else.
+    await q("select public.owner_mark_file_reward_paid($1, public.current_sast_date(), 'EFT 123')", [r2]);
+    await rejects(() => q('select public.owner_set_file_reward($1,null,null,$2,null)', [d1, U.agent]), /already paid/);
+    // Lead level for a lead with no deal; a lead with a deal goes through its deal.
+    await db.exec("reset role; insert into public.leads(id, business_name, contact_name) values ('" + id(108) + "','Hotel','C');");
+    await as(U.owner);
+    await q("select public.owner_set_file_reward(null,$1,null,$2,null)", [id(108), U.sub]);
+    await rejects(() => q('select public.owner_set_file_reward(null,$1,null,$2,null)', [L.l1, U.agent]), /already has a deal/);
+    await rejects(() => q('select public.owner_set_file_reward($1,$2,null,$3,null)', [d1, L.l1, U.agent]), /Choose one file/);
+    await rejects(() => q('select public.owner_set_file_reward($1,null,null,$2,null)', [d3, U.owner]), /cannot receive/);
+    // Staff R100 goes on the payslip in the cycle after the month it was chosen (made last month here).
+    await db.exec('reset role;');
+    await q("insert into public.file_reward_assignments(file_key, deal_id, lead_id, beneficiary_kind, beneficiary_profile_id, beneficiary_name, chosen_by, chosen_at) values ($1,$1,$2,'staff',$3,'Coordinator',$4,$5)",
+      [d2, L.l2, U.coordinator, U.owner, `${M}-15 10:00+02`]);
+    await as(U.admin);
+    assert.equal((await one('select public.payroll_apply_file_rewards($1) as n', [cycle])).n, 1);
+    assert.equal((await one('select public.payroll_apply_file_rewards($1) as n', [cycle])).n, 0, 'never twice');
+    await db.exec('reset role;');
+    const rLine = await one("select amount, label from public.payslip_lines where payslip_id = $1 and label like 'R100 file reward%' and removed_at is null", [slip.id]);
+    assert.equal(Number(rLine.amount), 100);
+    // ---- Files report ---------------------------------------------------------------------------------------------
+    await as(U.owner);
+    const rep = (await one("select public.owner_files_report($1,'all') as r", [`${M}-01`])).r;
+    const refs = rep.rows.map((x) => x.deal_reference).sort();
+    assert.deepEqual(refs, ['DEAL-101', 'DEAL-102', 'DEAL-103', 'DEAL-104', 'DEAL-106'],
+      'every deal first submitted in the month, plus files whose R100 was chosen in the month');
+    const row1 = rep.rows.find((x) => x.deal_reference === 'DEAL-101');
+    assert.equal(row1.in_credit, true);
+    assert.equal(row1.r29.handler, 'Coordinator');
+    assert.equal(row1.r29.signed_off, true);
+    assert.equal(row1.r100.status, 'paid');
+    assert.equal(rep.rows.find((x) => x.deal_reference === 'DEAL-104').r29, null, 'no coordinator, no R29');
+    assert.equal(rep.rows.find((x) => x.deal_reference === 'DEAL-102').r100.status, 'on_payslip');
+    assert.equal(rep.r29_count, 3);
+    const credit = (await one("select public.owner_files_report($1,'in_credit') as r", [`${M}-01`])).r;
+    assert.deepEqual(credit.rows.map((x) => x.deal_reference).sort(), ['DEAL-101', 'DEAL-103'], 'the In credit filter');
+    await rejects(() => q("select public.owner_files_report($1,'bogus')", [`${M}-01`]), /Choose all/);
     void cycleMonth;
   } finally {
     await db.close();
