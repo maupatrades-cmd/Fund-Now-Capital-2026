@@ -31,8 +31,7 @@ import {
   CircleDollarSign,
   MailWarning,
   NotebookPen,
-  type LucideIcon,
-} from "lucide-react";
+  type LucideIcon, FileBarChart } from "lucide-react";
 
 export type NavItem = {
   to: string;
@@ -57,6 +56,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/funders", label: "Funders", icon: Landmark },
   { to: "/invoices", label: "Invoices", icon: Receipt },
   { to: "/money", label: "Money Centre", icon: CircleDollarSign },
+  // Owner-only: files submitted / in credit, with the R29 and the R100 chooser (owner, 20 Nov 2026).
+  { to: "/files-report", label: "Files report", icon: FileBarChart },
   { to: "/repayments", label: "Repayments", icon: HandCoins },
   { to: "/invoices/partner-approvals", label: "Partner Invoices", icon: ReceiptText },
   { to: "/invoices/contractor-approvals", label: "Contractor Invoices", icon: ReceiptText },
