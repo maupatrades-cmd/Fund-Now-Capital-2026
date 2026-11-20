@@ -758,12 +758,12 @@ export const useClearReceiptFlag = () => useQueueMutation<{ receiptId: string; r
   "owner_clear_document_flag", (i) => ({ p_receipt_id: i.receiptId, p_reason: i.reason }));
 
 // ---- Qualifying files and KPIs (SC9) -----------------------------------------
-// Files ready for submission (the SC9 qualifying file): R29 each from Nov 2026 (owner, 19 Nov), paid on the payslip one
-// month in arrears once the Director signs the month off.
+// Files the Director moved to Submitted (or a later stage; owner, 20 Nov): R29 each from Nov 2026, credited to the
+// coordinator handling or capturing the file, paid on the payslip one month in arrears once the Director signs off.
 export type QualifyingFiles = {
   month: string; rate_per_file: number; count: number; estimate_total: number; cutoff_date: string; pay_date: string;
   status: "estimate_until_founder_sign_off" | "signed_off"; month_ended: boolean;
-  files: { lead_id: string; business_name: string; handler_id: string; handler_name: string | null; reached_founder_at: string; first_complete_at: string }[];
+  files: { lead_id: string; deal_id: string; deal_reference: string | null; business_name: string; handler_id: string; handler_name: string | null; reached_submitted_at: string }[];
   signoffs: { handler_id: string; count: number; rate: number; total: number; signed_at: string; on_payslip: boolean }[];
 };
 export function useQualifyingFiles(enabled: boolean, month?: string) {

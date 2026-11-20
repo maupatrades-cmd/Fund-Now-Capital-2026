@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-// Coordinator file incentive (owner, 19 Nov 2026): R29 per file ready for submission (the SC9 qualifying file), the
-// Director's monthly sign-off, and the incentive line on the coordinator's payslip one month in arrears. Reuses the
+// Coordinator file incentive (owner, 19-20 Nov 2026): R29 per file the Director moves to Submitted (first time a deal
+// linked to the lead reaches Submitted or any later stage, never Declined), credited to the coordinator handling or
+// capturing it; the Director's monthly sign-off, and the incentive line on the coordinator's payslip one month in arrears. Reuses the
 // payroll harness. It does NOT prove the live schema or the screens.
 const { PGlite } = await import(process.env.FNC_PGLITE_MODULE || '@electric-sql/pglite');
 const { btree_gist } = await import(process.env.FNC_PGLITE_MODULE
@@ -14,7 +15,7 @@ const id = (n) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const U = { owner: id(1), coordinator: id(2), switchboard: id(3), admin: id(4), partner: id(5), adminOff: id(6), sb2: id(7), agent: id(8), sub: id(9), leader: id(10), hr: id(11), fsup: id(12), fcon: id(13), fconOff: id(14) };
 const mig = async (name) => readFile(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8');
 
-test('Coordinator R29 per qualifying file: report, sign-off, payslip line', async () => {
+test('Coordinator R29 per submitted file: report, sign-off, payslip line', async () => {
   const db = new PGlite({ extensions: { btree_gist } });
   const q = async (sql, args = []) => (await db.query(sql, args)).rows;
   const one = async (sql, args = []) => (await q(sql, args))[0];
@@ -46,7 +47,9 @@ test('Coordinator R29 per qualifying file: report, sign-off, payslip line', asyn
       'create table public.document_requirement_rules(id uuid primary key default gen_random_uuid(), rule_scope text, product_code text, document_type public.document_type, requirement text, is_active boolean default true);',
       "create table public.leads(id uuid primary key default gen_random_uuid(), business_name text not null, contact_name text not null, contact_cell text, contact_email text, cipc_number text, funding_amount numeric(14,2), funding_purpose jsonb not null default '[]', entered_by uuid, created_at timestamptz not null default now());",
       'create table public.clients(id uuid primary key default gen_random_uuid(), business_name text, cipc_number text);',
-      'create table public.deals(id uuid primary key default gen_random_uuid(), lead_id uuid, stage text not null default \'new_lead\', archived_at timestamptz);',
+      "create type public.deal_stage as enum ('new_lead','qualifying','document_collection','deal_review','submitted','in_credit','approved_quote_received','client_deciding','verification_kyc','contract_signed','advance_pending','funded','invoiced','commission_paid','declined');",
+      "create table public.deals(id uuid primary key default gen_random_uuid(), reference text, lead_id uuid, client_id uuid, stage public.deal_stage not null default 'new_lead', archived_at timestamptz);",
+      'create table public.deal_stage_history(id uuid primary key default gen_random_uuid(), deal_id uuid not null, from_stage public.deal_stage, to_stage public.deal_stage not null, changed_by uuid, changed_at timestamptz not null default now());',
       'create table public.documents(id uuid primary key default gen_random_uuid(), lead_id uuid, document_type public.document_type, is_current_version boolean default true);',
       'create table public.notifications(id uuid primary key default gen_random_uuid(), user_id uuid, event_type public.notification_event_type, title text, body_text text, link_url text, data jsonb, read_status boolean, read_at timestamptz, created_at timestamptz default now());',
       'create table public.notification_deliveries(id uuid primary key default gen_random_uuid(), notification_id uuid, channel text, delivery_status public.notification_delivery_status, sent_at timestamptz, delivered_at timestamptz);',
@@ -126,34 +129,42 @@ test('Coordinator R29 per qualifying file: report, sign-off, payslip line', asyn
     // M = last month (paid on this month's cycle), N = this month (Johannesburg).
     const M = (await one("select to_char(date_trunc('month', public.current_sast_date()) - interval '1 month', 'YYYY-MM') as m")).m;
     const N = (await one("select to_char(date_trunc('month', public.current_sast_date()), 'YYYY-MM') as m")).m;
-    // Files: four reach the Founder last month (M), one this month (N).
-    //   L1: Coordinator assigned before Complete -> counts (October).
-    //   L2: Coordinator assigned AFTER Complete  -> does not count.
-    //   L3: never Complete                        -> does not count.
-    //   L4: Switchboard handled it               -> not the Coordinator's.
-    //   L5: Coordinator, reached the Founder this month -> this month.
-    const L = { l1: id(101), l2: id(102), l3: id(103), l4: id(104), l5: id(105) };
+    // Files. Deals move through deal_stage_history; the first reach of Submitted or later counts once.
+    //   L1: captured by the Coordinator, deal reaches Submitted in M (then In credit)  -> counts in M.
+    //   L2: captured by the Coordinator, deal only reaches Deal review in M            -> does not count.
+    //   L3: captured by the Coordinator, Deal review -> In credit (skips Submitted) in M -> counts in M.
+    //   L4: captured and handled by Switchboard                                         -> no coordinator, no R29.
+    //   L5: captured by the Coordinator, reaches Submitted this month (N)               -> counts in N.
+    //   L6: captured by Switchboard, handled by the Coordinator, Submitted in M         -> counts for the Coordinator.
+    //   L7: captured by the Coordinator, deal declined straight away                   -> does not count.
+    const L = { l1: id(101), l2: id(102), l3: id(103), l4: id(104), l5: id(105), l6: id(106), l7: id(107) };
     await db.exec("insert into public.funding_product_catalog(code, display_name) values ('working_capital','Working capital');");
     await db.exec('alter table public.submission_intakes disable trigger user;');
-    for (const [lead, name, complete] of [[L.l1,'Alpha',`${M}-05 10:00+02`],[L.l2,'Bravo',`${M}-05 10:00+02`],[L.l3,'Charlie',null],[L.l4,'Delta',`${M}-05 10:00+02`],[L.l5,'Echo',`${N}-01 08:30+02`]]) {
+    for (const [lead, name, by, handler] of [[L.l1,'Alpha',U.coordinator,null],[L.l2,'Bravo',U.coordinator,null],
+      [L.l3,'Charlie',U.coordinator,null],[L.l4,'Delta',U.switchboard,U.switchboard],[L.l5,'Echo',U.coordinator,null],
+      [L.l6,'Foxtrot',U.switchboard,U.coordinator],[L.l7,'Golf',U.coordinator,null]]) {
       await q('insert into public.leads(id, business_name, contact_name) values ($1,$2,$3)', [lead, name, 'Contact']);
-      await q("insert into public.submission_intakes(lead_id, channel, funding_type, created_by, idempotency_key, first_complete_at) values ($1,'direct_agent','working_capital',$2,$3,$4)",
-        [lead, U.coordinator, 'idem-' + name, complete]);
+      await q("insert into public.submission_intakes(lead_id, channel, funding_type, created_by, idempotency_key, operational_assignee_id) values ($1,'direct_agent','working_capital',$2,$3,$4)",
+        [lead, by, 'idem-' + name, handler]);
     }
     await db.exec('alter table public.submission_intakes enable trigger user;');
-    const ev = async (lead, type, detail, at) => q(
-      "insert into public.staff_audit_events(entity_type, entity_id, event_type, detail, occurred_at) values ('submission_intake',$1,$2,$3,$4)",
-      [lead, type, JSON.stringify(detail), at]);
-    await ev(L.l1, 'assignee_changed', { to: U.coordinator }, `${M}-02 09:00+02`);
-    await ev(L.l1, 'status_changed', { to: 'with_founder' }, `${M}-10 09:00+02`);
-    await ev(L.l2, 'assignee_changed', { to: U.coordinator }, `${M}-06 09:00+02`);
-    await ev(L.l2, 'status_changed', { to: 'with_founder' }, `${M}-10 09:00+02`);
-    await ev(L.l3, 'assignee_changed', { to: U.coordinator }, `${M}-02 09:00+02`);
-    await ev(L.l3, 'status_changed', { to: 'with_founder' }, `${M}-10 09:00+02`);
-    await ev(L.l4, 'assignee_changed', { to: U.switchboard }, `${M}-02 09:00+02`);
-    await ev(L.l4, 'status_changed', { to: 'with_founder' }, `${M}-10 09:00+02`);
-    await ev(L.l5, 'assignee_changed', { to: U.coordinator }, `${N}-01 08:00+02`);
-    await ev(L.l5, 'status_changed', { to: 'with_founder' }, `${N}-01 09:00+02`);
+    const deal = async (lead, ref, moves) => {
+      const d = (await one('insert into public.deals(reference, lead_id) values ($1,$2) returning id', [ref, lead])).id;
+      let from = 'qualifying';
+      for (const [to, at] of moves) {
+        await q('insert into public.deal_stage_history(deal_id, from_stage, to_stage, changed_at) values ($1,$2,$3,$4)', [d, from, to, at]);
+        await q('update public.deals set stage = $2 where id = $1', [d, to]);
+        from = to;
+      }
+      return d;
+    };
+    await deal(L.l1, 'DEAL-101', [['submitted', `${M}-10 09:00+02`], ['in_credit', `${M}-20 09:00+02`]]);
+    await deal(L.l2, 'DEAL-102', [['deal_review', `${M}-10 09:00+02`]]);
+    await deal(L.l3, 'DEAL-103', [['deal_review', `${M}-09 09:00+02`], ['in_credit', `${M}-11 09:00+02`]]);
+    await deal(L.l4, 'DEAL-104', [['submitted', `${M}-10 09:00+02`]]);
+    await deal(L.l5, 'DEAL-105', [['submitted', `${N}-01 09:00+02`]]);
+    await deal(L.l6, 'DEAL-106', [['submitted', `${M}-12 09:00+02`]]);
+    await deal(L.l7, 'DEAL-107', [['declined', `${M}-12 09:00+02`]]);
 
     // Rates: R35 for October (the 10 Oct rule), R29 from November (owner, 19 Nov).
     assert.equal((await one("select public.staff_incentive_rate('coordinator_qualifying_file', '2026-10-15') as r")).r, '35.00');
@@ -170,10 +181,12 @@ test('Coordinator R29 per qualifying file: report, sign-off, payslip line', asyn
     assert.equal(Number(nov.estimate_total), rateN);
     assert.deepEqual(nov.files.map((f) => f.lead_id), [L.l5]);
     const oct = (await one('select public.staff_qualifying_files($1) as r', [`${M}-01`])).r;
-    assert.deepEqual(oct.files.map((f) => f.lead_id), [L.l1], 'only the file assigned before Complete and Complete counts');
+    assert.deepEqual(oct.files.map((f) => f.lead_id), [L.l1, L.l3, L.l6],
+      'Submitted (or a later stage) counts, once; Deal review only and Declined do not; handled-by-her counts');
+    assert.equal(oct.files[0].deal_reference, 'DEAL-101');
     // She cannot ask for someone else's.
     const octOther = (await one('select public.staff_qualifying_files($1, $2) as r', [`${M}-01`, U.switchboard])).r;
-    assert.deepEqual(octOther.files.map((f) => f.lead_id), [L.l1], 'a coordinator always sees her own');
+    assert.deepEqual(octOther.files.map((f) => f.lead_id), [L.l1, L.l3, L.l6], 'a coordinator always sees her own');
     // She cannot sign off, apply lines, or read the tables.
     await rejects(() => q('select public.owner_signoff_qualifying_files($1,$2)', [`${M}-01`, U.coordinator]), /Only the Director/);
     await rejects(() => q('select * from public.qualifying_file_signoffs'), /permission denied/);
@@ -186,11 +199,12 @@ test('Coordinator R29 per qualifying file: report, sign-off, payslip line', asyn
     // The Director: the report covers every handler; open the November payroll cycle (October's files are paid there).
     await as(U.owner);
     const all = (await one('select public.staff_qualifying_files($1) as r', [`${M}-01`])).r;
-    assert.deepEqual(all.files.map((f) => f.lead_id).sort(), [L.l1, L.l4].sort(), 'the Director sees every handler');
+    assert.deepEqual(all.files.map((f) => f.lead_id).sort(), [L.l1, L.l3, L.l6].sort(),
+      'the Director sees every coordinator; a file no coordinator captured or handled earns no R29');
     assert.equal(all.status, 'estimate_until_founder_sign_off');
     // A month that has not ended, and an empty month, cannot be signed off.
     await rejects(() => q('select public.owner_signoff_qualifying_files(public.current_sast_date(), $1)', [U.coordinator]), /once it has ended/);
-    await rejects(() => q('select public.owner_signoff_qualifying_files($1,$2)', ['2026-09-01', U.coordinator]), /no qualifying files|No rate/);
+    await rejects(() => q('select public.owner_signoff_qualifying_files($1,$2)', ['2026-09-01', U.coordinator]), /no submitted files|No rate/);
 
     // The payroll cycle for November is opened from the Administrator's side; a payslip line needs a sign-off first.
     await db.exec("reset role; update public.profiles set created_at = now();");
@@ -209,16 +223,16 @@ test('Coordinator R29 per qualifying file: report, sign-off, payslip line', asyn
     await as(U.owner);
     const so = (await one('select public.owner_signoff_qualifying_files($1,$2) as r', [fileMonth, U.coordinator])).r;
     assert.equal(so.already_signed_off, false);
-    assert.equal(so.count, 1);
+    assert.equal(so.count, 3);
     const rate = rateM;
-    assert.equal(Number(so.total), Number(rate));
+    assert.equal(Number(so.total), 3 * Number(rate));
     assert.equal(so.added_to_payslip, true);
     await db.exec('reset role;');
     const lines = await q("select kind, amount, label from public.payslip_lines where payslip_id = $1 and removed_at is null", [slip.id]);
     assert.equal(lines.length, 1);
     assert.equal(lines[0].kind, 'incentive');
-    assert.equal(Number(lines[0].amount), Number(rate));
-    assert.match(lines[0].label, /Files ready for submission/);
+    assert.equal(Number(lines[0].amount), 3 * Number(rate));
+    assert.match(lines[0].label, /Files submitted/);
 
     // Idempotent: signing off again and applying again add nothing.
     await as(U.owner);

@@ -19,7 +19,7 @@ const monthName = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateStri
 function DirectorFiles({ data }: { data: QualifyingFiles }) {
   const signoff = useSignoffQualifyingFiles();
   const handlers = [...new Set(data.files.map((f) => f.handler_id))];
-  if (handlers.length === 0) return <p className="text-sm text-muted-foreground">No files ready for submission in {monthName(data.month)}.</p>;
+  if (handlers.length === 0) return <p className="text-sm text-muted-foreground">No files moved to Submitted in {monthName(data.month)}.</p>;
   return (
     <div className="space-y-3">
       {handlers.map((h) => {
@@ -37,7 +37,7 @@ function DirectorFiles({ data }: { data: QualifyingFiles }) {
             </div>
             <ul className="mt-1 divide-y divide-border text-sm">
               {files.map((f) => (
-                <li key={f.lead_id} className="py-1">{f.business_name} <span className="text-xs text-muted-foreground">· complete {day(f.first_complete_at)} · reached you {day(f.reached_founder_at)}</span></li>
+                <li key={f.lead_id} className="py-1">{f.business_name} <span className="text-xs text-muted-foreground">· {f.deal_reference ?? "deal"} · submitted {day(f.reached_submitted_at)}</span></li>
               ))}
             </ul>
             <div className="mt-2">
@@ -70,8 +70,8 @@ function kpiState(k: CoordinatorKpi): { text: string; cls: string } {
   return { text: `${k.value_pct}%`, cls: met ? "text-green-700" : "text-red-600" };
 }
 
-// Files ready for submission (the SC9 qualifying file) for a month: R29 each from Nov 2026 (owner, 19 Nov), paid on the
-// payslip one month in arrears once the Director signs the month off. The Coordinator sees her own; the Director sees
+// Files the Director moved to Submitted (or a later stage) in a month: R29 each from Nov 2026 (owner, 20 Nov), paid on
+// the payslip one month in arrears once the Director signs the month off. The Coordinator sees her own; the Director sees
 // every coordinator and signs off. Plus the Coordinator's KPI scorecard against the agreed targets.
 export function QualifyingAndKpis({ enabled }: { enabled: boolean }) {
   const { data: role } = useStaffRole();
@@ -83,7 +83,7 @@ export function QualifyingAndKpis({ enabled }: { enabled: boolean }) {
     <>
       <section className={card}>
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-bold text-brand-navy">Files ready for submission</h2>
+          <h2 className="text-base font-bold text-brand-navy">Files submitted (R29 each)</h2>
           <select aria-label="Month" className="rounded-md border border-input px-2 py-1 text-sm" value={month} onChange={(e) => setMonth(e.target.value)}>
             {[0, -1, -2, -3].map((o) => <option key={o} value={sastMonth(o)}>{monthName(sastMonth(o))}</option>)}
           </select>
@@ -99,10 +99,10 @@ export function QualifyingAndKpis({ enabled }: { enabled: boolean }) {
                 {q.data.status === "signed_off" ? "(signed off by the Director)" : "(estimate until the Director signs off)"}
               </span>
             </p>
-            <p className="text-xs text-muted-foreground">Paid on your payslip on {day(q.data.pay_date)}. A file counts once, when it reaches the Director, if you were assigned before it became Complete (all documents in).</p>
+            <p className="text-xs text-muted-foreground">Paid on your payslip on {day(q.data.pay_date)}. A file counts once, the first time the Director moves its deal to Submitted (or straight to a later stage), if you handled or captured it.</p>
             <ul className="mt-2 divide-y divide-border text-sm">
               {q.data.files.map((f) => (
-                <li key={f.lead_id} className="py-1.5">{f.business_name} <span className="text-xs text-muted-foreground">· reached the Director {day(f.reached_founder_at)}</span></li>
+                <li key={f.lead_id} className="py-1.5">{f.business_name} <span className="text-xs text-muted-foreground">· submitted {day(f.reached_submitted_at)}</span></li>
               ))}
               {q.data.files.length === 0 ? <li className="py-1.5 text-muted-foreground">None yet this month.</li> : null}
             </ul>

@@ -1,12 +1,16 @@
--- Sales Coordinator file incentive (owner, 19 Nov 2026): "R29 per file", counted only for files that are READY FOR
--- SUBMISSION. That is the SC9 qualifying file (20261010062000, fixed in 20261017100000), unchanged: the handler assigned
--- at or before the file first became Complete (all required documents received) and the file reached With Founder;
--- counted once; the month is the month it first reached With Founder (Johannesburg).
--- It replaces the R35 of 10 Oct and the launch plan's "R25 per closed file" (docs/FNC-LAUNCH-PLAN-2026-11-09.md §4).
+-- Sales Coordinator file incentive (owner, 19 + 20 Nov 2026): "R29 per file". OWNER DECISION 20 Nov 2026: a file counts
+-- when the DIRECTOR MOVES ITS DEAL TO "SUBMITTED". Counted once per file (lead), the first time a deal linked to the lead
+-- reaches Submitted OR ANY LATER STAGE (in_credit, approved_quote_received, ... commission_paid; never declined) - the
+-- Director sometimes moves a deal straight from Deal review to In credit, and that file was submitted too. Same rule
+-- the R100 engine uses (owner_lock_complete_document_reward: stage >= 'submitted' and <> 'declined'). Read from
+-- deal_stage_history. The month is the month of that first move (Johannesburg).
+-- Who is credited: the submission intake's operational assignee (handler) when that person is a Sales Coordinator,
+-- otherwise the Sales Coordinator who captured it; a file neither handled nor captured by a coordinator earns no R29.
+-- It replaces the R35 "qualifying file / With Founder" rule of 10 Oct and the launch plan's "R25 per closed file".
 --
 -- Paid both ways the owner asked for:
 --   (a) a monthly report: the Director sees each coordinator's files, count x rate = total (staff_qualifying_files,
---       as before, now with the effective rate and the sign-off state), and signs the month off;
+--       with the effective rate and the sign-off state), and signs the month off;
 --   (b) an incentive line on the coordinator's payslip one month in arrears (files of October are paid in the November
 --       cycle, on the 27th), added ONLY for a signed-off month, recomputed server-side and never twice.
 --
@@ -33,7 +37,7 @@ alter table public.staff_incentive_rates enable row level security;
 revoke all on table public.staff_incentive_rates from public, anon, authenticated;
 insert into public.staff_incentive_rates (code, effective_from, amount, note) values
   ('coordinator_qualifying_file', date '2026-10-01', 35.00, 'SC9 rule of 10 Oct 2026'),
-  ('coordinator_qualifying_file', date '2026-11-01', 29.00, 'Owner decision 19 Nov 2026: R29 per file ready for submission')
+  ('coordinator_qualifying_file', date '2026-11-01', 29.00, 'Owner decision 19-20 Nov 2026: R29 per file the Director moves to Submitted')
 on conflict (code, effective_from) do nothing;
 
 -- The rate in force for a month (the latest row on or before it); null when none.
@@ -46,37 +50,53 @@ language sql stable security definer set search_path = '' as $$
 $$;
 revoke all on function public.staff_incentive_rate(text, date) from public, anon, authenticated;
 
--- 2. The qualifying files of a month (the SC9 rule, unchanged), without the caller check -------------------------------
-create or replace function public.qualifying_files_compute(p_month date, p_handler uuid)
-returns table (lead_id uuid, business_name text, handler_id uuid, handler_name text, reached_founder_at timestamptz,
-               first_assigned_at timestamptz, first_complete_at timestamptz)
+-- 2. The counted files of a month, without the caller check ------------------------------------------------------------
+-- Stages at or after 'submitted' except 'declined' (deal_stage enum order: ... deal_review < submitted < in_credit < ...).
+create or replace function public.deal_stage_is_submitted_or_later(p_stage public.deal_stage)
+returns boolean
+language sql immutable set search_path = '' as $$
+  select p_stage >= 'submitted'::public.deal_stage and p_stage <> 'declined'::public.deal_stage;
+$$;
+revoke all on function public.deal_stage_is_submitted_or_later(public.deal_stage) from public, anon, authenticated;
+
+-- The first time each lead's deal reached Submitted or later (deal_stage_history), and the coordinator credited.
+create or replace function public.coordinator_file_credits()
+returns table (lead_id uuid, deal_id uuid, deal_reference text, business_name text, handler_id uuid, handler_name text,
+               reached_submitted_at timestamptz)
 language sql stable security definer set search_path = '' as $$
-  with wf as (
-    select e.entity_id as lead_id, min(e.occurred_at) as reached_at
-      from public.staff_audit_events e
-     where e.entity_type = 'submission_intake' and e.event_type = 'status_changed'
-       and e.detail ->> 'to' = 'with_founder'
-     group by e.entity_id
-  ), scoped as (
-    select wf.lead_id, wf.reached_at, cur.handler_id, cur.assigned_at
-      from wf
-      cross join lateral (
-        select nullif(a.detail ->> 'to', '')::uuid as handler_id, a.occurred_at as assigned_at
-          from public.staff_audit_events a
-         where a.entity_type = 'submission_intake' and a.entity_id = wf.lead_id
-           and a.event_type = 'assignee_changed' and a.occurred_at <= wf.reached_at
-         order by a.occurred_at desc, a.id desc limit 1) cur
-     where date_trunc('month', wf.reached_at at time zone 'Africa/Johannesburg')::date = date_trunc('month', p_month)::date
-  ), q as (
-    select s.lead_id, s.reached_at, s.handler_id, si.first_complete_at, s.assigned_at as first_assigned_at
-      from scoped s join public.submission_intakes si on si.lead_id = s.lead_id
-     where s.handler_id is not null and si.first_complete_at is not null
-       and (p_handler is null or s.handler_id = p_handler)
+  with first_reach as (
+    select distinct on (d.lead_id) d.lead_id, d.id as deal_id, d.reference, h.changed_at
+      from public.deal_stage_history h
+      join public.deals d on d.id = h.deal_id
+     where d.lead_id is not null and public.deal_stage_is_submitted_or_later(h.to_stage)
+     order by d.lead_id, h.changed_at, h.id
   )
-  select q.lead_id, l.business_name, q.handler_id, p.full_name, q.reached_at, q.first_assigned_at, q.first_complete_at
-    from q join public.leads l on l.id = q.lead_id left join public.profiles p on p.id = q.handler_id
-   where q.first_assigned_at <= q.first_complete_at
-   order by q.reached_at;
+  select f.lead_id, f.deal_id, f.reference, l.business_name, c.handler_id, coalesce(nullif(btrim(p.full_name), ''), p.email),
+         f.changed_at
+    from first_reach f
+    join public.submission_intakes si on si.lead_id = f.lead_id
+    join public.leads l on l.id = f.lead_id
+    cross join lateral (
+      select case
+               when exists (select 1 from public.profiles a where a.id = si.operational_assignee_id and a.role::text = 'coordinator')
+                 then si.operational_assignee_id
+               when exists (select 1 from public.profiles a where a.id = si.created_by and a.role::text = 'coordinator')
+                 then si.created_by
+             end as handler_id) c
+    left join public.profiles p on p.id = c.handler_id
+   where c.handler_id is not null;
+$$;
+revoke all on function public.coordinator_file_credits() from public, anon, authenticated;
+
+create or replace function public.qualifying_files_compute(p_month date, p_handler uuid)
+returns table (lead_id uuid, deal_id uuid, deal_reference text, business_name text, handler_id uuid, handler_name text,
+               reached_submitted_at timestamptz)
+language sql stable security definer set search_path = '' as $$
+  select c.lead_id, c.deal_id, c.deal_reference, c.business_name, c.handler_id, c.handler_name, c.reached_submitted_at
+    from public.coordinator_file_credits() c
+   where date_trunc('month', c.reached_submitted_at at time zone 'Africa/Johannesburg')::date = date_trunc('month', p_month)::date
+     and (p_handler is null or c.handler_id = p_handler)
+   order by c.reached_submitted_at;
 $$;
 revoke all on function public.qualifying_files_compute(date, uuid) from public, anon, authenticated;
 
@@ -143,7 +163,7 @@ begin
      for update of q
   loop
     v_line := public.payslip_add_line(s.payslip_id, 'incentive',
-      'Files ready for submission, ' || to_char(s.file_month, 'FMMonth YYYY') || ': ' || s.file_count || ' x R'
+      'Files submitted, ' || to_char(s.file_month, 'FMMonth YYYY') || ': ' || s.file_count || ' x R'
         || to_char(s.rate, 'FM999990.00'),
       s.total);
     update public.qualifying_file_signoffs set payslip_line_id = v_line where id = s.id;
@@ -182,10 +202,10 @@ begin
 
   v_rate := public.staff_incentive_rate('coordinator_qualifying_file', v_month);
   if v_rate is null then raise exception 'No rate is set for that month'; end if;
-  select count(*)::int, coalesce(array_agg(f.lead_id order by f.reached_founder_at), '{}')
+  select count(*)::int, coalesce(array_agg(f.lead_id order by f.reached_submitted_at), '{}')
     into v_count, v_leads
     from public.qualifying_files_compute(v_month, p_handler) f;
-  if v_count = 0 then raise exception 'There are no qualifying files to sign off for that month'; end if;
+  if v_count = 0 then raise exception 'There are no submitted files to sign off for that month'; end if;
 
   perform pg_advisory_xact_lock(hashtextextended('qualifying_signoff:' || p_handler::text || ':' || v_month::text, 0));
   insert into public.qualifying_file_signoffs (handler_id, file_month, file_count, rate, total, lead_ids, signed_by)
@@ -212,8 +232,8 @@ $$;
 revoke all on function public.owner_signoff_qualifying_files(date, uuid) from public, anon;
 grant execute on function public.owner_signoff_qualifying_files(date, uuid) to authenticated;
 
--- 6. The report (live body of 20261017100000, now through qualifying_files_compute, with the effective rate and the
---    sign-offs). The Director sees every coordinator (or one, with p_handler); a coordinator sees only her own files.
+-- 6. The report (shape of the live 20261017100000 body, now through qualifying_files_compute, with the effective rate and
+--    the sign-offs). The Director sees every coordinator (or one, with p_handler); a coordinator sees only her own files.
 create or replace function public.staff_qualifying_files(p_month date default null, p_handler uuid default null)
 returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
@@ -227,10 +247,10 @@ begin
   v_rate := coalesce(public.staff_incentive_rate('coordinator_qualifying_file', v_start), 0);
 
   select coalesce(jsonb_agg(jsonb_build_object(
-           'lead_id', f.lead_id, 'business_name', f.business_name, 'handler_id', f.handler_id,
-           'handler_name', f.handler_name, 'reached_founder_at', f.reached_founder_at,
-           'first_assigned_at', f.first_assigned_at, 'first_complete_at', f.first_complete_at)
-         order by f.reached_founder_at), '[]'::jsonb), count(*)::int
+           'lead_id', f.lead_id, 'deal_id', f.deal_id, 'deal_reference', f.deal_reference,
+           'business_name', f.business_name, 'handler_id', f.handler_id,
+           'handler_name', f.handler_name, 'reached_submitted_at', f.reached_submitted_at)
+         order by f.reached_submitted_at), '[]'::jsonb), count(*)::int
     into v_files, v_count
     from public.qualifying_files_compute(v_start, v_handler) f;
 
