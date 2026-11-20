@@ -110,3 +110,56 @@ export function useRevealAgentSensitive(profileId: string) {
     },
   });
 }
+
+// Correct an agent's type (owner, 19 Nov 2026): the Office Administrator and the Director fix a capture mistake
+// (e.g. added as Direct agent instead of Sub-agent). The server refuses once the agent has leads.
+export type AgentType = "direct" | "sub" | "team_leader";
+export type AgentTypeState = {
+  type: AgentType; organisation_id: string | null; organisation_name: string | null; has_bank_details: boolean;
+  type_locked: boolean; type_locked_reason: string | null;
+};
+
+export function useAgentTypeState(profileId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["agent-type-state", profileId],
+    enabled,
+    queryFn: async (): Promise<AgentTypeState> => {
+      const { data, error } = await supabase.rpc("staff_agent_type_state", { p_profile: profileId });
+      if (error) throw error;
+      return data as AgentTypeState;
+    },
+  });
+}
+
+export function useOrganisationOptions(enabled: boolean) {
+  return useQuery({
+    queryKey: ["team-leader-options"],
+    enabled,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<{ id: string; name: string }[]> => {
+      const { data, error } = await supabase.rpc("staff_team_leader_options");
+      if (error) throw error;
+      return (data ?? []) as { id: string; name: string }[];
+    },
+  });
+}
+
+export function useCorrectAgent(profileId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (i: { type: AgentType; organisationId: string | null; reason: string }) => {
+      const { data, error } = await supabase.rpc("staff_correct_agent", {
+        p_profile: profileId, p_full_name: null, p_phone: null, p_type: i.type, p_organisation_id: i.organisationId,
+        p_reason: i.reason,
+      });
+      if (error) throw error;
+      if (!data) throw new Error("The agent was not corrected");
+      return data as string;
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: key(profileId) });
+      void client.invalidateQueries({ queryKey: ["agent-type-state", profileId] });
+      void client.invalidateQueries({ queryKey: ["agent-onboarding"] });
+    },
+  });
+}
