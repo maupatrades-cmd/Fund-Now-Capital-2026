@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { CallButton, CallHistory } from "@/components/calls/CallButton";
 import { ArrowLeft, Pencil, Plus, Repeat2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useClient, useClientDeals, one } from "@/hooks/useClients";
@@ -57,7 +58,7 @@ export default function ClientDetailPage() {
             {one(client.industry)?.name || client.sector || "Industry not set"}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setNewDealOpen(true)} className="flex items-center gap-2 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />New deal</button><button
+        <div className="flex flex-wrap gap-2"><CallButton target={{ kind: "client", id: client.id, name: client.business_name ?? "this client" }} /><button type="button" onClick={() => setNewDealOpen(true)} className="flex items-center gap-2 rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />New deal</button><button
           type="button"
           onClick={() => navigate(`/clients/${client.id}/edit`)}
           className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50"
@@ -161,6 +162,9 @@ export default function ClientDetailPage() {
         <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
           <CallLogPanel clientId={client.id} />
         </section>
+      )}
+      {tab === "calllog" && (
+        <CallHistory target={{ kind: "client", id: client.id, name: client.business_name ?? "this client" }} />
       )}
 
       {tab === "notes" && (

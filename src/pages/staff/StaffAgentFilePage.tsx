@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
+import { CallButton, CallHistory } from "@/components/calls/CallButton";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { card, errorText, Field, primaryButton, selectClass } from "@/components/staff/StaffShell";
@@ -256,7 +257,11 @@ export default function StaffAgentFilePage() {
         <p className="text-sm text-muted-foreground">
           {ROLE_LABEL[f.role]}{f.agent_code ? ` · Agent Code ${f.agent_code}` : " · no Agent Code yet"}{f.is_active ? "" : " · deactivated"}
         </p>
+        <div className="mt-2">
+          <CallButton hasNumber={Boolean(f.phone_number)} target={{ kind: "profile", id: profileId ?? "", name: f.full_name ?? "this agent" }} />
+        </div>
       </div>
+      {role === "owner" && profileId ? <CallHistory target={{ kind: "profile", id: profileId, name: f.full_name ?? "this agent" }} /> : null}
       {/* key: reset the forms when a save brings back new values */}
       <DetailsForm key={`d-${f.details_updated_at ?? ""}`} f={f} />
       {role === "owner" || role === "administrator" ? <AgentTypeCard f={f} /> : null}

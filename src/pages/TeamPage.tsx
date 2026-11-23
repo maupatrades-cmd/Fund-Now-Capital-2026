@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { CallButton } from "@/components/calls/CallButton";
 import { Link, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -317,7 +318,13 @@ function TeamTable({
                 )}
               </td>
               <td className="px-4 py-3 text-brand-navy">{m.email || "—"}</td>
-              <td className="px-4 py-3 text-muted-foreground">{m.phone_number || "—"}</td>
+              <td className="px-4 py-3 text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  {m.phone_number || "—"}
+                  <CallButton compact hasNumber={Boolean(m.phone_number) && m.role !== "owner"}
+                    target={{ kind: "profile", id: m.id, name: m.full_name || m.email || "this person" }} />
+                </span>
+              </td>
               <td className="px-4 py-3">
                 <Badge className={roleBadgeClass(m.is_sub_agent ? "sub_agent" : m.role)}>
                   {m.is_sub_agent ? "Sub-agent" : roleLabel(m.role)}
