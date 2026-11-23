@@ -87,6 +87,9 @@ Until the payroll cycle is live, pay runs on a spreadsheet; the first cycle clos
     The owner-only **Files report** lists, per month, every file moved to Submitted or later and every file whose R100
     was chosen, with its stage (In credit highlighted), who captured and handles it, the source, the R29 and the R100,
     printable and downloadable as CSV.
+14. **R100: the Director's choice only (20 Nov):** the automatic R100 to the agent when a submission is Verified (or a
+    missing document is approved) is **switched off**; every R100 is paid only to the person the Director chooses on the
+    file (decision 13). Deals moved straight from Deal review to In credit **do count** for the R29 (decision 12).
 
 ## 4. Contract terms the CRM must enforce
 
