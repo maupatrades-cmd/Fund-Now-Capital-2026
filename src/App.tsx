@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { CallProvider } from "@/components/calls/CallProvider";
 import { Toaster } from "sonner";
 import AuthPage from "@/pages/AuthPage";
 import ChangePasswordPage from "@/pages/ChangePasswordPage";
@@ -401,7 +402,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ConfettiProvider>
-          <AppRoutes />
+          <CallProvider>
+            <AppRoutes />
+          </CallProvider>
           <Toaster position="top-center" richColors />
         </ConfettiProvider>
       </BrowserRouter>

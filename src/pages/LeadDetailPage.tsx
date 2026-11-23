@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { CallButton, CallHistory } from "@/components/calls/CallButton";
 import { ArrowLeft, Pencil, CheckCircle2, XCircle, PlayCircle, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +71,7 @@ export default function LeadDetailPage() {
             <Badge className={QUALIFICATION_BADGE[lead.qualification_stage] ?? ""}>
               {labelFor(QUALIFICATION_STAGES, lead.qualification_stage)}
             </Badge>
+            <CallButton hasNumber={Boolean(lead.contact_cell)} target={{ kind: "lead", id: lead.id, name: lead.business_name ?? "this lead" }} />
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {one(lead.industry)?.name || "Industry not set"}
@@ -85,6 +87,8 @@ export default function LeadDetailPage() {
       </div>
 
       <QualificationPanel lead={lead} />
+
+      <CallHistory target={{ kind: "lead", id: lead.id, name: lead.business_name ?? "this lead" }} />
 
       <LeadClientInvitationPanel
         leadId={lead.id}
