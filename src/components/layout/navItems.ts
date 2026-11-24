@@ -31,6 +31,7 @@ import {
   CircleDollarSign,
   MailWarning,
   NotebookPen,
+  PhoneCall,
   type LucideIcon, FileBarChart } from "lucide-react";
 
 export type NavItem = {
@@ -47,6 +48,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/tasks", label: "Tasks", icon: ListTodo },
   // Owner-only private journal (one entry per day + what the CRM recorded that day).
   { to: "/daily-log", label: "Daily log", icon: NotebookPen },
+  { to: "/meet", label: "Calls & meetings", icon: PhoneCall },
   // The office workspace task board: give tasks (incl. Important ones) to any staff member.
   { to: "/staff/tasks", label: "Office tasks", icon: Briefcase },
   { to: "/calendar", label: "Calendar", icon: CalendarDays },

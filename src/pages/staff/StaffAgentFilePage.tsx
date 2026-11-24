@@ -1,3 +1,4 @@
+import { MeetCallButton } from "@/components/meet/MeetCallButton";
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -252,7 +253,8 @@ export default function StaffAgentFilePage() {
     <div className="space-y-5">
       <div>
         <Link to="/staff/onboarding" className="text-sm font-semibold text-brand-teal hover:underline">← Agent onboarding</Link>
-        <h1 className="mt-1 text-2xl font-bold text-brand-navy">{f.full_name ?? "Unnamed agent"}</h1>
+        <h1 className="mt-1 flex flex-wrap items-center gap-3 text-2xl font-bold text-brand-navy">{f.full_name ?? "Unnamed agent"}
+          <MeetCallButton profileId={f.profile_id} name={f.full_name ?? "this agent"} /></h1>
         <p className="text-sm text-muted-foreground">
           {ROLE_LABEL[f.role]}{f.agent_code ? ` · Agent Code ${f.agent_code}` : " · no Agent Code yet"}{f.is_active ? "" : " · deactivated"}
         </p>

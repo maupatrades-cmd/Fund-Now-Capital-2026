@@ -24,6 +24,7 @@ import PortalCommsPage from "./portal/PortalCommsPage";
 import PortalCommissionsPage from "@/pages/portal/PortalCommissionsPage";
 import QualifiedRewardsPage from "./QualifiedRewardsPage";
 import PortalShell from "@/components/portal/PortalShell";
+import CallsMeetingsPage from "@/pages/CallsMeetingsPage";
 import RoleDocumentTasksPage from "./portal/RoleDocumentTasksPage";
 
 // Session + role guard for everything under /contractor/*. The contractor
@@ -83,6 +84,7 @@ export default function ContractorGate() {
         <Route path="messages" element={<PortalCommsPage portal="contractor" page="messages" />} />
         <Route path="commissions" element={<PortalCommissionsPage portal="contractor" />} />
         <Route path="rewards" element={<PortalShell portal="contractor"><QualifiedRewardsPage /></PortalShell>} />
+        <Route path="meet" element={<PortalShell portal="contractor"><CallsMeetingsPage /></PortalShell>} />
         <Route path="badges" element={<ContractorBadgesPage />} />
         <Route path="training" element={<ContractorTrainingPage />} />
         <Route path="training/:moduleId" element={<ContractorTrainingModulePage />} />

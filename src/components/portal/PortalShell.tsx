@@ -24,6 +24,7 @@ import {
   ClipboardCheck,
   HandCoins,
   MessagesSquare,
+  Video,
 } from "lucide-react";
 import { usePartnerPortalIdentity } from "@/hooks/usePartnerPortalIdentity";
 import { usePortalDeals } from "@/hooks/usePortalDeals";
@@ -64,6 +65,7 @@ function navItems(portal: PortalKind) {
     { to: `${base}/notices`, label: "Notices", icon: Megaphone, end: false },
     // Messages to the Sales Coordinator (the single contact point); the Director is copied automatically.
     { to: `${base}/messages`, label: "Messages", icon: MessagesSquare, end: false },
+    { to: `${base}/meet`, label: "Calls & meetings", icon: Video, end: false },
     { to: `${base}/commissions`, label: "Commission notices", icon: HandCoins, end: false },
     { to: `${base}/rewards`, label: "R100 rewards", icon: Coins, end: false },
     ...(portal === "contractor"
