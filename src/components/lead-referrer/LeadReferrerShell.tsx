@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Briefcase, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, ClipboardCheck, Coins, FilePlus2, Home, ListChecks, LogOut, Send } from "lucide-react";
+import { Briefcase, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, ClipboardCheck, Coins, FilePlus2, Home, ListChecks, LogOut, Send, Video } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -16,6 +16,7 @@ const navigation = [
   { to: "/lead-referrer/appointments", label: "My appointments", icon: CalendarCheck, end: false },
   { to: "/lead-referrer/notices", label: "Notices", icon: Megaphone, end: false },
   { to: "/lead-referrer/messages", label: "Messages", icon: MessagesSquare, end: false },
+  { to: "/lead-referrer/meet", label: "Calls & meetings", icon: Video, end: false },
   { to: "/lead-referrer/rewards", label: "R100 rewards", icon: Coins, end: false },
 ];
 

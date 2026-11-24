@@ -130,6 +130,10 @@ import { ConfettiProvider } from "@/lib/celebration/ConfettiProvider";
 import { useProfileRole } from "@/hooks/useProfileRole";
 import { roleHome } from "@/lib/roles";
 import { useSession } from "@/lib/useSession";
+import { MeetProvider } from "@/components/meet/MeetProvider";
+import CallsMeetingsPage from "@/pages/CallsMeetingsPage";
+import MeetingRoomPage from "@/pages/MeetingRoomPage";
+import CallsRedirect from "@/pages/CallsRedirect";
 import { arrivedFromPasswordLink } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import { passwordChangeLocation, signingReturnPath } from "@/lib/signingReturnPath";
@@ -240,6 +244,9 @@ function AppRoutes() {
         ContractorGate (this lane) instead owns its own internal <Routes>, so
         it mounts under the /contractor/* splat and adds its own sub-screens.
       */}
+      {/* In-CRM calls and meetings (owner, 24 Nov 2026): the room and the notice link work for every signed-in role. */}
+      <Route path="/meeting/:meetingId" element={session ? <MeetingRoomPage /> : <Navigate to="/" replace />} />
+      <Route path="/calls" element={session ? <CallsRedirect /> : <Navigate to="/" replace />} />
       <Route path="/partner" element={<PartnerGate />}>
         <Route index element={<PartnerHomePage />} />
         <Route path="submit-lead" element={<PartnerSubmitLeadPage />} />
@@ -254,6 +261,7 @@ function AppRoutes() {
         <Route path="messages" element={<PortalCommsPage portal="partner" page="messages" />} />
         <Route path="commissions" element={<PortalCommissionsPage portal="partner" />} />
         <Route path="rewards" element={<PortalShell portal="partner"><QualifiedRewardsPage /></PortalShell>} />
+        <Route path="meet" element={<PortalShell portal="partner"><CallsMeetingsPage /></PortalShell>} />
         <Route path="statements" element={<PartnerStatementsPage />} />
         <Route path="invoices" element={<PartnerInvoicesPage />} />
         <Route path="invoices/:invoiceId" element={<PartnerInvoiceDetailPage />} />
@@ -298,6 +306,7 @@ function AppRoutes() {
         <Route path="payslips" element={<StaffPayslipsPage />} />
         <Route path="payslips/:payslipId" element={<StaffPayslipDocumentPage />} />
         <Route path="tasks" element={<StaffTasksPage />} />
+        <Route path="meet" element={<CallsMeetingsPage />} />
         <Route path="daily-log" element={<DailyLogPage staff />} />
         <Route path="materials" element={<StaffMaterialsRequestPage />} />
         <Route path="outbound" element={<StaffOutboundPage />} />
@@ -322,6 +331,7 @@ function AppRoutes() {
         <Route path="notices" element={<PortalCommsPage portal="lead_referrer" page="notices" />} />
         <Route path="messages" element={<PortalCommsPage portal="lead_referrer" page="messages" />} />
         <Route path="rewards" element={<LeadReferrerShell><QualifiedRewardsPage /></LeadReferrerShell>} />
+        <Route path="meet" element={<LeadReferrerShell><CallsMeetingsPage /></LeadReferrerShell>} />
         <Route path="*" element={<Navigate to="/lead-referrer" replace />} />
       </Route>
 
@@ -353,6 +363,7 @@ function AppRoutes() {
         <Route path="/invoices/contractor-approvals" element={<ContractorApprovalsPage />} />
         <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
         <Route path="/partner-earnings" element={<PartnerEarningsPage />} />
+        <Route path="/meet" element={<CallsMeetingsPage />} />
         <Route path="/payouts" element={<PayoutsPage />} />
         <Route path="/money" element={<MoneyCommandCenterPage />} />
         <Route path="/rewards" element={<QualifiedRewardsPage />} />
@@ -401,7 +412,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ConfettiProvider>
-          <AppRoutes />
+          <MeetProvider>
+            <AppRoutes />
+          </MeetProvider>
           <Toaster position="top-center" richColors />
         </ConfettiProvider>
       </BrowserRouter>

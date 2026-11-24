@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon, MapPin, BadgeCheck, FolderOpen, Package, UserPlus, CalendarClock, CalendarHeart, NotebookPen } from "lucide-react";
+import { BookOpenCheck, MessageSquareReply, LayoutDashboard, CalendarCheck, Megaphone, MessagesSquare, CalendarDays, FilePlus2, BarChart3, MessageSquareWarning, HandCoins, ReceiptText, Wallet, FileText, ListChecks, LogOut, Target, PhoneCall, ClipboardList, Route as RouteIcon, MapPin, BadgeCheck, FolderOpen, Package, UserPlus, CalendarClock, CalendarHeart, NotebookPen, Video } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { signOutAndRedirect } from "@/lib/signOut";
@@ -26,6 +26,8 @@ const navigation: Item[] = [
   { to: "/staff/tasks", label: "Tasks", icon: ListChecks, end: false, hr: true, field: true },
   // Every staff member's own private daily log (20261118161000); the Director has hers in the main sidebar.
   { to: "/staff/daily-log", label: "Daily log", icon: NotebookPen, end: false, hr: true, field: true, notOwner: true },
+  // In-CRM calls and meetings (owner, 24 Nov 2026): every staff role, field team included.
+  { to: "/staff/meet", label: "Calls & meetings", icon: Video, end: false, hr: true, field: true, notOwner: true },
   // The field team asks the Office Administrator for flyers, banners and so on (field team, 17 Nov).
   { to: "/staff/materials", label: "Request materials", icon: Package, end: false, field: true, fieldOnly: true },
   { to: "/staff/reports", label: "Reports", icon: BarChart3, end: false, founderAdminOnly: true },

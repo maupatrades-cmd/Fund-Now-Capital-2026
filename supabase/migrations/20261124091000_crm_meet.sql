@@ -167,7 +167,7 @@ begin
             returning id, caller_id, callee_id
   loop
     perform public.meet_notify(c.callee_id, 'MEET_MISSED_CALL', 'Missed call from ' || public.meet_display_name(c.caller_id),
-      'You missed a CRM call. Open Calls & meetings to call back.', '/meet', jsonb_build_object('call_id', c.id));
+      'You missed a CRM call. Open Calls & meetings to call back.', '/calls', jsonb_build_object('call_id', c.id));
   end loop;
 end;
 $$;
@@ -234,7 +234,7 @@ begin
     end if;
     update public.meet_calls set status = 'missed', ended_at = now() where id = p_call;
     perform public.meet_notify(c.callee_id, 'MEET_MISSED_CALL', 'Missed call from ' || public.meet_display_name(c.caller_id),
-      'You missed a CRM call. Open Calls & meetings to call back.', '/meet', jsonb_build_object('call_id', c.id));
+      'You missed a CRM call. Open Calls & meetings to call back.', '/calls', jsonb_build_object('call_id', c.id));
     return 'missed';
   elsif c.status = 'answered' then
     update public.meet_calls
@@ -282,7 +282,7 @@ begin
       case when coalesce(p_instant, false) then 'Join now from Calls & meetings.'
            else to_char(coalesce(p_starts_at, now()) at time zone 'Africa/Johannesburg', 'Dy DD Mon HH24:MI')
                 || ' · ' || p_duration_minutes || ' min · from ' || public.meet_display_name(v_uid) end,
-      '/meet?meeting=' || v_id::text, jsonb_build_object('meeting_id', v_id));
+      '/calls?meeting=' || v_id::text, jsonb_build_object('meeting_id', v_id));
   end loop;
   perform public.meet_log('meet_meeting', v_id, 'CREATE', 'CRM meeting created: ' || v_title || ' (' || (cardinality(v_invitees) + 1) || ' people)');
   return v_id;

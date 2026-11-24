@@ -1,3 +1,4 @@
+import { MeetCallButton } from "@/components/meet/MeetCallButton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useSearchParams } from "react-router-dom";
@@ -309,7 +310,8 @@ function TeamTable({
           {members.map((m) => (
             <tr key={m.id} className="border-b border-border/60 last:border-0">
               <td className="px-4 py-3">
-                <div className="font-medium text-brand-navy">{m.full_name || "—"}</div>
+                <div className="flex items-center gap-2 font-medium text-brand-navy">{m.full_name || "—"}
+                  {m.is_active !== false ? <MeetCallButton profileId={m.id} name={m.full_name || m.email || "this person"} compact /> : null}</div>
                 {m.referral_partner_name && (
                   <div className="text-xs text-muted-foreground">
                     {m.is_sub_agent ? `Sub-agent under ${m.referral_partner_name}` : m.referral_partner_name}
